@@ -117,7 +117,7 @@ export async function processSegmentationWorkbook(file: File): Promise<Segmentat
         !Number.isNaN(currentCount) &&
         !Number.isNaN(currentTotal)
       ) {
-        const expectedTotal = correctTotal + currentCount
+        const expectedTotal: number = correctTotal + currentCount
         if (expectedTotal === currentTotal) {
           if (cumulativeCheckCell.value !== '补断点') {
             cumulativeCheckCell.value = '√'

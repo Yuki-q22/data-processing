@@ -7,7 +7,6 @@ import {
   signOut,
 } from 'firebase/auth'
 import {
-  get as dbGet,
   onValue,
   ref,
   remove as dbRemove,

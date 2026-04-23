@@ -589,12 +589,12 @@ export async function exportMatchedProfessionalTemplate(params: {
   })
 
   params.rows.forEach((row, rowNo) => {
-    const outputRow = {
-      ...row.sourceRow,
-      专业组代码: row.resolvedGroupCode,
-      选科要求: row.resolvedRequirementMode,
-      次选科目: row.resolvedSecondSubject,
-    }
+    const outputRow: Record<string, unknown> = {
+  ...row.sourceRow,
+  专业组代码: row.resolvedGroupCode,
+  选科要求: row.resolvedRequirementMode,
+  次选科目: row.resolvedSecondSubject,
+}
 
     IMPORT_HEADERS.forEach((header, colNo) => {
       const cell = ws.getCell(rowNo + 4, colNo + 1)

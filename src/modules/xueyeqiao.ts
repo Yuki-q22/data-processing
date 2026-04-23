@@ -565,17 +565,14 @@ export function processXueyeqiaoData(params: {
     }
 
     return {
-      rowId: String(rowNo + 1),
-      招生年份: t(row['年份']),
-      原始科类: categoryRaw,
-      原始报考要求: applyRequirementRaw,
-      原始备注: majorRemarkRaw,
-      修改后的备注: fixedRemark.fixedText,
-      数据是否有问题: exportRow.数据是否有问题,
-      学校名称匹配: schoolMatch,
-      问题列表: exportRow.问题列表,
-      ...exportRow,
-    }
+  rowId: String(rowNo + 1),
+  招生年份: t(row['年份']),
+  原始科类: categoryRaw,
+  原始报考要求: applyRequirementRaw,
+  原始备注: majorRemarkRaw,
+  学校名称匹配: schoolMatch,
+  ...exportRow,
+}
   })
 
   return {
