@@ -3,7 +3,6 @@ import { Alert, Card, Col, Input, Row, Select, Space, Switch, Typography, messag
 import * as XLSX from 'xlsx'
 import FileUploadCard from '../components/FileUploadCard'
 import { validateUploadedHeaders } from '../modules/uploadValidation'
-import { useRuleStore } from '../stores/ruleStore'
 import { useTaskStore } from '../stores/taskStore'
 import type { UploadedWorkbook } from '../types/workbook'
 
@@ -22,34 +21,25 @@ const DATA_SOURCE_OPTIONS = [
 
 const YEAR_OPTIONS = ['2025', '2026', '2027']
 
-const REQUIRED_SCORE_FIELDS = [
-  '学校名称',
-  '省份',
-  '招生科类',
-  '招生专业',
-  '最低分',
-]
-
+// 原始专业分数据上传：不再按目标模板字段强校验
+// 因为原始表头可能完全随机，后续通过“字段映射”页面手工/自动匹配
 const REQUIRED_PLAN_FIELDS = [
-  '招生年份',
+  '年份',
   '省份',
-  '学校名称',
-  '招生科类',
-  '招生批次',
-  '招生专业',
-  '一级层次',
-]
-
-const RECOMMENDED_PLAN_FIELDS = [
+  '学校',
+  '科类',
+  '批次',
   '招生类型',
-  '专业方向',
-  '专业备注',
+  '专业',
+  '层次',
+  '方向',
+  '备注',
   '招生人数',
   '招生代码',
   '专业代码',
   '专业组代码',
   '专业组选科要求',
-  '专业选科要求',
+  '专业选科要求(新高考专业省份)',
   '数据来源',
 ]
 
@@ -108,20 +98,7 @@ function getSheetHeaders(workbook?: UploadedWorkbook, selectedSheet?: string): s
   return (aoa[0] || []).map(normalizeHeader).filter(Boolean)
 }
 
-function getSuggestedMissingFields(
-  headers: string[],
-  suggestedFields: string[],
-  fieldAliases: Record<string, string[]>
-) {
-  if (!headers.length) return []
-
-  const validation = validateUploadedHeaders(headers, suggestedFields, fieldAliases)
-  return validation.missingFields
-}
-
 export default function UploadStep() {
-  const { fieldAliases } = useRuleStore()
-
   const {
     taskName,
     year,
@@ -147,20 +124,21 @@ export default function UploadStep() {
     [planWorkbook, planSheetName]
   )
 
-  const scoreValidation = useMemo(() => {
+  // 原始专业分文件：只做“是否成功识别字段”的检查，不做固定字段强校验
+  const scoreHeaderSummary = useMemo(() => {
     if (!scoreHeaders.length) return undefined
-    return validateUploadedHeaders(scoreHeaders, REQUIRED_SCORE_FIELDS, fieldAliases)
-  }, [scoreHeaders, fieldAliases])
+
+    return {
+      totalColumns: scoreHeaders.length,
+      detectedColumns: scoreHeaders,
+      hasHeaders: scoreHeaders.length > 0,
+    }
+  }, [scoreHeaders])
 
   const planValidation = useMemo(() => {
     if (!planHeaders.length) return undefined
-    return validateUploadedHeaders(planHeaders, REQUIRED_PLAN_FIELDS, fieldAliases)
-  }, [planHeaders, fieldAliases])
-
-  const recommendedPlanMissingFields = useMemo(() => {
-    if (!planHeaders.length) return []
-    return getSuggestedMissingFields(planHeaders, RECOMMENDED_PLAN_FIELDS, fieldAliases)
-  }, [planHeaders, fieldAliases])
+    return validateUploadedHeaders(planHeaders, REQUIRED_PLAN_FIELDS)
+  }, [planHeaders])
 
   const handleScoreUpload = async (file: File) => {
     const uploaded = await parseUploadedWorkbook(file)
@@ -170,14 +148,11 @@ export default function UploadStep() {
     if (firstSheetName) {
       setSheetName('score', firstSheetName)
       const headers = getSheetHeaders(uploaded, firstSheetName)
-      const validation = validateUploadedHeaders(headers, REQUIRED_SCORE_FIELDS, fieldAliases)
 
-      if (validation.isValid) {
-        message.success(`原始专业分文件已上传，字段校验通过：${file.name}`)
+      if (headers.length > 0) {
+        message.success(`原始专业分文件已上传：${file.name}。已识别 ${headers.length} 个字段，下一步请在“字段映射”中完成匹配。`)
       } else {
-        message.warning(
-          `原始专业分文件已上传，但缺少字段：${validation.missingFields.join('、')}`
-        )
+        message.warning(`原始专业分文件已上传，但未识别到表头：${file.name}`)
       }
     } else {
       message.warning(`原始专业分文件已上传，但未识别到 Sheet：${file.name}`)
@@ -192,21 +167,10 @@ export default function UploadStep() {
     if (firstSheetName) {
       setSheetName('plan', firstSheetName)
       const headers = getSheetHeaders(uploaded, firstSheetName)
-      const validation = validateUploadedHeaders(headers, REQUIRED_PLAN_FIELDS, fieldAliases)
-      const suggestedMissingFields = getSuggestedMissingFields(
-        headers,
-        RECOMMENDED_PLAN_FIELDS,
-        fieldAliases
-      )
+      const validation = validateUploadedHeaders(headers, REQUIRED_PLAN_FIELDS)
 
       if (validation.isValid) {
-        if (suggestedMissingFields.length) {
-          message.success(
-            `招生计划文件已上传，关键字段校验通过。建议补充字段：${suggestedMissingFields.join('、')}`
-          )
-        } else {
-          message.success(`招生计划文件已上传，字段校验通过：${file.name}`)
-        }
+        message.success(`招生计划文件已上传，字段校验通过：${file.name}`)
       } else {
         message.warning(
           `招生计划文件已上传，但缺少字段：${validation.missingFields.join('、')}`
@@ -284,7 +248,7 @@ export default function UploadStep() {
 
         <div style={{ marginTop: 12 }}>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            模糊匹配用于在学校名称、专业名称、备注存在轻微差异时辅助匹配，但仍建议优先保证原始字段尽量标准。
+            原始专业分数据支持随机表头，不要求直接符合最终导出模板。请先上传文件，再在第二步“字段映射”中完成原始字段与目标字段的对应关系。
           </Paragraph>
         </div>
       </Card>
@@ -295,7 +259,7 @@ export default function UploadStep() {
             title="原始专业分数据上传"
             workbook={scoreWorkbook}
             selectedSheet={scoreSheetName}
-            validation={scoreValidation}
+            validation={undefined}
             onSheetChange={(sheetName) => setSheetName('score', sheetName)}
             onUpload={handleScoreUpload}
           />
@@ -315,44 +279,38 @@ export default function UploadStep() {
 
       <Card title="上传结果检查" style={{ borderRadius: 12 }}>
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          {scoreValidation ? (
-            scoreValidation.isValid ? (
+          {scoreHeaderSummary ? (
+            scoreHeaderSummary.hasHeaders ? (
               <Alert
                 type="success"
                 showIcon
-                message="原始专业分数据字段校验通过"
-                description={`已识别 ${scoreValidation.totalColumns} 个字段，关键字段完整。`}
+                message="原始专业分数据已成功识别表头"
+                description={`已识别 ${scoreHeaderSummary.totalColumns} 个字段。原始专业分表头允许随机，下一步请在“字段映射”中完成匹配。`}
               />
             ) : (
               <Alert
                 type="warning"
                 showIcon
-                message="原始专业分数据字段不完整"
-                description={`缺失字段：${scoreValidation.missingFields.join('、')}`}
+                message="原始专业分数据未识别到表头"
+                description="请确认上传的 Sheet 第一行是否为字段标题。"
               />
             )
           ) : (
-            <Alert type="info" showIcon message="尚未上传原始专业分数据" />
+            <Alert
+              type="info"
+              showIcon
+              message="尚未上传原始专业分数据"
+            />
           )}
 
           {planValidation ? (
             planValidation.isValid ? (
-              <>
-                <Alert
-                  type="success"
-                  showIcon
-                  message="招生计划数据关键字段校验通过"
-                  description={`已识别 ${planValidation.totalColumns} 个字段，必需字段完整。`}
-                />
-                {recommendedPlanMissingFields.length ? (
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="招生计划数据建议补充字段"
-                    description={`建议补充字段：${recommendedPlanMissingFields.join('、')}`}
-                  />
-                ) : null}
-              </>
+              <Alert
+                type="success"
+                showIcon
+                message="招生计划数据字段校验通过"
+                description={`已识别 ${planValidation.totalColumns} 个字段，关键字段完整。`}
+              />
             ) : (
               <Alert
                 type="warning"
@@ -362,7 +320,11 @@ export default function UploadStep() {
               />
             )
           ) : (
-            <Alert type="info" showIcon message="尚未上传招生计划数据" />
+            <Alert
+              type="info"
+              showIcon
+              message="尚未上传招生计划数据"
+            />
           )}
         </Space>
       </Card>
