@@ -484,14 +484,14 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
 
     const newId = createRuleId()
     await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
-      rule_name: '新规则',
-      source_text: '',
-      target_text: '',
-      enabled: true,
-      sort_order: nextPriority,
-      updated_at: Date.now(),
-      updated_by: currentUid!,
-    })
+  rule_name: '新规则',
+  source_text: '请输入关键词',
+  target_text: '请输入招生类型',
+  enabled: true,
+  sort_order: nextPriority,
+  updated_at: Date.now(),
+  updated_by: currentUid!,
+})
     await updateMetaVersion()
   },
 
