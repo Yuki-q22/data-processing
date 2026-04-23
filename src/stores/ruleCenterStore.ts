@@ -490,17 +490,39 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
 
   const newId = createRuleId()
 
-  await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
-    rule_name: '新规则',
-    source_text: '请输入关键词',
-    target_text: '请输入招生类型',
-    enabled: true,
-    sort_order: nextPriority,
-    updated_at: Date.now(),
-    updated_by: currentUid!,
+  const newRule: RemarkTypeRule = {
+    id: newId,
+    keyword: '请输入关键词',
+    outputType: '请输入招生类型',
+    priority: nextPriority,
+  }
+
+  // 先本地追加，保证页面立刻出现新的一行
+  setState({
+    remarkTypeRules: sortRules([...remarkTypeRules, newRule]),
+    remarkRuleFileName: CLOUD_RULE_FILE_NAME,
   })
 
-  await updateMetaVersion()
+  try {
+    await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
+      rule_name: '新规则',
+      source_text: '请输入关键词',
+      target_text: '请输入招生类型',
+      enabled: true,
+      sort_order: nextPriority,
+      updated_at: Date.now(),
+      updated_by: currentUid!,
+    })
+
+    await updateMetaVersion()
+  } catch (error) {
+    // 如果云端写失败，把刚才本地补进去的这一行撤回
+    const latestRules = getState().remarkTypeRules.filter((rule) => rule.id !== newId)
+    setState({
+      remarkTypeRules: sortRules(latestRules),
+    })
+    throw error
+  }
 },
 
   updateRemarkTypeRule: async (id, patch) => {
