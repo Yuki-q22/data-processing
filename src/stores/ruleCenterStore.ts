@@ -181,8 +181,7 @@ function mapCloudRemarkRules(value: Record<string, CloudRuleItem> | null | undef
     priority: Number(item?.sort_order ?? 9999),
   }))
 
-  const validRules = rules.filter((rule) => rule.keyword && rule.outputType)
-  return validRules.length ? sortRules(validRules) : DEFAULT_REMARK_TYPE_RULES
+  return rules.length ? sortRules(rules) : DEFAULT_REMARK_TYPE_RULES
 }
 
 function mapCloudSimpleValues(value: Record<string, CloudRuleItem> | null | undefined): string[] {
