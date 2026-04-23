@@ -170,10 +170,7 @@ function toCloudPayloadFromRemarkRules(rules: RemarkTypeRule[], uid: string) {
 }
 
 function mapCloudRemarkRules(value: Record<string, CloudRuleItem> | null | undefined): RemarkTypeRule[] {
-  console.log('remark 原始云端数据 =', value)
-
   if (!value || typeof value !== 'object') {
-    console.log('没有云端规则，回退默认规则')
     return DEFAULT_REMARK_TYPE_RULES
   }
 
@@ -183,9 +180,6 @@ function mapCloudRemarkRules(value: Record<string, CloudRuleItem> | null | undef
     outputType: String(item?.target_text ?? '').trim(),
     priority: Number(item?.sort_order ?? 9999),
   }))
-
-  console.log('remark 映射后规则数 =', rules.length)
-  console.log('remark 映射后规则 =', rules)
 
   return rules.length ? sortRules(rules) : DEFAULT_REMARK_TYPE_RULES
 }
@@ -480,50 +474,48 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   },
 
   addRemarkTypeRule: async () => {
-  const { currentUid, isAdminUser, remarkTypeRules } = getState()
-  await ensureAdmin(currentUid, isAdminUser)
+    const { currentUid, isAdminUser, remarkTypeRules } = getState()
+    await ensureAdmin(currentUid, isAdminUser)
 
-  const nextPriority =
-    remarkTypeRules.length > 0
-      ? Math.max(...remarkTypeRules.map((rule) => rule.priority || 0)) + 1
-      : 1
+    const nextPriority =
+      remarkTypeRules.length > 0
+        ? Math.max(...remarkTypeRules.map((rule) => rule.priority || 0)) + 1
+        : 1
 
-  const newId = createRuleId()
+    const newId = createRuleId()
 
-  const newRule: RemarkTypeRule = {
-    id: newId,
-    keyword: '请输入关键词',
-    outputType: '请输入招生类型',
-    priority: nextPriority,
-  }
+    const newRule: RemarkTypeRule = {
+      id: newId,
+      keyword: '请输入关键词',
+      outputType: '请输入招生类型',
+      priority: nextPriority,
+    }
 
-  // 先本地追加，保证页面立刻出现新的一行
-  setState({
-    remarkTypeRules: sortRules([...remarkTypeRules, newRule]),
-    remarkRuleFileName: CLOUD_RULE_FILE_NAME,
-  })
-
-  try {
-    await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
-      rule_name: '新规则',
-      source_text: '请输入关键词',
-      target_text: '请输入招生类型',
-      enabled: true,
-      sort_order: nextPriority,
-      updated_at: Date.now(),
-      updated_by: currentUid!,
-    })
-
-    await updateMetaVersion()
-  } catch (error) {
-    // 如果云端写失败，把刚才本地补进去的这一行撤回
-    const latestRules = getState().remarkTypeRules.filter((rule) => rule.id !== newId)
     setState({
-      remarkTypeRules: sortRules(latestRules),
+      remarkTypeRules: sortRules([...remarkTypeRules, newRule]),
+      remarkRuleFileName: CLOUD_RULE_FILE_NAME,
     })
-    throw error
-  }
-},
+
+    try {
+      await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
+        rule_name: '新规则',
+        source_text: '请输入关键词',
+        target_text: '请输入招生类型',
+        enabled: true,
+        sort_order: nextPriority,
+        updated_at: Date.now(),
+        updated_by: currentUid!,
+      })
+
+      await updateMetaVersion()
+    } catch (error) {
+      const latestRules = getState().remarkTypeRules.filter((rule) => rule.id !== newId)
+      setState({
+        remarkTypeRules: sortRules(latestRules),
+      })
+      throw error
+    }
+  },
 
   updateRemarkTypeRule: async (id, patch) => {
     const { currentUid, isAdminUser, remarkTypeRules } = getState()
@@ -538,6 +530,21 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     const nextOutputType = patch.outputType ?? current.outputType
     const nextPriority = patch.priority ?? current.priority
 
+    setState({
+      remarkTypeRules: sortRules(
+        remarkTypeRules.map((rule) =>
+          rule.id === id
+            ? {
+                ...rule,
+                keyword: nextKeyword,
+                outputType: nextOutputType,
+                priority: nextPriority,
+              }
+            : rule
+        )
+      ),
+    })
+
     await dbUpdate(ref(db, `rule_center/remark_enrollment_type/${id}`), {
       rule_name: `${nextKeyword} → ${nextOutputType}`,
       source_text: nextKeyword,
@@ -550,16 +557,33 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   },
 
   removeRemarkTypeRule: async (id) => {
-    const { currentUid, isAdminUser } = getState()
+    const { currentUid, isAdminUser, remarkTypeRules } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
-    await dbRemove(ref(db, `rule_center/remark_enrollment_type/${id}`))
-    await updateMetaVersion()
+    const previousRules = remarkTypeRules
+    setState({
+      remarkTypeRules: remarkTypeRules.filter((rule) => rule.id !== id),
+    })
+
+    try {
+      await dbRemove(ref(db, `rule_center/remark_enrollment_type/${id}`))
+      await updateMetaVersion()
+    } catch (error) {
+      setState({
+        remarkTypeRules: previousRules,
+      })
+      throw error
+    }
   },
 
   resetRemarkTypeRules: async () => {
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
+
+    setState({
+      remarkTypeRules: sortRules(DEFAULT_REMARK_TYPE_RULES),
+      remarkRuleFileName: CLOUD_RULE_FILE_NAME,
+    })
 
     await dbSet(
       ref(db, 'rule_center/remark_enrollment_type'),
@@ -573,6 +597,10 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     await ensureAdmin(currentUid, isAdminUser)
 
     const cleaned = items.map((x) => x.trim()).filter(Boolean)
+    setState({
+      exclusionKeywords: cleaned,
+    })
+
     await dbSet(ref(db, 'rule_center/exclusion_keywords'), cleaned)
     await updateMetaVersion()
   },
