@@ -170,7 +170,10 @@ function toCloudPayloadFromRemarkRules(rules: RemarkTypeRule[], uid: string) {
 }
 
 function mapCloudRemarkRules(value: Record<string, CloudRuleItem> | null | undefined): RemarkTypeRule[] {
+  console.log('remark 原始云端数据 =', value)
+
   if (!value || typeof value !== 'object') {
+    console.log('没有云端规则，回退默认规则')
     return DEFAULT_REMARK_TYPE_RULES
   }
 
@@ -180,6 +183,9 @@ function mapCloudRemarkRules(value: Record<string, CloudRuleItem> | null | undef
     outputType: String(item?.target_text ?? '').trim(),
     priority: Number(item?.sort_order ?? 9999),
   }))
+
+  console.log('remark 映射后规则数 =', rules.length)
+  console.log('remark 映射后规则 =', rules)
 
   return rules.length ? sortRules(rules) : DEFAULT_REMARK_TYPE_RULES
 }
@@ -474,26 +480,28 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   },
 
   addRemarkTypeRule: async () => {
-    const { currentUid, isAdminUser, remarkTypeRules } = getState()
-    await ensureAdmin(currentUid, isAdminUser)
+  const { currentUid, isAdminUser, remarkTypeRules } = getState()
+  await ensureAdmin(currentUid, isAdminUser)
 
-    const nextPriority =
-      remarkTypeRules.length > 0
-        ? Math.max(...remarkTypeRules.map((rule) => rule.priority || 0)) + 1
-        : 1
+  const nextPriority =
+    remarkTypeRules.length > 0
+      ? Math.max(...remarkTypeRules.map((rule) => rule.priority || 0)) + 1
+      : 1
 
-    const newId = createRuleId()
-    await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
-  rule_name: '新规则',
-  source_text: '请输入关键词',
-  target_text: '请输入招生类型',
-  enabled: true,
-  sort_order: nextPriority,
-  updated_at: Date.now(),
-  updated_by: currentUid!,
-})
-    await updateMetaVersion()
-  },
+  const newId = createRuleId()
+
+  await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
+    rule_name: '新规则',
+    source_text: '请输入关键词',
+    target_text: '请输入招生类型',
+    enabled: true,
+    sort_order: nextPriority,
+    updated_at: Date.now(),
+    updated_by: currentUid!,
+  })
+
+  await updateMetaVersion()
+},
 
   updateRemarkTypeRule: async (id, patch) => {
     const { currentUid, isAdminUser, remarkTypeRules } = getState()
