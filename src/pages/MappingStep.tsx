@@ -25,13 +25,14 @@ export default function MappingStep() {
   } = usePreviewStore()
 
   const {
-    year,
-    defaultDataSource,
-    scoreWorkbook,
-    planWorkbook,
-    scoreSheetName,
-    planSheetName,
-  } = useTaskStore()
+  year,
+  defaultDataSource,
+  manualSchoolName,
+  scoreWorkbook,
+  planWorkbook,
+  scoreSheetName,
+  planSheetName,
+} = useTaskStore()
 
   const {
     fieldAliases,
@@ -88,32 +89,34 @@ export default function MappingStep() {
       .filter((item) => !item.ignored && item.targetField)
 
     const scoreRecords = buildScoreRecords(
-      scoreRows,
-      finalScoreMappings,
-      year,
-      defaultDataSource,
-      {
-        provinceRules,
-        categoryRules,
-        batchRules,
-        provinceYearCategoryType,
-        remarkTypeRules,
-      }
-    )
+  scoreRows,
+  finalScoreMappings,
+  year,
+  defaultDataSource,
+  {
+    provinceRules,
+    categoryRules,
+    batchRules,
+    provinceYearCategoryType,
+    remarkTypeRules,
+    manualSchoolName,
+  }
+)
 
-    const planRecords = buildPlanRecords(
-      planRows,
-      finalPlanMappings,
-      year,
-      defaultDataSource,
-      {
-        provinceRules,
-        categoryRules,
-        batchRules,
-        provinceYearCategoryType,
-        remarkTypeRules,
-      }
-    )
+const planRecords = buildPlanRecords(
+  planRows,
+  finalPlanMappings,
+  year,
+  defaultDataSource,
+  {
+    provinceRules,
+    categoryRules,
+    batchRules,
+    provinceYearCategoryType,
+    remarkTypeRules,
+    manualSchoolName,
+  }
+)
 
     setScoreRecords(scoreRecords)
     setPlanRecords(planRecords)

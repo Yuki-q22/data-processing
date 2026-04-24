@@ -9,6 +9,7 @@ import {
 import {
   onValue,
   ref,
+  push,
   remove as dbRemove,
   set as dbSet,
   update as dbUpdate,
@@ -474,48 +475,46 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   },
 
   addRemarkTypeRule: async () => {
-    const { currentUid, isAdminUser, remarkTypeRules } = getState()
-    await ensureAdmin(currentUid, isAdminUser)
+  const { currentUid, isAdminUser, remarkTypeRules } = getState()
+  await ensureAdmin(currentUid, isAdminUser)
 
-    const nextPriority =
-      remarkTypeRules.length > 0
-        ? Math.max(...remarkTypeRules.map((rule) => rule.priority || 0)) + 1
-        : 1
+  const nextPriority =
+    remarkTypeRules.length > 0
+      ? Math.max(...remarkTypeRules.map((rule) => rule.priority || 0)) + 1
+      : 1
 
-    const newId = createRuleId()
+  const parentRef = ref(db, 'rule_center/remark_enrollment_type')
+  const newRef = push(parentRef)
+  const newId = newRef.key
 
-    const newRule: RemarkTypeRule = {
-      id: newId,
-      keyword: '请输入关键词',
-      outputType: '请输入招生类型',
-      priority: nextPriority,
-    }
+  if (!newId) {
+    throw new Error('新增规则失败：无法生成云端规则ID')
+  }
 
-    setState({
-      remarkTypeRules: sortRules([...remarkTypeRules, newRule]),
-      remarkRuleFileName: CLOUD_RULE_FILE_NAME,
-    })
+  const newRule: RemarkTypeRule = {
+    id: newId,
+    keyword: '',
+    outputType: '',
+    priority: nextPriority,
+  }
 
-    try {
-      await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
-        rule_name: '新规则',
-        source_text: '请输入关键词',
-        target_text: '请输入招生类型',
-        enabled: true,
-        sort_order: nextPriority,
-        updated_at: Date.now(),
-        updated_by: currentUid!,
-      })
+  await dbSet(newRef, {
+    rule_name: '新规则',
+    source_text: '',
+    target_text: '',
+    enabled: true,
+    sort_order: nextPriority,
+    updated_at: Date.now(),
+    updated_by: currentUid!,
+  })
 
-      await updateMetaVersion()
-    } catch (error) {
-      const latestRules = getState().remarkTypeRules.filter((rule) => rule.id !== newId)
-      setState({
-        remarkTypeRules: sortRules(latestRules),
-      })
-      throw error
-    }
-  },
+  await updateMetaVersion()
+
+  setState({
+    remarkTypeRules: sortRules([...remarkTypeRules, newRule]),
+    remarkRuleFileName: CLOUD_RULE_FILE_NAME,
+  })
+},
 
   updateRemarkTypeRule: async (id, patch) => {
     const { currentUid, isAdminUser, remarkTypeRules } = getState()
