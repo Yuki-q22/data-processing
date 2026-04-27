@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
@@ -93,6 +93,15 @@ export default function RuleCenterPage() {
   >({})
 
   /**
+   * 已在页面上修改、但还没有保存到 Firebase 的规则 ID。
+   * 用 ref 防止 Firebase 实时回流覆盖用户正在输入的内容。
+   */
+  const dirtyRemarkRuleIdsRef = useRef<Set<string>>(new Set())
+  const [dirtyRemarkRuleIds, setDirtyRemarkRuleIds] = useState<
+    Record<string, boolean>
+  >({})
+
+  /**
    * 新增规则弹窗。
    * 新增规则不再先插入表格空行，避免 Firebase 实时同步导致输入框中断。
    */
@@ -109,7 +118,21 @@ export default function RuleCenterPage() {
   }, [exclusionKeywords])
 
   useEffect(() => {
-    setRemarkRuleDrafts(remarkTypeRules)
+    setRemarkRuleDrafts((prevDrafts) => {
+      if (!prevDrafts.length) return remarkTypeRules
+
+      const prevDraftMap = new Map(prevDrafts.map((rule) => [rule.id, rule]))
+
+      return remarkTypeRules.map((cloudRule) => {
+        const dirtyDraft = prevDraftMap.get(cloudRule.id)
+
+        if (dirtyDraft && dirtyRemarkRuleIdsRef.current.has(cloudRule.id)) {
+          return dirtyDraft
+        }
+
+        return cloudRule
+      })
+    })
   }, [remarkTypeRules])
 
   const schoolPreview = useMemo<PreviewRow[]>(
@@ -309,10 +332,27 @@ export default function RuleCenterPage() {
     }
   }
 
+  const clearDirtyRemarkRule = (id: string) => {
+    dirtyRemarkRuleIdsRef.current.delete(id)
+
+    setDirtyRemarkRuleIds((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }
+
   const updateRemarkRuleDraft = (
     id: string,
     patch: Partial<RemarkTypeRule>
   ) => {
+    dirtyRemarkRuleIdsRef.current.add(id)
+
+    setDirtyRemarkRuleIds((prev) => ({
+      ...prev,
+      [id]: true,
+    }))
+
     setRemarkRuleDrafts((prev) =>
       prev.map((rule) =>
         rule.id === id
@@ -346,7 +386,10 @@ export default function RuleCenterPage() {
       nextOutputType !== original.outputType ||
       nextPriority !== original.priority
 
-    if (!hasChanged) return
+    if (!hasChanged) {
+      clearDirtyRemarkRule(id)
+      return
+    }
 
     if (!nextKeyword) {
       message.warning('备注查找字段不能为空')
@@ -369,6 +412,8 @@ export default function RuleCenterPage() {
         outputType: nextOutputType,
         priority: nextPriority,
       })
+
+      clearDirtyRemarkRule(id)
       message.success('规则已保存')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '更新规则失败')
@@ -425,8 +470,6 @@ export default function RuleCenterPage() {
           onChange={(e) =>
             updateRemarkRuleDraft(record.id, { keyword: e.target.value })
           }
-          onBlur={() => saveRemarkRuleDraft(record.id)}
-          onPressEnter={() => saveRemarkRuleDraft(record.id)}
         />
       ),
     },
@@ -443,8 +486,6 @@ export default function RuleCenterPage() {
           onChange={(e) =>
             updateRemarkRuleDraft(record.id, { outputType: e.target.value })
           }
-          onBlur={() => saveRemarkRuleDraft(record.id)}
-          onPressEnter={() => saveRemarkRuleDraft(record.id)}
         />
       ),
     },
@@ -464,28 +505,34 @@ export default function RuleCenterPage() {
               priority: typeof value === 'number' ? value : 9999,
             })
           }
-          onBlur={() => saveRemarkRuleDraft(record.id)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              saveRemarkRuleDraft(record.id)
-            }
-          }}
         />
       ),
     },
     {
       title: '操作',
       key: 'action',
-      width: 100,
+      width: 160,
       render: (_: unknown, record: RemarkTypeRule) => (
-        <Button
-          danger
-          size="small"
-          disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
-          onClick={() => handleRemoveRemarkRule(record.id)}
-        >
-          删除
-        </Button>
+        <Space size={8}>
+          <Button
+            type="primary"
+            size="small"
+            loading={savingRemarkRuleIds[record.id]}
+            disabled={!isAdminUser || !dirtyRemarkRuleIds[record.id]}
+            onClick={() => saveRemarkRuleDraft(record.id)}
+          >
+            保存
+          </Button>
+
+          <Button
+            danger
+            size="small"
+            disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
+            onClick={() => handleRemoveRemarkRule(record.id)}
+          >
+            删除
+          </Button>
+        </Space>
       ),
     },
   ]
@@ -794,7 +841,7 @@ export default function RuleCenterPage() {
               <Alert
                 type="info"
                 showIcon
-                message="新增规则请点击“新增规则”后在弹窗中填写；已有规则编辑时，输入框失焦或按回车后才会写入云端。"
+                message="新增规则请点击“新增规则”后在弹窗中填写；已有规则编辑只修改本地草稿，点击对应行的“保存”后才会写入云端。"
               />
 
               <Table
@@ -803,7 +850,7 @@ export default function RuleCenterPage() {
                 pagination={false}
                 columns={remarkColumns}
                 dataSource={remarkRuleDrafts}
-                scroll={{ x: 760 }}
+                scroll={{ x: 860 }}
               />
 
               <Divider style={{ margin: '8px 0' }} />
@@ -856,6 +903,7 @@ export default function RuleCenterPage() {
         okText="保存规则"
         cancelText="取消"
         destroyOnClose
+        maskClosable={false}
       >
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
           <div>
