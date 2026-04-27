@@ -338,6 +338,22 @@ export default function PlanCompareTool() {
                 value={result.planCollegeRows.filter((item) => item.missingEnrollmentCodeFlag).length}
               />
             </Card>
+            {result.groupCodeWarnings.length > 0 ? (
+  <Card style={{ minWidth: 420, maxWidth: 620, borderRadius: 12 }}>
+    <Alert
+      type="error"
+      showIcon
+      message="专业组代码缺失提醒"
+      description={
+        <div>
+          {result.groupCodeWarnings.map((item) => (
+            <div key={item.province}>{item.message}</div>
+          ))}
+        </div>
+      }
+    />
+  </Card>
+) : null}
           </Space>
 
           {(result.missingPlanHeaders.length > 0 ||

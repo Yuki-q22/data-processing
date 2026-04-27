@@ -37,12 +37,18 @@ export type EnrollmentCodeWarning = {
   message: string
 }
 
+export type GroupCodeWarning = {
+  province: string
+  message: string
+}
+
 export type PlanCompareResult = {
   yearValue: string
   missingPlanHeaders: string[]
   missingScoreHeaders: string[]
   missingCollegeHeaders: string[]
   enrollmentCodeWarnings: EnrollmentCodeWarning[]
+  groupCodeWarnings: GroupCodeWarning[]
   planScoreRows: PlanScoreCompareRow[]
   planCollegeRows: PlanCollegeCompareRow[]
 }
@@ -501,6 +507,84 @@ function buildEnrollmentCodeWarnings(
     .filter((item): item is EnrollmentCodeWarning => item !== null)
 }
 
+function buildGroupCodeWarnings(
+  planRows: Record<string, unknown>[],
+  collegeRows: Record<string, unknown>[]
+): GroupCodeWarning[] {
+  if (!planRows.length || !collegeRows.length) return []
+
+  const provinceMap = new Map<
+    string,
+    {
+      planHasGroupCode: boolean
+      planMissingGroupCode: boolean
+      collegeHasGroupCode: boolean
+      collegeMissingGroupCode: boolean
+    }
+  >()
+
+  const ensureProvince = (province: string) => {
+    if (!provinceMap.has(province)) {
+      provinceMap.set(province, {
+        planHasGroupCode: false,
+        planMissingGroupCode: false,
+        collegeHasGroupCode: false,
+        collegeMissingGroupCode: false,
+      })
+    }
+    return provinceMap.get(province)!
+  }
+
+  planRows.forEach((row) => {
+    const province = t(row['省份'])
+    if (!province) return
+
+    const item = ensureProvince(province)
+    const groupCode = stripCaret(row['专业组代码'])
+
+    if (groupCode) {
+      item.planHasGroupCode = true
+    } else {
+      item.planMissingGroupCode = true
+    }
+  })
+
+  collegeRows.forEach((row) => {
+    const province = t(row['省份'])
+    if (!province) return
+
+    const item = ensureProvince(province)
+    const groupCode = stripCaret(row['专业组代码'])
+
+    if (groupCode) {
+      item.collegeHasGroupCode = true
+    } else {
+      item.collegeMissingGroupCode = true
+    }
+  })
+
+  return Array.from(provinceMap.entries())
+    .map(([province, item]) => {
+      const messages: string[] = []
+
+      if (item.planHasGroupCode && item.collegeMissingGroupCode) {
+        messages.push('招生计划文件中有专业组代码，但院校分文件中存在空专业组代码')
+      }
+
+      if (item.collegeHasGroupCode && item.planMissingGroupCode) {
+        messages.push('院校分文件中有专业组代码，但招生计划文件中存在空专业组代码')
+      }
+
+      if (messages.length === 0) return null
+
+      return {
+        province,
+        message: `${province}：${messages.join('；')}`,
+      }
+    })
+    .filter((item): item is GroupCodeWarning => item !== null)
+}
+
 export function processPlanCompare(params: {
   planRows: Record<string, unknown>[]
   scoreRows: Record<string, unknown>[]
@@ -518,6 +602,7 @@ export function processPlanCompare(params: {
   const scoreKeySet = new Set(scoreRows.map((row) => buildScoreKey(row)))
   const collegeKeySet = new Set(collegeRows.map((row) => buildCollegeKey(row)))
   const enrollmentCodeWarnings = buildEnrollmentCodeWarnings(planRows, collegeRows)
+  const groupCodeWarnings = buildGroupCodeWarnings(planRows, collegeRows)
 
   const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
     const key = buildPlanScoreKey(row)
@@ -569,14 +654,15 @@ export function processPlanCompare(params: {
   })
 
   return {
-    yearValue,
-    missingPlanHeaders,
-    missingScoreHeaders,
-    missingCollegeHeaders,
-    enrollmentCodeWarnings,
-    planScoreRows,
-    planCollegeRows,
-  }
+  yearValue,
+  missingPlanHeaders,
+  missingScoreHeaders,
+  missingCollegeHeaders,
+  enrollmentCodeWarnings,
+  groupCodeWarnings,
+  planScoreRows,
+  planCollegeRows,
+}
 }
 
 
