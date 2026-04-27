@@ -73,11 +73,35 @@ export default function RuleCenterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authSubmitting, setAuthSubmitting] = useState(false)
-  const [exclusionDraft, setExclusionDraft] = useState(exclusionKeywords.join('\n'))
+  const [exclusionDraft, setExclusionDraft] = useState(
+    exclusionKeywords.join('\n')
+  )
+
+  /**
+   * 备注招生类型规则本地草稿
+   * 输入时只改这里，不直接写 Firebase
+   */
+  const [remarkRuleDrafts, setRemarkRuleDrafts] = useState<RemarkTypeRule[]>([])
+
+  /**
+   * 正在保存的规则 ID
+   * 用于避免同一条规则保存过程中重复编辑
+   */
+  const [savingRemarkRuleIds, setSavingRemarkRuleIds] = useState<
+    Record<string, boolean>
+  >({})
 
   useEffect(() => {
     setExclusionDraft(exclusionKeywords.join('\n'))
   }, [exclusionKeywords])
+
+  /**
+   * 云端规则变化后，同步到本地草稿。
+   * 注意：输入过程中不会写云端，所以不会因为每个字符变化导致输入框失焦。
+   */
+  useEffect(() => {
+    setRemarkRuleDrafts(remarkTypeRules)
+  }, [remarkTypeRules])
 
   const schoolPreview = useMemo<PreviewRow[]>(
     () =>
@@ -97,6 +121,20 @@ export default function RuleCenterPage() {
     [validMajorCombos]
   )
 
+  const getAuthErrorMessage = (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error)
+
+    if (msg.includes('auth/network-request-failed')) {
+      return 'Firebase 网络连接失败：请检查当前网络是否能访问 Firebase / Google 服务，或检查 Edge 是否开启了严格跟踪防护'
+    }
+
+    if (msg.includes('auth/unauthorized-domain')) {
+      return '当前域名未加入 Firebase 授权域名，请到 Firebase Authentication 的 Authorized domains 中添加 Cloudflare 域名'
+    }
+
+    return msg || '登录失败'
+  }
+
   const handleLogin = async () => {
     if (!email.trim() || !password) {
       message.warning('请输入邮箱和密码')
@@ -110,7 +148,7 @@ export default function RuleCenterPage() {
       message.success('登录成功')
       setPassword('')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '登录失败')
+      message.error(getAuthErrorMessage(error))
     } finally {
       setAuthSubmitting(false)
     }
@@ -123,7 +161,7 @@ export default function RuleCenterPage() {
       await loginWithGoogle()
       message.success('Gmail 登录成功')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Gmail 登录失败')
+      message.error(getAuthErrorMessage(error))
     } finally {
       setAuthSubmitting(false)
     }
@@ -213,14 +251,76 @@ export default function RuleCenterPage() {
     }
   }
 
-  const handleUpdateRemarkRule = async (
+  /**
+   * 输入时只更新本地草稿，不写 Firebase
+   */
+  const updateRemarkRuleDraft = (
     id: string,
     patch: Partial<RemarkTypeRule>
   ) => {
+    setRemarkRuleDrafts((prev) =>
+      prev.map((rule) =>
+        rule.id === id
+          ? {
+              ...rule,
+              ...patch,
+            }
+          : rule
+      )
+    )
+  }
+
+  /**
+   * 输入框失焦或回车时，再保存当前行到 Firebase
+   */
+  const saveRemarkRuleDraft = async (id: string) => {
+    if (!isAdminUser) return
+    if (savingRemarkRuleIds[id]) return
+
+    const draft = remarkRuleDrafts.find((rule) => rule.id === id)
+    const original = remarkTypeRules.find((rule) => rule.id === id)
+
+    if (!draft || !original) return
+
+    const nextKeyword = draft.keyword.trim()
+    const nextOutputType = draft.outputType.trim()
+    const nextPriority =
+      typeof draft.priority === 'number' && !Number.isNaN(draft.priority)
+        ? draft.priority
+        : 9999
+
+    const hasChanged =
+      nextKeyword !== original.keyword ||
+      nextOutputType !== original.outputType ||
+      nextPriority !== original.priority
+
+    if (!hasChanged) return
+
+    if (!nextKeyword || !nextOutputType) {
+      message.warning('备注查找字段和输出招生类型不能为空')
+      return
+    }
+
+    setSavingRemarkRuleIds((prev) => ({
+      ...prev,
+      [id]: true,
+    }))
+
     try {
-      await updateRemarkTypeRule(id, patch)
+      await updateRemarkTypeRule(id, {
+        keyword: nextKeyword,
+        outputType: nextOutputType,
+        priority: nextPriority,
+      })
+      message.success('规则已保存')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '更新规则失败')
+    } finally {
+      setSavingRemarkRuleIds((prev) => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
     }
   }
 
@@ -262,12 +362,14 @@ export default function RuleCenterPage() {
       width: 260,
       render: (_: string, record: RemarkTypeRule) => (
         <Input
-          disabled={!isAdminUser}
+          disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
           value={record.keyword}
           placeholder="如：国家专项"
           onChange={(e) =>
-            handleUpdateRemarkRule(record.id, { keyword: e.target.value })
+            updateRemarkRuleDraft(record.id, { keyword: e.target.value })
           }
+          onBlur={() => saveRemarkRuleDraft(record.id)}
+          onPressEnter={() => saveRemarkRuleDraft(record.id)}
         />
       ),
     },
@@ -278,12 +380,14 @@ export default function RuleCenterPage() {
       width: 260,
       render: (_: string, record: RemarkTypeRule) => (
         <Input
-          disabled={!isAdminUser}
+          disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
           value={record.outputType}
-          placeholder="如：国家专项"
+          placeholder="如：国家专项计划"
           onChange={(e) =>
-            handleUpdateRemarkRule(record.id, { outputType: e.target.value })
+            updateRemarkRuleDraft(record.id, { outputType: e.target.value })
           }
+          onBlur={() => saveRemarkRuleDraft(record.id)}
+          onPressEnter={() => saveRemarkRuleDraft(record.id)}
         />
       ),
     },
@@ -294,15 +398,21 @@ export default function RuleCenterPage() {
       width: 120,
       render: (_: number, record: RemarkTypeRule) => (
         <InputNumber
-          disabled={!isAdminUser}
+          disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
           min={1}
           style={{ width: '100%' }}
           value={record.priority}
           onChange={(value) =>
-            handleUpdateRemarkRule(record.id, {
+            updateRemarkRuleDraft(record.id, {
               priority: typeof value === 'number' ? value : 9999,
             })
           }
+          onBlur={() => saveRemarkRuleDraft(record.id)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              saveRemarkRuleDraft(record.id)
+            }
+          }}
         />
       ),
     },
@@ -314,7 +424,7 @@ export default function RuleCenterPage() {
         <Button
           danger
           size="small"
-          disabled={!isAdminUser}
+          disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
           onClick={() => handleRemoveRemarkRule(record.id)}
         >
           删除
@@ -624,12 +734,19 @@ export default function RuleCenterPage() {
                 </Col>
               </Row>
 
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 8 }}
+                message="编辑规则时，输入内容会先保存在本地草稿中；输入框失焦或按回车后才会写入云端。"
+              />
+
               <Table
                 rowKey="id"
                 size="small"
                 pagination={false}
                 columns={remarkColumns}
-                dataSource={remarkTypeRules}
+                dataSource={remarkRuleDrafts}
                 scroll={{ x: 760 }}
               />
 
