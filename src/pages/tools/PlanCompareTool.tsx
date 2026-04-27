@@ -342,7 +342,8 @@ export default function PlanCompareTool() {
 
           {(result.missingPlanHeaders.length > 0 ||
             result.missingScoreHeaders.length > 0 ||
-            result.missingCollegeHeaders.length > 0) && (
+            result.missingCollegeHeaders.length > 0 ||
+            result.enrollmentCodeWarnings.length > 0) && (
             <Card title={<span style={cardTitleStyle}>字段校验</span>} style={{ borderRadius: 12 }}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 {result.missingPlanHeaders.length > 0 ? (
@@ -364,6 +365,20 @@ export default function PlanCompareTool() {
                     type="warning"
                     showIcon
                     message={`院校分文件缺少字段：${result.missingCollegeHeaders.join('、')}`}
+                  />
+                ) : null}
+                {result.enrollmentCodeWarnings.length > 0 ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="招生代码缺失提醒"
+                    description={
+                      <div>
+                        {result.enrollmentCodeWarnings.map((item) => (
+                          <div key={item.province}>{item.message}</div>
+                        ))}
+                      </div>
+                    }
                   />
                 ) : null}
               </Space>

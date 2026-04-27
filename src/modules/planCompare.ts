@@ -32,11 +32,17 @@ export type PlanCollegeCompareRow = {
   sourceRow: Record<string, unknown>
 }
 
+export type EnrollmentCodeWarning = {
+  province: string
+  message: string
+}
+
 export type PlanCompareResult = {
   yearValue: string
   missingPlanHeaders: string[]
   missingScoreHeaders: string[]
   missingCollegeHeaders: string[]
+  enrollmentCodeWarnings: EnrollmentCodeWarning[]
   planScoreRows: PlanScoreCompareRow[]
   planCollegeRows: PlanCollegeCompareRow[]
 }
@@ -414,6 +420,87 @@ function buildCollegeKey(row: Record<string, unknown>): string {
     : [...base, enrollmentCode].join('||')
 }
 
+
+function buildEnrollmentCodeWarnings(
+  planRows: Record<string, unknown>[],
+  collegeRows: Record<string, unknown>[]
+): EnrollmentCodeWarning[] {
+  const provinceMap = new Map<
+    string,
+    {
+      planHasCode: boolean
+      planMissingCode: boolean
+      collegeHasCode: boolean
+      collegeMissingCode: boolean
+    }
+  >()
+
+  const ensureProvince = (province: string) => {
+    if (!provinceMap.has(province)) {
+      provinceMap.set(province, {
+        planHasCode: false,
+        planMissingCode: false,
+        collegeHasCode: false,
+        collegeMissingCode: false,
+      })
+    }
+    return provinceMap.get(province)!
+  }
+
+  planRows.forEach((row) => {
+    const province = t(row['省份'])
+    if (!province) return
+
+    const item = ensureProvince(province)
+    const code = stripCaret(row['招生代码'])
+
+    if (code) {
+      item.planHasCode = true
+    } else {
+      item.planMissingCode = true
+    }
+  })
+
+  collegeRows.forEach((row) => {
+    const province = t(row['省份'])
+    if (!province) return
+
+    const item = ensureProvince(province)
+    const code = stripCaret(row['招生代码'])
+
+    if (code) {
+      item.collegeHasCode = true
+    } else {
+      item.collegeMissingCode = true
+    }
+  })
+
+  return Array.from(provinceMap.entries())
+    .map(([province, item]) => {
+      const messages: string[] = []
+
+      if (item.planMissingCode && item.collegeHasCode) {
+        messages.push('招生计划文件中存在无招生代码数据，但院校分文件中有招生代码')
+      }
+
+      if (item.collegeMissingCode && item.planHasCode) {
+        messages.push('院校分文件中存在无招生代码数据，但招生计划文件中有招生代码')
+      }
+
+      if (item.planMissingCode && item.collegeMissingCode) {
+        messages.push('招生计划文件和院校分文件均存在无招生代码数据')
+      }
+
+      if (messages.length === 0) return null
+
+      return {
+        province,
+        message: `${province}：${messages.join('；')}`,
+      }
+    })
+    .filter((item): item is EnrollmentCodeWarning => item !== null)
+}
+
 export function processPlanCompare(params: {
   planRows: Record<string, unknown>[]
   scoreRows: Record<string, unknown>[]
@@ -430,6 +517,7 @@ export function processPlanCompare(params: {
 
   const scoreKeySet = new Set(scoreRows.map((row) => buildScoreKey(row)))
   const collegeKeySet = new Set(collegeRows.map((row) => buildCollegeKey(row)))
+  const enrollmentCodeWarnings = buildEnrollmentCodeWarnings(planRows, collegeRows)
 
   const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
     const key = buildPlanScoreKey(row)
@@ -485,10 +573,12 @@ export function processPlanCompare(params: {
     missingPlanHeaders,
     missingScoreHeaders,
     missingCollegeHeaders,
+    enrollmentCodeWarnings,
     planScoreRows,
     planCollegeRows,
   }
 }
+
 
 function buildUniqueKey(
   row: Record<string, unknown>,
@@ -516,6 +606,18 @@ function dedupeCompareRows<T extends { sourceRow: Record<string, unknown> }>(
   return result
 }
 
+function buildCollegeAggregateKey(row: Record<string, unknown>): string {
+  return [
+    t(row['年份']),
+    t(row['省份']),
+    t(row['学校']),
+    t(row['科类']),
+    t(row['批次']),
+    stripCaret(row['专业组代码']),
+    stripCaret(row['招生代码']),
+  ].join('||')
+}
+
 function aggregateCollegeCompareRows(
   rows: PlanCollegeCompareRow[]
 ): Array<PlanCollegeCompareRow & { aggregatedEnrollmentCount: number | null }> {
@@ -523,31 +625,20 @@ function aggregateCollegeCompareRows(
     string,
     PlanCollegeCompareRow & {
       aggregatedEnrollmentCount: number | null
-      __hasEnrollmentCount?: boolean
+      hasEnrollmentCount: boolean
     }
   >()
 
   rows.forEach((row) => {
-    const source = row.sourceRow
-
-    const key = [
-      t(source['年份']),
-      t(source['省份']),
-      t(source['学校']),
-      t(source['科类']),
-      t(source['批次']),
-      stripCaret(source['专业组代码']),
-      stripCaret(source['招生代码']),
-    ].join('||')
-
-    const currentCount = n(source['招生人数'])
+    const key = buildCollegeAggregateKey(row.sourceRow)
+    const currentCount = n(row.sourceRow['招生人数'])
     const existed = map.get(key)
 
     if (!existed) {
       map.set(key, {
         ...row,
         aggregatedEnrollmentCount: currentCount,
-        __hasEnrollmentCount: currentCount !== null,
+        hasEnrollmentCount: currentCount !== null,
       })
       return
     }
@@ -555,13 +646,13 @@ function aggregateCollegeCompareRows(
     if (currentCount !== null) {
       existed.aggregatedEnrollmentCount =
         (existed.aggregatedEnrollmentCount || 0) + currentCount
-      existed.__hasEnrollmentCount = true
+      existed.hasEnrollmentCount = true
     }
   })
 
   return Array.from(map.values()).map((row) => ({
     ...row,
-    aggregatedEnrollmentCount: row.__hasEnrollmentCount
+    aggregatedEnrollmentCount: row.hasEnrollmentCount
       ? row.aggregatedEnrollmentCount
       : null,
   }))
@@ -615,7 +706,6 @@ export function buildCollegeTemplateRows(
   return aggregateCollegeCompareRows(compareRows.filter((row) => !row.exists)).map(
     (row) => {
       const source = row.sourceRow
-
       return {
         学校名称: t(source['学校']),
         省份: t(source['省份']),
@@ -640,8 +730,7 @@ export function buildCollegeTemplateRows(
         院校招生代码: stripCaret(source['招生代码']),
         层次: normalizeLevelForExport(source['层次']),
       }
-    }
-  )
+    })
 }
 
 async function fillTemplateSheet<T extends Record<string, unknown>>(params: {
