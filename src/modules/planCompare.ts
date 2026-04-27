@@ -516,6 +516,57 @@ function dedupeCompareRows<T extends { sourceRow: Record<string, unknown> }>(
   return result
 }
 
+function aggregateCollegeCompareRows(
+  rows: PlanCollegeCompareRow[]
+): Array<PlanCollegeCompareRow & { aggregatedEnrollmentCount: number | null }> {
+  const map = new Map<
+    string,
+    PlanCollegeCompareRow & {
+      aggregatedEnrollmentCount: number | null
+      __hasEnrollmentCount?: boolean
+    }
+  >()
+
+  rows.forEach((row) => {
+    const source = row.sourceRow
+
+    const key = [
+      t(source['年份']),
+      t(source['省份']),
+      t(source['学校']),
+      t(source['科类']),
+      t(source['批次']),
+      stripCaret(source['专业组代码']),
+      stripCaret(source['招生代码']),
+    ].join('||')
+
+    const currentCount = n(source['招生人数'])
+    const existed = map.get(key)
+
+    if (!existed) {
+      map.set(key, {
+        ...row,
+        aggregatedEnrollmentCount: currentCount,
+        __hasEnrollmentCount: currentCount !== null,
+      })
+      return
+    }
+
+    if (currentCount !== null) {
+      existed.aggregatedEnrollmentCount =
+        (existed.aggregatedEnrollmentCount || 0) + currentCount
+      existed.__hasEnrollmentCount = true
+    }
+  })
+
+  return Array.from(map.values()).map((row) => ({
+    ...row,
+    aggregatedEnrollmentCount: row.__hasEnrollmentCount
+      ? row.aggregatedEnrollmentCount
+      : null,
+  }))
+}
+
 export function buildProfessionalTemplateRows(
   compareRows: PlanScoreCompareRow[]
 ): ProfessionalTemplateRow[] {
@@ -561,11 +612,10 @@ export function buildProfessionalTemplateRows(
 export function buildCollegeTemplateRows(
   compareRows: PlanCollegeCompareRow[]
 ): CollegeTemplateRow[] {
-  return dedupeCompareRows(
-    compareRows.filter((row) => !row.exists),
-    ['年份', '省份', '学校', '科类', '批次', '专业组代码', '招生代码']
-  ).map((row) => {
+  return aggregateCollegeCompareRows(compareRows.filter((row) => !row.exists)).map(
+    (row) => {
       const source = row.sourceRow
+
       return {
         学校名称: t(source['学校']),
         省份: t(source['省份']),
@@ -580,7 +630,7 @@ export function buildCollegeTemplateRows(
         最低位次: null,
         平均位次: null,
         录取人数: null,
-        招生人数: n(source['招生人数']),
+        招生人数: row.aggregatedEnrollmentCount,
         数据来源: t(source['数据来源']),
         省控线科类: '',
         省控线批次: '',
@@ -590,7 +640,8 @@ export function buildCollegeTemplateRows(
         院校招生代码: stripCaret(source['招生代码']),
         层次: normalizeLevelForExport(source['层次']),
       }
-    })
+    }
+  )
 }
 
 async function fillTemplateSheet<T extends Record<string, unknown>>(params: {
