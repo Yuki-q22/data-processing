@@ -16,7 +16,11 @@ import {
   update as dbUpdate,
 } from 'firebase/database'
 import { auth, db } from '../lib/firebase'
-import { DEFAULT_REMARK_TYPE_RULES } from '../constants/remarkTypeRules'
+import {
+  DEFAULT_EXCLUSION_KEYWORDS,
+  DEFAULT_REMARK_TYPE_RULES,
+} from '../constants/remarkTypeRules'
+
 export type RemarkTypeRule = {
   id: string
   keyword: string
@@ -72,7 +76,6 @@ type RuleCenterStore = {
 }
 
 
-const DEFAULT_EXCLUSION_KEYWORDS = ['除了', '不含', '除外', '没有', '除', '不包含', '不招收']
 const CLOUD_RULE_FILE_NAME = '云端实时规则'
 
 let hasBootstrapped = false

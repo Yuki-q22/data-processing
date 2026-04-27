@@ -5,6 +5,10 @@ export type DefaultRemarkTypeRule = {
   priority: number
 }
 
+/**
+ * 备注招生类型规则
+ * 用于：规则中心、备注招生类型提取、Firebase 默认规则
+ */
 export const DEFAULT_REMARK_TYPE_RULES: DefaultRemarkTypeRule[] = [
   { id: 'r1', keyword: '中外合作', outputType: '中外合作办学', priority: 1 },
   { id: 'r2', keyword: '中外高水平大学生交流计划', outputType: '中外高水平大学生交流计划', priority: 2 },
@@ -16,7 +20,7 @@ export const DEFAULT_REMARK_TYPE_RULES: DefaultRemarkTypeRule[] = [
   { id: 'r8', keyword: '闽台合作', outputType: '闽台合作', priority: 8 },
   { id: 'r9', keyword: '预科', outputType: '预科', priority: 9 },
 
-  // 定向培养军士必须排在“定向”前面
+  // 定向培养军士必须放在“定向”前面，否则会先命中“定向”
   { id: 'r10', keyword: '定向培养军士', outputType: '定向培养军士生', priority: 10 },
   { id: 'r11', keyword: '定向', outputType: '定向', priority: 11 },
 
@@ -44,7 +48,7 @@ export const DEFAULT_REMARK_TYPE_RULES: DefaultRemarkTypeRule[] = [
   { id: 'r33', keyword: '中外联合培养', outputType: '中外联合培养', priority: 33 },
   { id: 'r34', keyword: '中外高水平大学学生交流计划', outputType: '中外高水平大学学生交流计划', priority: 34 },
 
-  // 原规则没有 priority 35，保持原始优先级
+  // 原规则中没有 priority 35，这里保持你的原始优先级
   { id: 'r35', keyword: '威海校区', outputType: '威海校区', priority: 36 },
   { id: 'r36', keyword: '马来西亚校区', outputType: '马来西亚校区', priority: 37 },
   { id: 'r37', keyword: '马来西亚分校', outputType: '马来西亚分校', priority: 38 },
@@ -78,6 +82,24 @@ export const DEFAULT_REMARK_TYPE_RULES: DefaultRemarkTypeRule[] = [
   { id: 'r65', keyword: '招朝鲜族考生', outputType: '招朝鲜族考生', priority: 66 },
 ]
 
+/**
+ * 需要核查关键词
+ * 用于：备注中出现这些词时，标记“需要核查”
+ * 注意：这里不参与招生类型输出
+ */
+export const DEFAULT_EXCLUSION_KEYWORDS: string[] = [
+  '除',
+  '除了',
+  '除外',
+  '不含',
+  '不包含',
+  '不招收',
+]
+
+/**
+ * 兼容旧 ruleStore.ts 的格式
+ * ruleStore.ts 里使用的是 output，不是 outputType
+ */
 export const DEFAULT_LEGACY_REMARK_TYPE_RULES = DEFAULT_REMARK_TYPE_RULES.map(
   ({ keyword, outputType, priority }) => ({
     keyword,
