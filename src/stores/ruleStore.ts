@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { DEFAULT_LEGACY_REMARK_TYPE_RULES } from '../constants/remarkTypeRules'
 
 type RuleStore = {
   provinceRules: Record<string, string>
@@ -340,37 +341,7 @@ const defaultState = {
     '专业组名称',
   ],
 
-  remarkTypeRules: [
-    { keyword: '中外合作', output: '中外合作办学', priority: 1 },
-    { keyword: '中外高水平大学生交流计划', output: '中外高水平大学生交流计划', priority: 2 },
-    { keyword: '学分互认联合培养项目', output: '学分互认联合培养项目', priority: 3 },
-    { keyword: '地方专项', output: '地方专项计划', priority: 4 },
-    { keyword: '国家专项', output: '国家专项计划', priority: 5 },
-    { keyword: '高校专项', output: '高校专项计划', priority: 6 },
-    { keyword: '艺术类', output: '艺术类', priority: 7 },
-    { keyword: '闽台合作', output: '闽台合作', priority: 8 },
-    { keyword: '预科', output: '预科', priority: 9 },
-    { keyword: '定向', output: '定向', priority: 10 },
-    { keyword: '护理类', output: '护理类', priority: 11 },
-    { keyword: '民族班', output: '民族班', priority: 12 },
-    { keyword: '联合办学', output: '联合办学', priority: 13 },
-    { keyword: '联办', output: '联合办学', priority: 14 },
-    { keyword: '建档立卡专项', output: '建档立卡专项', priority: 15 },
-    { keyword: '藏区专项', output: '藏区专项', priority: 16 },
-    { keyword: '少数民族紧缺人才培养专项', output: '少数民族紧缺人才培养专项', priority: 17 },
-    { keyword: '民语类及对等培养', output: '民语类及对等培养', priority: 18 },
-    { keyword: '优师计划', output: '优师计划', priority: 19 },
-    { keyword: '国家优师专项', output: '国家优师专项', priority: 20 },
-    { keyword: '优师专项', output: '优师专项', priority: 21 },
-    { keyword: '国家公费师范生', output: '国家公费师范生', priority: 22 },
-    { keyword: '公费师范', output: '公费师范生', priority: 23 },
-    { keyword: '中美121', output: '中美121项目', priority: 24 },
-    { keyword: '中俄实验班', output: '中俄实验班', priority: 25 },
-    { keyword: '校企合作', output: '校企合作', priority: 26 },
-    { keyword: '订单培养', output: '订单培养', priority: 27 },
-    { keyword: '订单班', output: '订单班', priority: 28 },
-    { keyword: '高本贯通', output: '高本贯通', priority: 29 },
-  ],
+  remarkTypeRules: DEFAULT_LEGACY_REMARK_TYPE_RULES,
 
   provinceYearCategoryType,
 }
