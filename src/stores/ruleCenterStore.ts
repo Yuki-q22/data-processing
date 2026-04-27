@@ -10,7 +10,6 @@ import {
 import {
   onValue,
   ref,
-  push,
   remove as dbRemove,
   set as dbSet,
   update as dbUpdate,
@@ -28,14 +27,20 @@ export type RemarkTypeRule = {
   priority: number
 }
 
+type AddRemarkTypeRuleInput = {
+  keyword?: string
+  outputType?: string
+  priority?: number
+}
+
 type CloudRuleItem = {
-  rule_name: string
-  source_text: string
-  target_text: string
-  enabled: boolean
-  sort_order: number
-  updated_at: number
-  updated_by: string
+  rule_name?: string
+  source_text?: string
+  target_text?: string
+  enabled?: boolean
+  sort_order?: number
+  updated_at?: number
+  updated_by?: string
 }
 
 type RuleCenterStore = {
@@ -56,6 +61,7 @@ type RuleCenterStore = {
   authError?: string
 
   bootstrap: () => void
+
   login: (email: string, password: string) => Promise<void>
   loginWithGoogle: () => Promise<void>
   logout: () => Promise<void>
@@ -67,14 +73,16 @@ type RuleCenterStore = {
   clearSchoolRules: () => Promise<void>
   clearMajorRules: () => Promise<void>
 
-  addRemarkTypeRule: () => Promise<void>
-  updateRemarkTypeRule: (id: string, patch: Partial<RemarkTypeRule>) => Promise<void>
+  addRemarkTypeRule: (rule?: AddRemarkTypeRuleInput) => Promise<void>
+  updateRemarkTypeRule: (
+    id: string,
+    patch: Partial<RemarkTypeRule>
+  ) => Promise<void>
   removeRemarkTypeRule: (id: string) => Promise<void>
   resetRemarkTypeRules: () => Promise<void>
 
   setExclusionKeywords: (items: string[]) => Promise<void>
 }
-
 
 const CLOUD_RULE_FILE_NAME = '云端实时规则'
 
@@ -85,11 +93,42 @@ function createRuleId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
   }
+
   return `rule_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
 function sortRules(rules: RemarkTypeRule[]) {
-  return [...rules].sort((a, b) => a.priority - b.priority)
+  return [...rules].sort((a, b) => {
+    const priorityA = Number.isFinite(a.priority) ? a.priority : 9999
+    const priorityB = Number.isFinite(b.priority) ? b.priority : 9999
+
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB
+    }
+
+    return a.keyword.localeCompare(b.keyword, 'zh-CN')
+  })
+}
+
+function getDefaultRemarkTypeRules(): RemarkTypeRule[] {
+  return sortRules(
+    DEFAULT_REMARK_TYPE_RULES.map((rule) => ({
+      id: rule.id,
+      keyword: String(rule.keyword ?? '').trim(),
+      outputType: String(rule.outputType ?? '').trim(),
+      priority: Number(rule.priority ?? 9999),
+    })).filter((rule) => rule.keyword && rule.outputType)
+  )
+}
+
+function getDefaultExclusionKeywords(): string[] {
+  return Array.from(
+    new Set(
+      DEFAULT_EXCLUSION_KEYWORDS.map((item) => String(item).trim()).filter(
+        Boolean
+      )
+    )
+  )
 }
 
 async function readWorkbook(file: File) {
@@ -100,6 +139,7 @@ async function readWorkbook(file: File) {
 function getFirstSheetRows(workbook: XLSX.WorkBook): Record<string, unknown>[] {
   const firstSheetName = workbook.SheetNames[0]
   const sheet = workbook.Sheets[firstSheetName]
+
   return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     defval: '',
     raw: false,
@@ -111,10 +151,13 @@ function toCloudPayloadFromSimpleValues(values: string[], uid: string) {
   const payload: Record<string, CloudRuleItem> = {}
 
   values.forEach((value, index) => {
+    const cleanValue = String(value).trim()
+    if (!cleanValue) return
+
     payload[createRuleId()] = {
-      rule_name: value,
-      source_text: value,
-      target_text: value,
+      rule_name: cleanValue,
+      source_text: cleanValue,
+      target_text: cleanValue,
       enabled: true,
       sort_order: index + 1,
       updated_at: now,
@@ -130,12 +173,18 @@ function toCloudPayloadFromRemarkRules(rules: RemarkTypeRule[], uid: string) {
   const payload: Record<string, CloudRuleItem> = {}
 
   sortRules(rules).forEach((rule) => {
+    const keyword = String(rule.keyword ?? '').trim()
+    const outputType = String(rule.outputType ?? '').trim()
+    const priority = Number(rule.priority ?? 9999)
+
+    if (!keyword || !outputType) return
+
     payload[rule.id || createRuleId()] = {
-      rule_name: `${rule.keyword} → ${rule.outputType}`,
-      source_text: rule.keyword,
-      target_text: rule.outputType,
+      rule_name: `${keyword} → ${outputType}`,
+      source_text: keyword,
+      target_text: outputType,
       enabled: true,
-      sort_order: rule.priority,
+      sort_order: Number.isNaN(priority) ? 9999 : priority,
       updated_at: now,
       updated_by: uid,
     }
@@ -144,22 +193,35 @@ function toCloudPayloadFromRemarkRules(rules: RemarkTypeRule[], uid: string) {
   return payload
 }
 
-function mapCloudRemarkRules(value: Record<string, CloudRuleItem> | null | undefined): RemarkTypeRule[] {
+function mapCloudRemarkRules(
+  value: Record<string, CloudRuleItem> | null | undefined
+): RemarkTypeRule[] {
   if (!value || typeof value !== 'object') {
-    return DEFAULT_REMARK_TYPE_RULES
+    return getDefaultRemarkTypeRules()
   }
 
-  const rules = Object.entries(value).map(([id, item]) => ({
-    id,
-    keyword: String(item?.source_text ?? '').trim(),
-    outputType: String(item?.target_text ?? '').trim(),
-    priority: Number(item?.sort_order ?? 9999),
-  }))
+  const rules = Object.entries(value)
+    .filter(([, item]) => item?.enabled !== false)
+    .map(([id, item]) => {
+      const keyword = String(item?.source_text ?? '').trim()
+      const outputType = String(item?.target_text ?? '').trim()
+      const priority = Number(item?.sort_order ?? 9999)
 
-  return rules.length ? sortRules(rules) : DEFAULT_REMARK_TYPE_RULES
+      return {
+        id,
+        keyword,
+        outputType,
+        priority: Number.isNaN(priority) ? 9999 : priority,
+      }
+    })
+    .filter((rule) => rule.keyword && rule.outputType)
+
+  return rules.length ? sortRules(rules) : getDefaultRemarkTypeRules()
 }
 
-function mapCloudSimpleValues(value: Record<string, CloudRuleItem> | null | undefined): string[] {
+function mapCloudSimpleValues(
+  value: Record<string, CloudRuleItem> | null | undefined
+): string[] {
   if (!value || typeof value !== 'object') return []
 
   const values = Object.values(value)
@@ -168,6 +230,30 @@ function mapCloudSimpleValues(value: Record<string, CloudRuleItem> | null | unde
     .filter(Boolean)
 
   return Array.from(new Set(values))
+}
+
+function mapCloudExclusionKeywords(raw: unknown): string[] {
+  if (raw == null) {
+    return getDefaultExclusionKeywords()
+  }
+
+  if (Array.isArray(raw)) {
+    return Array.from(
+      new Set(raw.map((item) => String(item).trim()).filter(Boolean))
+    )
+  }
+
+  if (typeof raw === 'object') {
+    return Array.from(
+      new Set(
+        Object.values(raw)
+          .map((item) => String(item).trim())
+          .filter(Boolean)
+      )
+    )
+  }
+
+  return getDefaultExclusionKeywords()
 }
 
 function clearDataUnsubscribers() {
@@ -186,6 +272,7 @@ async function ensureAdmin(uid?: string, isAdminUser?: boolean) {
   if (!uid) {
     throw new Error('请先登录')
   }
+
   if (!isAdminUser) {
     throw new Error('当前账号没有规则编辑权限')
   }
@@ -197,9 +284,9 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   schoolRuleFileName: undefined,
   majorRuleFileName: undefined,
 
-  remarkTypeRules: DEFAULT_REMARK_TYPE_RULES,
+  remarkTypeRules: getDefaultRemarkTypeRules(),
   remarkRuleFileName: '内置默认规则',
-  exclusionKeywords: DEFAULT_EXCLUSION_KEYWORDS,
+  exclusionKeywords: getDefaultExclusionKeywords(),
 
   currentUserEmail: undefined,
   currentUid: undefined,
@@ -229,10 +316,11 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
             validMajorCombos: [],
             schoolRuleFileName: undefined,
             majorRuleFileName: undefined,
-            remarkTypeRules: DEFAULT_REMARK_TYPE_RULES,
+            remarkTypeRules: getDefaultRemarkTypeRules(),
             remarkRuleFileName: '内置默认规则',
-            exclusionKeywords: DEFAULT_EXCLUSION_KEYWORDS,
+            exclusionKeywords: getDefaultExclusionKeywords(),
           })
+
           return
         }
 
@@ -251,58 +339,107 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
         const remarkRef = ref(db, 'rule_center/remark_enrollment_type')
         const exclusionRef = ref(db, 'rule_center/exclusion_keywords')
 
-        const offAdmin = onValue(adminRef, (snapshot) => {
-          setState({ isAdminUser: snapshot.val() === true })
-        })
-
-        const offSchool = onValue(schoolRef, (snapshot) => {
-          const validSchoolNames = mapCloudSimpleValues(snapshot.val())
-          setState({
-            validSchoolNames,
-            schoolRuleFileName: validSchoolNames.length ? CLOUD_RULE_FILE_NAME : undefined,
-            syncing: false,
-          })
-        })
-
-        const offMajor = onValue(majorRef, (snapshot) => {
-          const validMajorCombos = mapCloudSimpleValues(snapshot.val())
-          setState({
-            validMajorCombos,
-            majorRuleFileName: validMajorCombos.length ? CLOUD_RULE_FILE_NAME : undefined,
-            syncing: false,
-          })
-        })
-
-        const offRemark = onValue(remarkRef, (snapshot) => {
-          const remarkTypeRules = mapCloudRemarkRules(snapshot.val())
-          setState({
-            remarkTypeRules,
-            remarkRuleFileName: remarkTypeRules.length ? CLOUD_RULE_FILE_NAME : '内置默认规则',
-            syncing: false,
-          })
-        })
-
-        const offExclusion = onValue(exclusionRef, (snapshot) => {
-          const raw = snapshot.val()
-          if (raw == null) {
+        const offAdmin = onValue(
+          adminRef,
+          (snapshot) => {
             setState({
-              exclusionKeywords: DEFAULT_EXCLUSION_KEYWORDS,
+              isAdminUser: snapshot.val() === true,
+            })
+          },
+          (error) => {
+            setState({
+              authError: error.message,
               syncing: false,
             })
-            return
           }
+        )
 
-          const exclusionKeywords = Array.isArray(raw)
-            ? raw.map((item) => String(item).trim()).filter(Boolean)
-            : Object.values(raw).map((item) => String(item).trim()).filter(Boolean)
+        const offSchool = onValue(
+          schoolRef,
+          (snapshot) => {
+            const validSchoolNames = mapCloudSimpleValues(snapshot.val())
 
-          setState({
-            exclusionKeywords,
-            syncing: false,
-          })
-        })
+            setState({
+              validSchoolNames,
+              schoolRuleFileName: validSchoolNames.length
+                ? CLOUD_RULE_FILE_NAME
+                : undefined,
+              syncing: false,
+            })
+          },
+          (error) => {
+            setState({
+              authError: error.message,
+              syncing: false,
+            })
+          }
+        )
 
-        dataUnsubscribers = [offAdmin, offSchool, offMajor, offRemark, offExclusion]
+        const offMajor = onValue(
+          majorRef,
+          (snapshot) => {
+            const validMajorCombos = mapCloudSimpleValues(snapshot.val())
+
+            setState({
+              validMajorCombos,
+              majorRuleFileName: validMajorCombos.length
+                ? CLOUD_RULE_FILE_NAME
+                : undefined,
+              syncing: false,
+            })
+          },
+          (error) => {
+            setState({
+              authError: error.message,
+              syncing: false,
+            })
+          }
+        )
+
+        const offRemark = onValue(
+          remarkRef,
+          (snapshot) => {
+            const remarkTypeRules = mapCloudRemarkRules(snapshot.val())
+
+            setState({
+              remarkTypeRules,
+              remarkRuleFileName: remarkTypeRules.length
+                ? CLOUD_RULE_FILE_NAME
+                : '内置默认规则',
+              syncing: false,
+            })
+          },
+          (error) => {
+            setState({
+              authError: error.message,
+              syncing: false,
+            })
+          }
+        )
+
+        const offExclusion = onValue(
+          exclusionRef,
+          (snapshot) => {
+            setState({
+              exclusionKeywords: mapCloudExclusionKeywords(snapshot.val()),
+              syncing: false,
+            })
+          },
+          (error) => {
+            setState({
+              authError: error.message,
+              syncing: false,
+            })
+          }
+        )
+
+        dataUnsubscribers = [
+          offAdmin,
+          offSchool,
+          offMajor,
+          offRemark,
+          offExclusion,
+        ]
       },
       (error) => {
         setState({
@@ -315,22 +452,22 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   },
 
   login: async (email, password) => {
-  await signInWithEmailAndPassword(auth, email.trim(), password)
-},
+    await signInWithEmailAndPassword(auth, email.trim(), password)
+  },
 
-loginWithGoogle: async () => {
-  const provider = new GoogleAuthProvider()
+  loginWithGoogle: async () => {
+    const provider = new GoogleAuthProvider()
 
-  provider.setCustomParameters({
-    prompt: 'select_account',
-  })
+    provider.setCustomParameters({
+      prompt: 'select_account',
+    })
 
-  await signInWithPopup(auth, provider)
-},
+    await signInWithPopup(auth, provider)
+  },
 
-logout: async () => {
-  await signOut(auth)
-},
+  logout: async () => {
+    await signOut(auth)
+  },
 
   importSchoolRuleFile: async (file: File) => {
     const { currentUid, isAdminUser } = getState()
@@ -344,6 +481,7 @@ logout: async () => {
     }
 
     const firstRow = rows[0]
+
     if (!('学校名称' in firstRow)) {
       throw new Error('学校规则文件缺少“学校名称”列')
     }
@@ -360,7 +498,11 @@ logout: async () => {
       throw new Error('学校规则文件中没有有效学校名称')
     }
 
-    await dbSet(ref(db, 'rule_center/school_name'), toCloudPayloadFromSimpleValues(values, currentUid!))
+    await dbSet(
+      ref(db, 'rule_center/school_name'),
+      toCloudPayloadFromSimpleValues(values, currentUid!)
+    )
+
     await updateMetaVersion()
   },
 
@@ -376,6 +518,7 @@ logout: async () => {
     }
 
     const firstRow = rows[0]
+
     if (!('招生专业' in firstRow)) {
       throw new Error('专业规则文件缺少“招生专业”列')
     }
@@ -392,7 +535,11 @@ logout: async () => {
       throw new Error('专业规则文件中没有有效招生专业')
     }
 
-    await dbSet(ref(db, 'rule_center/major_combo'), toCloudPayloadFromSimpleValues(values, currentUid!))
+    await dbSet(
+      ref(db, 'rule_center/major_combo'),
+      toCloudPayloadFromSimpleValues(values, currentUid!)
+    )
+
     await updateMetaVersion()
   },
 
@@ -408,6 +555,7 @@ logout: async () => {
     }
 
     const firstRow = rows[0]
+
     if (!('备注查找字段' in firstRow) || !('输出招生类型' in firstRow)) {
       throw new Error('备注招生类型规则文件缺少“备注查找字段”或“输出招生类型”列')
     }
@@ -434,7 +582,11 @@ logout: async () => {
       throw new Error('备注招生类型规则文件中没有有效规则')
     }
 
-    await dbSet(ref(db, 'rule_center/remark_enrollment_type'), toCloudPayloadFromRemarkRules(rules, currentUid!))
+    await dbSet(
+      ref(db, 'rule_center/remark_enrollment_type'),
+      toCloudPayloadFromRemarkRules(rules, currentUid!)
+    )
+
     await updateMetaVersion()
   },
 
@@ -454,85 +606,118 @@ logout: async () => {
     await updateMetaVersion()
   },
 
-  addRemarkTypeRule: async () => {
-  const { currentUid, isAdminUser, remarkTypeRules } = getState()
-  await ensureAdmin(currentUid, isAdminUser)
+  addRemarkTypeRule: async (rule = {}) => {
+    const { currentUid, isAdminUser, remarkTypeRules } = getState()
+    await ensureAdmin(currentUid, isAdminUser)
 
-  const nextPriority =
-    remarkTypeRules.length > 0
-      ? Math.max(...remarkTypeRules.map((rule) => rule.priority || 0)) + 1
-      : 1
+    const keyword = String(rule.keyword || '').trim()
+    const outputType = String(rule.outputType || '').trim()
 
-  const parentRef = ref(db, 'rule_center/remark_enrollment_type')
-  const newRef = push(parentRef)
-  const newId = newRef.key
+    if (!keyword) {
+      throw new Error('备注查找字段不能为空')
+    }
 
-  if (!newId) {
-    throw new Error('新增规则失败：无法生成云端规则ID')
-  }
+    if (!outputType) {
+      throw new Error('输出招生类型不能为空')
+    }
 
-  const newRule: RemarkTypeRule = {
-    id: newId,
-    keyword: '',
-    outputType: '',
-    priority: nextPriority,
-  }
+    const nextPriority =
+      typeof rule.priority === 'number' && !Number.isNaN(rule.priority)
+        ? rule.priority
+        : remarkTypeRules.length > 0
+          ? Math.max(...remarkTypeRules.map((item) => item.priority || 0)) + 1
+          : 1
 
-  await dbSet(newRef, {
-    rule_name: '新规则',
-    source_text: '',
-    target_text: '',
-    enabled: true,
-    sort_order: nextPriority,
-    updated_at: Date.now(),
-    updated_by: currentUid!,
-  })
+    const newId = createRuleId()
 
-  await updateMetaVersion()
+    const newRule: RemarkTypeRule = {
+      id: newId,
+      keyword,
+      outputType,
+      priority: nextPriority,
+    }
 
-  setState({
-    remarkTypeRules: sortRules([...remarkTypeRules, newRule]),
-    remarkRuleFileName: CLOUD_RULE_FILE_NAME,
-  })
-},
+    await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
+      rule_name: `${keyword} → ${outputType}`,
+      source_text: keyword,
+      target_text: outputType,
+      enabled: true,
+      sort_order: nextPriority,
+      updated_at: Date.now(),
+      updated_by: currentUid!,
+    })
+
+    setState({
+      remarkTypeRules: sortRules([...remarkTypeRules, newRule]),
+      remarkRuleFileName: CLOUD_RULE_FILE_NAME,
+    })
+
+    await updateMetaVersion()
+  },
 
   updateRemarkTypeRule: async (id, patch) => {
     const { currentUid, isAdminUser, remarkTypeRules } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
     const current = remarkTypeRules.find((rule) => rule.id === id)
+
     if (!current) {
       throw new Error('未找到要更新的备注规则')
     }
 
-    const nextKeyword = patch.keyword ?? current.keyword
-    const nextOutputType = patch.outputType ?? current.outputType
-    const nextPriority = patch.priority ?? current.priority
+    const previousRules = remarkTypeRules
+
+    const nextKeyword = String(patch.keyword ?? current.keyword).trim()
+    const nextOutputType = String(patch.outputType ?? current.outputType).trim()
+    const nextPriority = Number(patch.priority ?? current.priority)
+
+    if (!nextKeyword) {
+      throw new Error('备注查找字段不能为空')
+    }
+
+    if (!nextOutputType) {
+      throw new Error('输出招生类型不能为空')
+    }
+
+    const safePriority = Number.isNaN(nextPriority) ? 9999 : nextPriority
+
+    const nextRules = sortRules(
+      remarkTypeRules.map((rule) =>
+        rule.id === id
+          ? {
+              ...rule,
+              keyword: nextKeyword,
+              outputType: nextOutputType,
+              priority: safePriority,
+            }
+          : rule
+      )
+    )
 
     setState({
-      remarkTypeRules: sortRules(
-        remarkTypeRules.map((rule) =>
-          rule.id === id
-            ? {
-                ...rule,
-                keyword: nextKeyword,
-                outputType: nextOutputType,
-                priority: nextPriority,
-              }
-            : rule
-        )
-      ),
+      remarkTypeRules: nextRules,
+      remarkRuleFileName: CLOUD_RULE_FILE_NAME,
     })
 
-    await dbUpdate(ref(db, `rule_center/remark_enrollment_type/${id}`), {
-      rule_name: `${nextKeyword} → ${nextOutputType}`,
-      source_text: nextKeyword,
-      target_text: nextOutputType,
-      sort_order: nextPriority,
-      updated_at: Date.now(),
-      updated_by: currentUid!,
-    })
-    await updateMetaVersion()
+    try {
+      await dbUpdate(ref(db, `rule_center/remark_enrollment_type/${id}`), {
+        rule_name: `${nextKeyword} → ${nextOutputType}`,
+        source_text: nextKeyword,
+        target_text: nextOutputType,
+        sort_order: safePriority,
+        enabled: true,
+        updated_at: Date.now(),
+        updated_by: currentUid!,
+      })
+
+      await updateMetaVersion()
+    } catch (error) {
+      setState({
+        remarkTypeRules: previousRules,
+      })
+
+      throw error
+    }
   },
 
   removeRemarkTypeRule: async (id) => {
@@ -540,8 +725,10 @@ logout: async () => {
     await ensureAdmin(currentUid, isAdminUser)
 
     const previousRules = remarkTypeRules
+
     setState({
       remarkTypeRules: remarkTypeRules.filter((rule) => rule.id !== id),
+      remarkRuleFileName: CLOUD_RULE_FILE_NAME,
     })
 
     try {
@@ -551,6 +738,7 @@ logout: async () => {
       setState({
         remarkTypeRules: previousRules,
       })
+
       throw error
     }
   },
@@ -559,15 +747,18 @@ logout: async () => {
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
+    const defaultRules = getDefaultRemarkTypeRules()
+
     setState({
-      remarkTypeRules: sortRules(DEFAULT_REMARK_TYPE_RULES),
+      remarkTypeRules: defaultRules,
       remarkRuleFileName: CLOUD_RULE_FILE_NAME,
     })
 
     await dbSet(
       ref(db, 'rule_center/remark_enrollment_type'),
-      toCloudPayloadFromRemarkRules(DEFAULT_REMARK_TYPE_RULES, currentUid!)
+      toCloudPayloadFromRemarkRules(defaultRules, currentUid!)
     )
+
     await updateMetaVersion()
   },
 
@@ -575,7 +766,10 @@ logout: async () => {
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
-    const cleaned = items.map((x) => x.trim()).filter(Boolean)
+    const cleaned = Array.from(
+      new Set(items.map((x) => String(x).trim()).filter(Boolean))
+    )
+
     setState({
       exclusionKeywords: cleaned,
     })

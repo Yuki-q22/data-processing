@@ -8,6 +8,7 @@ import {
   Divider,
   Input,
   InputNumber,
+  Modal,
   Row,
   Space,
   Statistic,
@@ -73,32 +74,40 @@ export default function RuleCenterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authSubmitting, setAuthSubmitting] = useState(false)
+
   const [exclusionDraft, setExclusionDraft] = useState(
     exclusionKeywords.join('\n')
   )
 
   /**
-   * 备注招生类型规则本地草稿
-   * 输入时只改这里，不直接写 Firebase
+   * 备注招生类型规则本地草稿。
+   * 已有规则编辑时，输入过程只改这里，不直接写 Firebase。
    */
   const [remarkRuleDrafts, setRemarkRuleDrafts] = useState<RemarkTypeRule[]>([])
 
   /**
-   * 正在保存的规则 ID
-   * 用于避免同一条规则保存过程中重复编辑
+   * 正在保存的规则 ID。
    */
   const [savingRemarkRuleIds, setSavingRemarkRuleIds] = useState<
     Record<string, boolean>
   >({})
 
+  /**
+   * 新增规则弹窗。
+   * 新增规则不再先插入表格空行，避免 Firebase 实时同步导致输入框中断。
+   */
+  const [addRuleOpen, setAddRuleOpen] = useState(false)
+  const [creatingRemarkRule, setCreatingRemarkRule] = useState(false)
+  const [newRemarkRuleDraft, setNewRemarkRuleDraft] = useState({
+    keyword: '',
+    outputType: '',
+    priority: 1,
+  })
+
   useEffect(() => {
     setExclusionDraft(exclusionKeywords.join('\n'))
   }, [exclusionKeywords])
 
-  /**
-   * 云端规则变化后，同步到本地草稿。
-   * 注意：输入过程中不会写云端，所以不会因为每个字符变化导致输入框失焦。
-   */
   useEffect(() => {
     setRemarkRuleDrafts(remarkTypeRules)
   }, [remarkTypeRules])
@@ -183,6 +192,7 @@ export default function RuleCenterPage() {
     } catch (error) {
       message.error(error instanceof Error ? error.message : '学校名称规则导入失败')
     }
+
     return false
   }
 
@@ -193,6 +203,7 @@ export default function RuleCenterPage() {
     } catch (error) {
       message.error(error instanceof Error ? error.message : '招生专业组合规则导入失败')
     }
+
     return false
   }
 
@@ -203,6 +214,7 @@ export default function RuleCenterPage() {
     } catch (error) {
       message.error(error instanceof Error ? error.message : '备注招生类型规则导入失败')
     }
+
     return false
   }
 
@@ -224,12 +236,58 @@ export default function RuleCenterPage() {
     }
   }
 
-  const handleAddRemarkRule = async () => {
+  const openAddRemarkRuleModal = () => {
+    const nextPriority =
+      Math.max(
+        0,
+        ...remarkRuleDrafts.map((rule) =>
+          typeof rule.priority === 'number' ? rule.priority : 0
+        )
+      ) + 1
+
+    setNewRemarkRuleDraft({
+      keyword: '',
+      outputType: '',
+      priority: nextPriority,
+    })
+
+    setAddRuleOpen(true)
+  }
+
+  const handleCreateRemarkRule = async () => {
+    const keyword = newRemarkRuleDraft.keyword.trim()
+    const outputType = newRemarkRuleDraft.outputType.trim()
+    const priority =
+      typeof newRemarkRuleDraft.priority === 'number' &&
+      !Number.isNaN(newRemarkRuleDraft.priority)
+        ? newRemarkRuleDraft.priority
+        : 9999
+
+    if (!keyword) {
+      message.warning('请输入备注查找字段')
+      return
+    }
+
+    if (!outputType) {
+      message.warning('请输入输出招生类型')
+      return
+    }
+
+    setCreatingRemarkRule(true)
+
     try {
-      await addRemarkTypeRule()
+      await addRemarkTypeRule({
+        keyword,
+        outputType,
+        priority,
+      })
+
       message.success('已新增备注招生类型规则')
+      setAddRuleOpen(false)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '新增规则失败')
+    } finally {
+      setCreatingRemarkRule(false)
     }
   }
 
@@ -251,9 +309,6 @@ export default function RuleCenterPage() {
     }
   }
 
-  /**
-   * 输入时只更新本地草稿，不写 Firebase
-   */
   const updateRemarkRuleDraft = (
     id: string,
     patch: Partial<RemarkTypeRule>
@@ -270,9 +325,6 @@ export default function RuleCenterPage() {
     )
   }
 
-  /**
-   * 输入框失焦或回车时，再保存当前行到 Firebase
-   */
   const saveRemarkRuleDraft = async (id: string) => {
     if (!isAdminUser) return
     if (savingRemarkRuleIds[id]) return
@@ -296,8 +348,13 @@ export default function RuleCenterPage() {
 
     if (!hasChanged) return
 
-    if (!nextKeyword || !nextOutputType) {
-      message.warning('备注查找字段和输出招生类型不能为空')
+    if (!nextKeyword) {
+      message.warning('备注查找字段不能为空')
+      return
+    }
+
+    if (!nextOutputType) {
+      message.warning('输出招生类型不能为空')
       return
     }
 
@@ -719,7 +776,7 @@ export default function RuleCenterPage() {
                     <Button
                       type="primary"
                       disabled={!isAdminUser}
-                      onClick={handleAddRemarkRule}
+                      onClick={openAddRemarkRuleModal}
                     >
                       新增规则
                     </Button>
@@ -737,8 +794,7 @@ export default function RuleCenterPage() {
               <Alert
                 type="info"
                 showIcon
-                style={{ marginBottom: 8 }}
-                message="编辑规则时，输入内容会先保存在本地草稿中；输入框失焦或按回车后才会写入云端。"
+                message="新增规则请点击“新增规则”后在弹窗中填写；已有规则编辑时，输入框失焦或按回车后才会写入云端。"
               />
 
               <Table
@@ -790,6 +846,71 @@ export default function RuleCenterPage() {
           </Card>
         </>
       ) : null}
+
+      <Modal
+        title="新增备注招生类型规则"
+        open={addRuleOpen}
+        onCancel={() => setAddRuleOpen(false)}
+        onOk={handleCreateRemarkRule}
+        confirmLoading={creatingRemarkRule}
+        okText="保存规则"
+        cancelText="取消"
+        destroyOnClose
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <div>
+            <Text strong>备注查找字段</Text>
+            <Input
+              value={newRemarkRuleDraft.keyword}
+              placeholder="如：国家专项"
+              style={{ marginTop: 6 }}
+              autoFocus
+              onChange={(e) =>
+                setNewRemarkRuleDraft((prev) => ({
+                  ...prev,
+                  keyword: e.target.value,
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <Text strong>输出招生类型</Text>
+            <Input
+              value={newRemarkRuleDraft.outputType}
+              placeholder="如：国家专项计划"
+              style={{ marginTop: 6 }}
+              onChange={(e) =>
+                setNewRemarkRuleDraft((prev) => ({
+                  ...prev,
+                  outputType: e.target.value,
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <Text strong>优先级</Text>
+            <InputNumber
+              min={1}
+              value={newRemarkRuleDraft.priority}
+              style={{ width: '100%', marginTop: 6 }}
+              onChange={(value) =>
+                setNewRemarkRuleDraft((prev) => ({
+                  ...prev,
+                  priority: typeof value === 'number' ? value : 9999,
+                }))
+              }
+            />
+          </div>
+
+          <Alert
+            type="info"
+            showIcon
+            message="新增规则会在点击“保存规则”后一次性写入云端，不会边输入边同步。"
+          />
+        </Space>
+      </Modal>
     </div>
   )
 }
