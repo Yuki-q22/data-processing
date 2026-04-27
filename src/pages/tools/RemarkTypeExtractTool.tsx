@@ -154,11 +154,17 @@ export default function RemarkTypeExtractTool() {
               pagination={{ pageSize: 10 }}
               scroll={{ x: 1000 }}
               columns={[
-                { title: '行号', dataIndex: 'rowId', key: 'rowId', width: 80 },
-                { title: '备注', dataIndex: '备注', key: '备注', width: 420 },
-                { title: '招生类型', dataIndex: '招生类型', key: '招生类型', width: 180 },
-                { title: '需要核查', dataIndex: '需要核查', key: '需要核查', width: 120 },
-              ]}
+  { title: '行号', dataIndex: 'rowId', key: 'rowId', width: 80 },
+  { title: '备注', dataIndex: '备注', key: '备注', width: 420 },
+  { title: '招生类型', dataIndex: '招生类型', key: '招生类型', width: 180 },
+  { title: '需要核查', dataIndex: '需要核查', key: '需要核查', width: 120 },
+  {
+    title: '命中核查关键词',
+    dataIndex: '命中核查关键词',
+    key: '命中核查关键词',
+    width: 180,
+  },
+]}
             />
           </Card>
         </>
