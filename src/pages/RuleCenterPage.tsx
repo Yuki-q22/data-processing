@@ -17,7 +17,7 @@ import {
   Upload,
   message,
 } from 'antd'
-import { InboxOutlined } from '@ant-design/icons'
+import { GoogleOutlined, InboxOutlined } from '@ant-design/icons'
 import {
   useRuleCenterStore,
   type RemarkTypeRule,
@@ -35,6 +35,7 @@ type PreviewRow = {
 
 export default function RuleCenterPage() {
   console.log('当前UID =', auth.currentUser?.uid)
+
   const {
     validSchoolNames,
     validMajorCombos,
@@ -51,7 +52,7 @@ export default function RuleCenterPage() {
     authError,
 
     login,
-    register,
+    loginWithGoogle,
     logout,
 
     importSchoolRuleFile,
@@ -103,6 +104,7 @@ export default function RuleCenterPage() {
     }
 
     setAuthSubmitting(true)
+
     try {
       await login(email, password)
       message.success('登录成功')
@@ -114,19 +116,14 @@ export default function RuleCenterPage() {
     }
   }
 
-  const handleRegister = async () => {
-    if (!email.trim() || !password) {
-      message.warning('请输入邮箱和密码')
-      return
-    }
-
+  const handleGoogleLogin = async () => {
     setAuthSubmitting(true)
+
     try {
-      await register(email, password)
-      message.success('注册成功，请联系管理员为当前账号开通编辑权限')
-      setPassword('')
+      await loginWithGoogle()
+      message.success('Gmail 登录成功')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '注册失败')
+      message.error(error instanceof Error ? error.message : 'Gmail 登录失败')
     } finally {
       setAuthSubmitting(false)
     }
@@ -216,7 +213,10 @@ export default function RuleCenterPage() {
     }
   }
 
-  const handleUpdateRemarkRule = async (id: string, patch: Partial<RemarkTypeRule>) => {
+  const handleUpdateRemarkRule = async (
+    id: string,
+    patch: Partial<RemarkTypeRule>
+  ) => {
     try {
       await updateRemarkTypeRule(id, patch)
     } catch (error) {
@@ -323,7 +323,6 @@ export default function RuleCenterPage() {
     },
   ]
 
-
   if (!authReady) {
     return (
       <Card style={{ borderRadius: 12 }}>
@@ -343,8 +342,11 @@ export default function RuleCenterPage() {
         <Title level={3} style={{ marginTop: 0, marginBottom: 8 }}>
           规则中心
         </Title>
+
         <Paragraph style={{ marginBottom: 8 }}>
-          当前页面已切换为 <Text strong>Firebase 云端实时共享规则中心</Text>。管理员改完规则后，其他在线页面会自动同步，不需要手动刷新。
+          当前页面已切换为{' '}
+          <Text strong>Firebase 云端实时共享规则中心</Text>
+          。管理员改完规则后，其他在线页面会自动同步，不需要手动刷新。
         </Paragraph>
 
         {authError ? (
@@ -362,21 +364,29 @@ export default function RuleCenterPage() {
               <Descriptions.Item label="当前账号">
                 {currentUserEmail}
               </Descriptions.Item>
+
               <Descriptions.Item label="账号权限">
                 {isAdminUser ? (
                   <Tag color="green">管理员</Tag>
                 ) : (
                   <Tag color="blue">只读用户</Tag>
                 )}
-                {syncing ? <Tag color="processing">同步中</Tag> : <Tag color="success">已同步</Tag>}
+
+                {syncing ? (
+                  <Tag color="processing">同步中</Tag>
+                ) : (
+                  <Tag color="success">已同步</Tag>
+                )}
               </Descriptions.Item>
             </Descriptions>
 
             <Space wrap>
               <Button onClick={handleLogout}>退出登录</Button>
+
               {!isAdminUser ? (
                 <Text type="secondary">
-                  当前账号只有查看权限，若要编辑规则，请把该账号 UID 加入 Firebase 的 admins 节点。
+                  当前账号只有查看权限，若要编辑规则，请把该账号 UID 加入
+                  Firebase 的 admins 节点。
                 </Text>
               ) : null}
             </Space>
@@ -386,7 +396,7 @@ export default function RuleCenterPage() {
             <Alert
               type="info"
               showIcon
-              message="请先登录后再访问共享规则中心"
+              message="请使用邮箱密码登录，或使用 Gmail 账号登录"
             />
 
             <Input
@@ -402,11 +412,20 @@ export default function RuleCenterPage() {
             />
 
             <Space wrap>
-              <Button type="primary" loading={authSubmitting} onClick={handleLogin}>
+              <Button
+                type="primary"
+                loading={authSubmitting}
+                onClick={handleLogin}
+              >
                 登录
               </Button>
-              <Button loading={authSubmitting} onClick={handleRegister}>
-                注册
+
+              <Button
+                icon={<GoogleOutlined />}
+                loading={authSubmitting}
+                onClick={handleGoogleLogin}
+              >
+                Gmail 登录
               </Button>
             </Space>
           </Space>
@@ -418,22 +437,37 @@ export default function RuleCenterPage() {
           <Row gutter={16}>
             <Col span={6}>
               <Card style={{ borderRadius: 12 }}>
-                <Statistic title="学校名称规则数" value={validSchoolNames.length} />
+                <Statistic
+                  title="学校名称规则数"
+                  value={validSchoolNames.length}
+                />
               </Card>
             </Col>
+
             <Col span={6}>
               <Card style={{ borderRadius: 12 }}>
-                <Statistic title="招生专业组合数" value={validMajorCombos.length} />
+                <Statistic
+                  title="招生专业组合数"
+                  value={validMajorCombos.length}
+                />
               </Card>
             </Col>
+
             <Col span={6}>
               <Card style={{ borderRadius: 12 }}>
-                <Statistic title="备注招生类型规则数" value={remarkTypeRules.length} />
+                <Statistic
+                  title="备注招生类型规则数"
+                  value={remarkTypeRules.length}
+                />
               </Card>
             </Col>
+
             <Col span={6}>
               <Card style={{ borderRadius: 12 }}>
-                <Statistic title="需要核查关键词数" value={exclusionKeywords.length} />
+                <Statistic
+                  title="需要核查关键词数"
+                  value={exclusionKeywords.length}
+                />
               </Card>
             </Col>
           </Row>
@@ -459,18 +493,24 @@ export default function RuleCenterPage() {
                     <Descriptions.Item label="当前来源">
                       {schoolRuleFileName || '未加载'}
                     </Descriptions.Item>
+
                     <Descriptions.Item label="学校数量">
                       {validSchoolNames.length}
                     </Descriptions.Item>
                   </Descriptions>
 
-                  <Button danger disabled={!isAdminUser} onClick={handleClearSchoolRules}>
+                  <Button
+                    danger
+                    disabled={!isAdminUser}
+                    onClick={handleClearSchoolRules}
+                  >
                     清空学校规则
                   </Button>
 
                   <Divider style={{ margin: '8px 0' }} />
 
                   <Text strong>预览（前 50 条）</Text>
+
                   {schoolPreview.length === 0 ? (
                     <Text type="secondary">暂无学校名称规则</Text>
                   ) : (
@@ -506,18 +546,24 @@ export default function RuleCenterPage() {
                     <Descriptions.Item label="当前来源">
                       {majorRuleFileName || '未加载'}
                     </Descriptions.Item>
+
                     <Descriptions.Item label="专业组合数量">
                       {validMajorCombos.length}
                     </Descriptions.Item>
                   </Descriptions>
 
-                  <Button danger disabled={!isAdminUser} onClick={handleClearMajorRules}>
+                  <Button
+                    danger
+                    disabled={!isAdminUser}
+                    onClick={handleClearMajorRules}
+                  >
                     清空专业组合规则
                   </Button>
 
                   <Divider style={{ margin: '8px 0' }} />
 
                   <Text strong>预览（前 50 条）</Text>
+
                   {majorPreview.length === 0 ? (
                     <Text type="secondary">暂无招生专业组合规则</Text>
                   ) : (
@@ -542,6 +588,7 @@ export default function RuleCenterPage() {
                     <Descriptions.Item label="当前规则来源">
                       {remarkRuleFileName || '未加载'}
                     </Descriptions.Item>
+
                     <Descriptions.Item label="规则条数">
                       {remarkTypeRules.length}
                     </Descriptions.Item>
@@ -559,11 +606,18 @@ export default function RuleCenterPage() {
                       <Button disabled={!isAdminUser}>导入备注规则文件</Button>
                     </Upload>
 
-                    <Button type="primary" disabled={!isAdminUser} onClick={handleAddRemarkRule}>
+                    <Button
+                      type="primary"
+                      disabled={!isAdminUser}
+                      onClick={handleAddRemarkRule}
+                    >
                       新增规则
                     </Button>
 
-                    <Button disabled={!isAdminUser} onClick={handleResetRemarkRules}>
+                    <Button
+                      disabled={!isAdminUser}
+                      onClick={handleResetRemarkRules}
+                    >
                       恢复默认规则
                     </Button>
                   </Space>
@@ -583,6 +637,7 @@ export default function RuleCenterPage() {
 
               <div>
                 <Text strong>需要核查关键词</Text>
+
                 <Paragraph type="secondary" style={{ marginTop: 4 }}>
                   当前关键词：
                   {exclusionKeywords.length === 0 ? (
