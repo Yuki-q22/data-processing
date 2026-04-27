@@ -490,12 +490,39 @@ export function processPlanCompare(params: {
   }
 }
 
+function buildUniqueKey(
+  row: Record<string, unknown>,
+  fields: string[]
+): string {
+  return fields.map((field) => t(row[field])).join('||')
+}
+
+function dedupeCompareRows<T extends { sourceRow: Record<string, unknown> }>(
+  rows: T[],
+  fields: string[]
+): T[] {
+  const seen = new Set<string>()
+  const result: T[] = []
+
+  rows.forEach((row) => {
+    const key = buildUniqueKey(row.sourceRow, fields)
+
+    if (!seen.has(key)) {
+      seen.add(key)
+      result.push(row)
+    }
+  })
+
+  return result
+}
+
 export function buildProfessionalTemplateRows(
   compareRows: PlanScoreCompareRow[]
 ): ProfessionalTemplateRow[] {
-  return compareRows
-    .filter((row) => !row.exists)
-    .map((row) => {
+  return dedupeCompareRows(
+    compareRows.filter((row) => !row.exists),
+    ['年份', '省份', '学校', '科类', '批次', '专业', '层次', '专业组代码']
+  ).map((row) => {
       const source = row.sourceRow
       const electiveRaw = combineElectiveRequirement(source)
       const elective = convertElectiveRequirement(electiveRaw)
@@ -534,9 +561,10 @@ export function buildProfessionalTemplateRows(
 export function buildCollegeTemplateRows(
   compareRows: PlanCollegeCompareRow[]
 ): CollegeTemplateRow[] {
-  return compareRows
-    .filter((row) => !row.exists)
-    .map((row) => {
+  return dedupeCompareRows(
+    compareRows.filter((row) => !row.exists),
+    ['年份', '省份', '学校', '科类', '批次', '专业组代码', '招生代码']
+  ).map((row) => {
       const source = row.sourceRow
       return {
         学校名称: t(source['学校']),
