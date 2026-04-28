@@ -80,7 +80,16 @@ export async function fetchStaticImagesFromPage(url: string): Promise<ExtractedI
         throw new Error(`图片获取失败：${imageUrl}`)
       }
       const blob = await resp.blob()
-      const objectUrl = URL.createObjectURL(blob)
+
+if (!(blob instanceof Blob) || blob.size === 0) {
+  throw new Error(`图片文件无效：${imageUrl}`)
+}
+
+if (!blob.type.startsWith('image/')) {
+  throw new Error(`非图片文件，已跳过：${imageUrl}`)
+}
+
+const objectUrl = URL.createObjectURL(blob)
       const size = await getImageSize(objectUrl)
 
       return {
@@ -138,7 +147,8 @@ export async function imagesToPdfBlob(images: ExtractedImageItem[]): Promise<Blo
     pdf.addImage(dataUrl, format, x, y, renderWidth, renderHeight)
   }
 
-  return pdf.output('blob')
+  const arrayBuffer = pdf.output('arraybuffer')
+return new Blob([arrayBuffer], { type: 'application/pdf' })
 }
 
 export function cleanupImageObjectUrls(images: ExtractedImageItem[]) {
@@ -152,10 +162,26 @@ export function cleanupImageObjectUrls(images: ExtractedImageItem[]) {
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
+  if (!(blob instanceof Blob)) {
+    throw new Error('下载失败：生成的文件不是有效 Blob')
+  }
+
+  if (blob.size === 0) {
+    throw new Error('下载失败：生成的文件为空')
+  }
+
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
+
   a.href = url
   a.download = filename
+  a.style.display = 'none'
+
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  document.body.removeChild(a)
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url)
+  }, 1000)
 }
