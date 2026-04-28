@@ -43,6 +43,50 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
     reader.readAsDataURL(blob)
   })
 }
+async function compressImageForPdf(
+  blob: Blob,
+  maxWidth = 1600,
+  quality = 0.82
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  const objectUrl = URL.createObjectURL(blob)
+
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image()
+      image.onload = () => resolve(image)
+      image.onerror = () => reject(new Error('图片压缩失败：图片加载失败'))
+      image.src = objectUrl
+    })
+
+    const sourceWidth = img.naturalWidth || img.width
+    const sourceHeight = img.naturalHeight || img.height
+
+    const scale = Math.min(1, maxWidth / sourceWidth)
+    const width = Math.max(1, Math.round(sourceWidth * scale))
+    const height = Math.max(1, Math.round(sourceHeight * scale))
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      throw new Error('图片压缩失败：无法创建 Canvas')
+    }
+
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, width, height)
+    ctx.drawImage(img, 0, 0, width, height)
+
+    return {
+      dataUrl: canvas.toDataURL('image/jpeg', quality),
+      width,
+      height,
+    }
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
 
 export function extractStaticImageUrlsFromHtml(html: string, baseUrl: string): string[] {
   const parser = new DOMParser()
@@ -117,6 +161,7 @@ export async function imagesToPdfBlob(images: ExtractedImageItem[]): Promise<Blo
     orientation: 'p',
     unit: 'pt',
     format: 'a4',
+    compress: true,
   })
 
   const pageWidth = pdf.internal.pageSize.getWidth()
@@ -127,14 +172,15 @@ export async function imagesToPdfBlob(images: ExtractedImageItem[]): Promise<Blo
 
   for (let i = 0; i < images.length; i += 1) {
     const item = images[i]
-    const dataUrl = await blobToDataUrl(item.blob)
 
-    const widthRatio = usableWidth / item.width
-    const heightRatio = usableHeight / item.height
+    const compressed = await compressImageForPdf(item.blob, 1600, 0.82)
+
+    const widthRatio = usableWidth / compressed.width
+    const heightRatio = usableHeight / compressed.height
     const scale = Math.min(widthRatio, heightRatio, 1)
 
-    const renderWidth = item.width * scale
-    const renderHeight = item.height * scale
+    const renderWidth = compressed.width * scale
+    const renderHeight = compressed.height * scale
 
     const x = (pageWidth - renderWidth) / 2
     const y = (pageHeight - renderHeight) / 2
@@ -143,12 +189,20 @@ export async function imagesToPdfBlob(images: ExtractedImageItem[]): Promise<Blo
       pdf.addPage()
     }
 
-    const format = item.blob.type.includes('png') ? 'PNG' : 'JPEG'
-    pdf.addImage(dataUrl, format, x, y, renderWidth, renderHeight)
+    pdf.addImage(
+      compressed.dataUrl,
+      'JPEG',
+      x,
+      y,
+      renderWidth,
+      renderHeight,
+      undefined,
+      'FAST'
+    )
   }
 
   const arrayBuffer = pdf.output('arraybuffer')
-return new Blob([arrayBuffer], { type: 'application/pdf' })
+  return new Blob([arrayBuffer], { type: 'application/pdf' })
 }
 
 export function cleanupImageObjectUrls(images: ExtractedImageItem[]) {
