@@ -35,19 +35,15 @@ async function getImageSize(objectUrl: string): Promise<{ width: number; height:
   })
 }
 
-async function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result || ''))
-    reader.onerror = () => reject(new Error('图片转 DataURL 失败'))
-    reader.readAsDataURL(blob)
-  })
-}
 async function compressImageForPdf(
   blob: Blob,
-  maxWidth = 1600,
-  quality = 0.82
+  maxWidth = 1200,
+  quality = 0.75
 ): Promise<{ dataUrl: string; width: number; height: number }> {
+  if (!(blob instanceof Blob) || blob.size === 0) {
+    throw new Error('图片压缩失败：图片文件无效')
+  }
+
   const objectUrl = URL.createObjectURL(blob)
 
   try {
@@ -60,6 +56,10 @@ async function compressImageForPdf(
 
     const sourceWidth = img.naturalWidth || img.width
     const sourceHeight = img.naturalHeight || img.height
+
+    if (!sourceWidth || !sourceHeight) {
+      throw new Error('图片压缩失败：图片尺寸无效')
+    }
 
     const scale = Math.min(1, maxWidth / sourceWidth)
     const width = Math.max(1, Math.round(sourceWidth * scale))
@@ -74,6 +74,7 @@ async function compressImageForPdf(
       throw new Error('图片压缩失败：无法创建 Canvas')
     }
 
+    // 统一转为 JPEG，避免透明 PNG/超大 PNG 导致 jsPDF 内部字符串过大。
     ctx.fillStyle = '#fff'
     ctx.fillRect(0, 0, width, height)
     ctx.drawImage(img, 0, 0, width, height)
@@ -123,27 +124,29 @@ export async function fetchStaticImagesFromPage(url: string): Promise<ExtractedI
       if (!resp.ok) {
         throw new Error(`图片获取失败：${imageUrl}`)
       }
+
       const blob = await resp.blob()
+      if (!(blob instanceof Blob) || blob.size === 0) {
+        throw new Error(`图片文件无效：${imageUrl}`)
+      }
 
-if (!(blob instanceof Blob) || blob.size === 0) {
-  throw new Error(`图片文件无效：${imageUrl}`)
-}
+      const objectUrl = URL.createObjectURL(blob)
 
-if (!blob.type.startsWith('image/')) {
-  throw new Error(`非图片文件，已跳过：${imageUrl}`)
-}
+      try {
+        const size = await getImageSize(objectUrl)
 
-const objectUrl = URL.createObjectURL(blob)
-      const size = await getImageSize(objectUrl)
-
-      return {
-        id: `img_${index + 1}`,
-        url: imageUrl,
-        blob,
-        objectUrl,
-        width: size.width,
-        height: size.height,
-      } satisfies ExtractedImageItem
+        return {
+          id: `img_${index + 1}`,
+          url: imageUrl,
+          blob,
+          objectUrl,
+          width: size.width,
+          height: size.height,
+        } satisfies ExtractedImageItem
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl)
+        throw error
+      }
     })
   )
 
@@ -173,7 +176,9 @@ export async function imagesToPdfBlob(images: ExtractedImageItem[]): Promise<Blo
   for (let i = 0; i < images.length; i += 1) {
     const item = images[i]
 
-    const compressed = await compressImageForPdf(item.blob, 1600, 0.82)
+    // 先压缩，再写入 PDF，避免大图/大量 PNG 导致：
+    // Error in function Array.join (: Invalid string length
+    const compressed = await compressImageForPdf(item.blob, 1200, 0.75)
 
     const widthRatio = usableWidth / compressed.width
     const heightRatio = usableHeight / compressed.height
