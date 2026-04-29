@@ -794,8 +794,12 @@ export function buildCollegeTemplateRows(
     (row) => {
       const source = row.sourceRow
       const province = t(source['省份'])
-      const enrollmentCategory = t(source['科类'])
-      const enrollmentBatch = t(source['批次'])
+      const enrollmentCategory = t(
+  source['招生类别'] || source['招生科类'] || source['科类']
+)
+const enrollmentBatch = t(
+  source['招生批次'] || source['批次']
+)
       const controlLine = resolveControlLine(province, enrollmentCategory, enrollmentBatch)
 
       return {
