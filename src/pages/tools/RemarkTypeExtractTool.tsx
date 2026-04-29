@@ -25,12 +25,48 @@ async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
   return { fileName: file.name, workbook, sheetNames: workbook.SheetNames }
 }
 
+function cellToText(value: unknown) {
+  if (value === null || value === undefined) return ''
+  return String(value).trim()
+}
+
 function getRows(workbook: XLSX.WorkBook, sheetName: string) {
   const sheet = workbook.Sheets[sheetName]
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+  if (!sheet) return []
+
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
     defval: '',
     raw: false,
     blankrows: true,
+  })
+
+  if (!matrix.length) return []
+
+  const headerRow = matrix[0] || []
+  const headers = headerRow.map((cell, index) => {
+    const header = cellToText(cell)
+    return header || `空字段${index + 1}`
+  })
+
+  const hasValue = (row: unknown[] | undefined) => {
+    if (!row) return false
+    return row.some((cell) => cellToText(cell) !== '')
+  }
+
+  let lastDataRowIndex = matrix.length - 1
+  while (lastDataRowIndex > 0 && !hasValue(matrix[lastDataRowIndex])) {
+    lastDataRowIndex -= 1
+  }
+
+  if (lastDataRowIndex <= 0) return []
+
+  return matrix.slice(1, lastDataRowIndex + 1).map((row) => {
+    const record: Record<string, unknown> = {}
+    headers.forEach((header, index) => {
+      record[header] = row?.[index] ?? ''
+    })
+    return record
   })
 }
 

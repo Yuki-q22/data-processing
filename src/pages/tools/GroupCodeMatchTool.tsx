@@ -126,6 +126,7 @@ export default function GroupCodeMatchTool() {
 
   const resolvedRows = useMemo(() => applyManualSelections(rows, manualSelections), [rows, manualSelections])
   const manualRows = useMemo(() => getManualRequiredRows(resolvedRows), [resolvedRows])
+  const manualNavigationRows = useMemo(() => getManualRequiredRows(rows), [rows])
 
   const provinceOptions = useMemo(() => {
     const values = Array.from(new Set(resolvedRows.map((item) => item.province).filter(Boolean))).sort()
@@ -145,49 +146,44 @@ export default function GroupCodeMatchTool() {
   }, [resolvedRows, provinceFilter, manualOnly])
 
   const visibleManualRows = useMemo(() => {
-    return manualRows.filter((row) => {
+    return manualNavigationRows.filter((row) => {
       if (provinceFilter !== '全部' && row.province !== provinceFilter) {
         return false
       }
       return true
     })
-  }, [manualRows, provinceFilter])
+  }, [manualNavigationRows, provinceFilter])
 
-    const activeRow = useMemo(() => {
+  const activeRow = useMemo(() => {
     if (!activeRowId) return null
+    return rows.find((item) => item.rowId === activeRowId) || null
+  }, [rows, activeRowId])
 
-    return (
-      resolvedRows.find((item) => item.rowId === activeRowId) ||
-      visibleManualRows.find((item) => item.rowId === activeRowId) ||
-      null
-    )
-  }, [resolvedRows, visibleManualRows, activeRowId])
-
-    const activeRowIndexInResolvedRows = useMemo(() => {
-    return resolvedRows.findIndex((item) => item.rowId === activeRowId)
-  }, [resolvedRows, activeRowId])
+  const activeRowIndexInRows = useMemo(() => {
+    return rows.findIndex((item) => item.rowId === activeRowId)
+  }, [rows, activeRowId])
 
   const nextManualRow = useMemo(() => {
-    if (activeRowIndexInResolvedRows < 0) return null
+    if (activeRowIndexInRows < 0) return null
 
     return (
       visibleManualRows.find((item) => {
-        const index = resolvedRows.findIndex((row) => row.rowId === item.rowId)
-        return index > activeRowIndexInResolvedRows
+        const index = rows.findIndex((row) => row.rowId === item.rowId)
+        return index > activeRowIndexInRows
       }) || null
     )
-  }, [activeRowIndexInResolvedRows, resolvedRows, visibleManualRows])
+  }, [activeRowIndexInRows, rows, visibleManualRows])
 
   const prevManualRow = useMemo(() => {
-    if (activeRowIndexInResolvedRows < 0) return null
+    if (activeRowIndexInRows < 0) return null
 
     const previousRows = visibleManualRows.filter((item) => {
-      const index = resolvedRows.findIndex((row) => row.rowId === item.rowId)
-      return index < activeRowIndexInResolvedRows
+      const index = rows.findIndex((row) => row.rowId === item.rowId)
+      return index < activeRowIndexInRows
     })
 
     return previousRows[previousRows.length - 1] || null
-  }, [activeRowIndexInResolvedRows, resolvedRows, visibleManualRows])
+  }, [activeRowIndexInRows, rows, visibleManualRows])
 
   const handleUploadImport = async (file: File) => {
     try {
@@ -276,37 +272,11 @@ const saveManualSelection = () => {
     message.success('当前补充内容已保存')
   }
 
-  const saveCandidateSelection = (candidateId: string) => {
+  const chooseCandidate = (candidateId: string) => {
     if (!activeRow) return
 
     const candidate = activeRow.candidates.find((item) => item.candidateId === candidateId)
     if (!candidate) return
-
-    const nextValue: ManualSelection = {
-      candidateId,
-      manualGroupCode: activeRow.requiresGroupCode ? candidate.groupCode || '' : '',
-      manualRequirementMode: activeRow.requiresElectiveConversion
-        ? candidate.convertedRequirementMode || ''
-        : manualRequirementMode,
-      manualSecondSubject: activeRow.requiresElectiveConversion
-        ? candidate.convertedSecondSubject || ''
-        : manualSecondSubject,
-    }
-
-    setManualSelections((prev) => ({
-      ...prev,
-      [activeRow.rowId]: nextValue,
-    }))
-
-    message.success('已自动保存当前记录')
-  }
-
-
-  const chooseCandidate = (candidateId: string) => {
-    setCandidateChoice(candidateId)
-
-    const candidate = activeRow?.candidates.find((item) => item.candidateId === candidateId)
-    if (!candidate || !activeRow) return
 
     const nextGroupCode = activeRow.requiresGroupCode ? candidate.groupCode || '' : ''
     const nextRequirementMode = activeRow.requiresElectiveConversion
@@ -316,11 +286,24 @@ const saveManualSelection = () => {
       ? candidate.convertedSecondSubject || ''
       : manualSecondSubject
 
+    const nextValue: ManualSelection = {
+      candidateId,
+      manualGroupCode: nextGroupCode,
+      manualRequirementMode: nextRequirementMode,
+      manualSecondSubject: nextSecondSubject,
+    }
+
+    setCandidateChoice(candidateId)
     setManualGroupCode(nextGroupCode)
     setManualRequirementMode(nextRequirementMode)
     setManualSecondSubject(nextSecondSubject)
 
-    saveCandidateSelection(candidateId)
+    setManualSelections((prev) => ({
+      ...prev,
+      [activeRow.rowId]: nextValue,
+    }))
+
+    message.success('已自动保存当前记录，请手动点击“下一条”继续')
   }
   
   const saveAndNext = () => {
