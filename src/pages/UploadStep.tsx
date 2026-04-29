@@ -214,13 +214,16 @@ export default function UploadStep() {
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>默认数据来源</Text>
               <Select
-                value={defaultDataSource}
-                onChange={(value) => setTaskMeta({ defaultDataSource: value })}
-                options={DATA_SOURCE_OPTIONS.map((item) => ({
-                  label: item,
-                  value: item,
-                }))}
-              />
+  value={defaultDataSource}
+  onChange={(value) => setTaskMeta({ defaultDataSource: value })}
+  style={{ width: '100%' }}
+  popupMatchSelectWidth={220}
+  optionLabelProp="label"
+  options={DATA_SOURCE_OPTIONS.map((item) => ({
+    label: item,
+    value: item,
+  }))}
+/>
             </Space>
           </Col>
 

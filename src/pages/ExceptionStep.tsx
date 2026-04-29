@@ -516,22 +516,29 @@ export default function ExceptionStep() {
                   onChange={(e) => handleApplyManual(activeRecord.rowId, e.target.value)}
                 >
                   <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                    {activeRecord.matchCandidates.map((candidate: any) => (
-                      <Card
-                        key={candidate.rowId}
-                        size="small"
-                        style={{
-                          border:
-                            activeSelectedId === candidate.rowId
-                              ? '1px solid #1677ff'
-                              : undefined,
-                        }}
-                      >
-                        <Radio value={candidate.rowId} style={{ fontSize: UI_FONT_SIZE }}>
-                          <span style={{ fontWeight: 500, fontSize: UI_TITLE_FONT_SIZE }}>
-                            {candidate.schoolName || '-'} / {candidate.majorName || '-'}
-                          </span>
-                        </Radio>
+                    {activeRecord.matchCandidates.map((candidate: any) => {
+  const selected = activeSelectedId === candidate.rowId
+
+  return (
+    <Card
+      key={candidate.rowId}
+      size="small"
+      hoverable
+      onClick={() => handleApplyManual(activeRecord.rowId, candidate.rowId)}
+      style={{
+        cursor: 'pointer',
+        border: selected ? '1px solid #1677ff' : undefined,
+      }}
+    >
+      <Radio
+        value={candidate.rowId}
+        style={{ fontSize: UI_FONT_SIZE }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span style={{ fontWeight: 500, fontSize: UI_TITLE_FONT_SIZE }}>
+          {candidate.schoolName || '-'} / {candidate.majorName || '-'}
+        </span>
+      </Radio>
 
                         <div style={{ marginTop: 8, marginLeft: 24, lineHeight: 1.9, fontSize: UI_FONT_SIZE }}>
                           <div>省份：{candidate.province || '-'}</div>
@@ -541,8 +548,9 @@ export default function ExceptionStep() {
                           <div>层次：{candidate.level1 || '-'}</div>
                           <div>类型：{candidate.enrollmentType || '-'}</div>
                         </div>
-                      </Card>
-                    ))}
+                          </Card>
+  )
+})}
                   </Space>
                 </Radio.Group>
               )}
