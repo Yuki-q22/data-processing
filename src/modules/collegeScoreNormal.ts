@@ -193,7 +193,10 @@ function sumNullable(values: Array<number | null>): number | null {
   return valid.reduce((sum, item) => sum + item, 0)
 }
 
-function processRows(rows: Record<string, unknown>[]): NormalCollegeScoreOutputRow[] {
+function processRows(
+  rows: Record<string, unknown>[],
+  yearValue?: string | number,
+): NormalCollegeScoreOutputRow[] {
   const normalizedRows: InputRow[] = rows
     .map((row, rowNo) => ({
       ...row,
@@ -231,28 +234,31 @@ function processRows(rows: Record<string, unknown>[]): NormalCollegeScoreOutputR
     const representative = sorted[0]
 
     const year = t(
-  representative['年份'] ||
-  representative['招生年'] ||
-  representative['招生年份']
-)
+      representative['年份'] ||
+      representative['招生年'] ||
+      representative['招生年份'] ||
+      yearValue,
+    )
 
-const province = t(representative['省份'])
-const enrollmentCategory = t(
-  representative['招生类别'] ||
-  representative['招生科类'] ||
-  representative['科类']
-)
-const enrollmentBatch = t(
-  representative['招生批次'] ||
-  representative['批次']
-)
+    const province = t(representative['省份'])
 
-const controlLine = resolveControlLine(
-  province,
-  enrollmentCategory,
-  enrollmentBatch,
-  year,
-)
+    const enrollmentCategory = t(
+      representative['招生类别'] ||
+      representative['招生科类'] ||
+      representative['科类'],
+    )
+
+    const enrollmentBatch = t(
+      representative['招生批次'] ||
+      representative['批次'],
+    )
+
+    const controlLine = resolveControlLine(
+      province,
+      enrollmentCategory,
+      enrollmentBatch,
+      year,
+    )
 
     output.push({
       学校名称: t(representative['学校名称']),
@@ -315,7 +321,7 @@ export function processNormalCollegeScoreWorkbook(
     defval: '',
   })
 
-  const outputRows = processRows(rows)
+  const outputRows = processRows(rows, year)
 
   return {
     year,

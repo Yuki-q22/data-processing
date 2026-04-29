@@ -657,7 +657,9 @@ function scoreBatch(option: string, enrollmentBatch: string, enrollmentCategory:
   const categoryText = normalizeText(enrollmentCategory)
 
   if (!batchText) return 0
-  if (optionText === batchText) return 1000
+
+  // 完全相同最高优先级
+  if (optionText === batchText) return 10000
 
   let score = getBatchKeywordScore(optionText, batchText)
 
@@ -677,8 +679,25 @@ export function resolveControlLineBatch(
 ): string {
   const batch = t(enrollmentBatch)
   const config = getProvinceConfig(province)
+
+  if (!batch) return ''
   if (!config) return batch
 
+  const normalizedBatch = normalizeText(batch)
+
+  // 第一优先级：原始文本完全相同
+  // 例如：招生批次 = 本科批，省控线批次里也有 本科批，则直接返回 本科批
+  const exactMatch = config.batches.find((option) => t(option) === batch)
+  if (exactMatch) return exactMatch
+
+  // 第二优先级：标准化后完全相同
+  // 用于处理空格、括号、横线等格式差异
+  const normalizedExactMatch = config.batches.find(
+    (option) => normalizeText(option) === normalizedBatch,
+  )
+  if (normalizedExactMatch) return normalizedExactMatch
+
+  // 第三优先级：没有相同批次时，再做相近匹配
   const best = config.batches
     .map((option) => ({
       option,
@@ -687,6 +706,7 @@ export function resolveControlLineBatch(
     .sort((a, b) => b.score - a.score)[0]
 
   if (best && best.score > 0) return best.option
+
   return batch
 }
 
