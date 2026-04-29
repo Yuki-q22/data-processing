@@ -49,7 +49,8 @@ function getMatchedReviewKeywords(remark: string, keywords: string[]) {
   return Array.from(new Set(matched)).join('、')
 }
 
-function remarkNeedsReview(matchedKeywords: string) {
+function remarkNeedsReview(remark: string, matchedKeywords: string) {
+  if (!remark.trim()) return ''
   return matchedKeywords ? '是' : '否'
 }
 
@@ -71,9 +72,20 @@ export function processRemarkTypeExtract(params: {
 
   const resultRows: RemarkTypeExtractRow[] = rows.map((row, index) => {
   const remark = toText(row[remarkColumn])
+
+  if (!remark) {
+    return {
+      rowId: String(index + 1),
+      备注: '',
+      招生类型: '',
+      需要核查: '',
+      命中核查关键词: '',
+    }
+  }
+
   const type = extractRecruitmentType(remark, rules)
   const matchedReviewKeywords = getMatchedReviewKeywords(remark, exclusionKeywords)
-  const review = remarkNeedsReview(matchedReviewKeywords)
+  const review = remarkNeedsReview(remark, matchedReviewKeywords)
 
   return {
     rowId: String(index + 1),

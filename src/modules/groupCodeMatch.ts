@@ -624,7 +624,7 @@ export async function exportMatchedProfessionalTemplate(params: {
   }
   ws.getRow(1).height = 350
 
-  ws.getCell('A2').value = '招生年'
+  ws.getCell('A2').value = '招生年份'
   ws.getCell('B2').value = params.yearValue
   ws.getCell('C2').value = 1
   ws.getCell('D2').value = '模板类型（模板标识不要更改）'

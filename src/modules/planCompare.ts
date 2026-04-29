@@ -838,7 +838,7 @@ async function fillTemplateSheet<T extends Record<string, unknown>>(params: {
   }
   worksheet.getRow(1).height = 350
 
-  worksheet.getCell('A2').value = '招生年'
+  worksheet.getCell('A2').value = '招生年份'
   worksheet.getCell('B2').value = yearValue
   worksheet.getCell('C2').value = 1
   worksheet.getCell('D2').value = '模板类型（模板标识不要更改）'
