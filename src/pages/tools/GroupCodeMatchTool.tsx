@@ -230,22 +230,7 @@ export default function GroupCodeMatchTool() {
     setManualSecondSubject(saved?.manualSecondSubject || row.resolvedSecondSubject || '')
     setDrawerOpen(true)
   }
-
-const chooseCandidate = (candidateId: string) => {
-  setCandidateChoice(candidateId)
-
-  const candidate = activeRow?.candidates.find((item) => item.candidateId === candidateId)
-  if (!candidate || !activeRow) return
-
-  setManualGroupCode(activeRow.requiresGroupCode ? candidate.groupCode : '')
-
-  if (activeRow.requiresElectiveConversion) {
-    setManualRequirementMode(candidate.convertedRequirementMode)
-    setManualSecondSubject(candidate.convertedSecondSubject)
-  }
-}
-
-  const saveManualSelection = () => {
+const saveManualSelection = () => {
     if (!activeRow) return
 
     const nextValue: ManualSelection = {}
@@ -266,6 +251,66 @@ const chooseCandidate = (candidateId: string) => {
     message.success('当前补充内容已保存')
   }
 
+const saveCandidateSelection = (candidateId: string) => {
+  if (!activeRow) return
+
+  const candidate = activeRow.candidates.find((item) => item.candidateId === candidateId)
+  if (!candidate) return
+
+  const nextValue: ManualSelection = {
+    candidateId,
+    manualGroupCode: activeRow.requiresGroupCode ? candidate.groupCode || '' : '',
+    manualRequirementMode: activeRow.requiresElectiveConversion
+      ? candidate.convertedRequirementMode || ''
+      : manualRequirementMode,
+    manualSecondSubject: activeRow.requiresElectiveConversion
+      ? candidate.convertedSecondSubject || ''
+      : manualSecondSubject,
+  }
+
+  setManualSelections((prev) => ({
+    ...prev,
+    [activeRow.rowId]: nextValue,
+  }))
+
+  message.success('已自动保存')
+
+  if (nextManualRow) {
+    setTimeout(() => {
+      openManualDrawer(nextManualRow)
+    }, 0)
+  } else {
+    setTimeout(() => {
+      setDrawerOpen(false)
+      setActiveRowId(null)
+    }, 0)
+  }
+}
+
+
+const chooseCandidate = (candidateId: string) => {
+  setCandidateChoice(candidateId)
+
+  const candidate = activeRow?.candidates.find((item) => item.candidateId === candidateId)
+  if (!candidate || !activeRow) return
+
+  const nextGroupCode = activeRow.requiresGroupCode ? candidate.groupCode || '' : ''
+  const nextRequirementMode = activeRow.requiresElectiveConversion
+    ? candidate.convertedRequirementMode || ''
+    : manualRequirementMode
+  const nextSecondSubject = activeRow.requiresElectiveConversion
+    ? candidate.convertedSecondSubject || ''
+    : manualSecondSubject
+
+  setManualGroupCode(nextGroupCode)
+  setManualRequirementMode(nextRequirementMode)
+  setManualSecondSubject(nextSecondSubject)
+
+  saveCandidateSelection(candidateId)
+}
+
+  
+  
   const saveAndNext = () => {
     saveManualSelection()
     if (nextManualRow) {
