@@ -6,6 +6,7 @@ import {
   getCategoryTypeByYearProvince,
   mergeSubjectRequirements,
   normalizeBatch,
+  normalizeBatchByCurrentTable,
   normalizeLevel1,
   normalizeProvince,
   normalizeSubjectCategoryByRaw,
@@ -43,6 +44,7 @@ type StandardizeOptions = {
   provinceRules: Record<string, string>
   categoryRules: Record<string, string>
   batchRules: Record<string, string>
+  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
   provinceYearCategoryType: Record<string, Record<string, string>>
   remarkTypeRules: Array<{ keyword: string; output: string; priority: number }>
   manualSchoolName?: string
@@ -86,7 +88,12 @@ export function buildScoreRecords(
       subjectCategory:
         derivedFromRaw.subjectCategory ||
         normalizeSubjectCategoryByRaw(rawCategory, categoryType),
-      batch: normalizeBatch(toText(mapped['招生批次']), options.batchRules),
+            batch: normalizeBatchByCurrentTable(
+        toText(mapped['招生批次']),
+        year,
+        province,
+        options.provinceCurrentBatchDictByYear
+      ),
       majorName: sanitizeText(splitMajor.majorName),
       majorDirection: sanitizeText(toText(mapped['专业方向'])),
       majorRemark: finalRemark,

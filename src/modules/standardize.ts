@@ -140,6 +140,61 @@ export function normalizeBatch(
   return raw
 }
 
+function isTemplateRemarkBatchText(text: string): boolean {
+  const compact = text.replace(/\s/g, '')
+
+  return (
+    compact.includes('请删除示例') ||
+    compact.includes('以下为19年使用批次') ||
+    compact.includes('省份：必须填写') ||
+    compact.includes('招生人数：仅能填写数字') ||
+    compact.includes('批次：（以下为') ||
+    compact.includes('限定本科提前批') ||
+    compact.length > 120
+  )
+}
+
+export function normalizeBatchByCurrentTable(
+  batch: string | undefined,
+  year: string | undefined,
+  province: string | undefined,
+  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
+): string | undefined {
+  const raw = sanitizeText(batch)
+
+  if (!raw || !province) return undefined
+
+  // 禁止使用“专业分模板备注说明”里的旧批次内容
+  if (isTemplateRemarkBatchText(raw)) return undefined
+
+  const batchDict =
+    provinceCurrentBatchDictByYear[year || ''] ||
+    provinceCurrentBatchDictByYear['2025'] ||
+    {}
+
+  const currentBatches = batchDict[province] || []
+
+  if (!currentBatches.length) return undefined
+
+  const compactRaw = raw.replace(/\s/g, '')
+
+  const exactMatched = currentBatches.find(
+    (item) => item === raw || item.replace(/\s/g, '') === compactRaw
+  )
+
+  if (exactMatched) return exactMatched
+
+  // 按长度倒序，避免“本科批”先于“本科批A段（国家专项）”被误命中
+  const containsMatched = [...currentBatches]
+    .sort((a, b) => b.length - a.length)
+    .find((item) => {
+      const compactItem = item.replace(/\s/g, '')
+      return compactRaw.includes(compactItem)
+    })
+
+  return containsMatched
+}
+
 export function splitMajorNameAndRemark(majorName?: string): {
   majorName?: string
   majorRemark?: string
