@@ -1,3 +1,22 @@
+/**
+ * 文件名称：备注招生类型提取页面
+ *
+ * 文件作用：
+ * - 控制“备注招生类型提取”工具页面
+ * - 负责上传文件、选择备注字段、执行提取、展示结果、导出结果
+ *
+ * 常改位置：
+ * - 文件上传
+ * - 备注字段选择
+ * - 提取按钮
+ * - 结果表格
+ * - 空备注行是否保留
+ *
+ * 注意：
+ * - 页面显示和上传问题改本文件
+ * - 具体提取规则改 src/modules/remarkTypeExtract.ts
+ */
+
 import { useMemo, useState } from 'react'
 import { Button, Card, Descriptions, Empty, Select, Space, Statistic, Table, Typography, Upload, message } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
