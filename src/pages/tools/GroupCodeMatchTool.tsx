@@ -231,6 +231,20 @@ export default function GroupCodeMatchTool() {
     setDrawerOpen(true)
   }
 
+const chooseCandidate = (candidateId: string) => {
+  setCandidateChoice(candidateId)
+
+  const candidate = activeRow?.candidates.find((item) => item.candidateId === candidateId)
+  if (!candidate || !activeRow) return
+
+  setManualGroupCode(activeRow.requiresGroupCode ? candidate.groupCode : '')
+
+  if (activeRow.requiresElectiveConversion) {
+    setManualRequirementMode(candidate.convertedRequirementMode)
+    setManualSecondSubject(candidate.convertedSecondSubject)
+  }
+}
+
   const saveManualSelection = () => {
     if (!activeRow) return
 
@@ -485,32 +499,44 @@ export default function GroupCodeMatchTool() {
             >
               {activeRow.candidates.length > 0 ? (
                 <Radio.Group
-                  value={candidateChoice}
-                  onChange={(event) => setCandidateChoice(event.target.value)}
-                  style={{ width: '100%' }}
-                >
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {activeRow.candidates.map((candidate) => (
-                      <Card key={candidate.candidateId} size="small">
-                        <Radio value={candidate.candidateId}>选择该招生计划记录</Radio>
-                        <div style={{ marginTop: 10, marginLeft: 24, lineHeight: 1.8 }}>
-                          <div>学校名称：{candidate.schoolName || '-'}</div>
-                          <div>省份：{candidate.province || '-'}</div>
-                          <div>一级层次：{candidate.level1 || '-'}</div>
-                          <div>招生科类：{candidate.subjectCategory || '-'}</div>
-                          <div>招生批次：{candidate.batch || '-'}</div>
-                          <div>招生专业：{candidate.majorName || '-'}</div>
-                          <div>专业备注（选填）：{candidate.majorRemark || '-'}</div>
-                          <div>招生类型（选填）：{candidate.enrollmentType || '-'}</div>
-                          <div>专业组代码：{candidate.groupCode || '-'}</div>
-                          <div>原始选科要求：{candidate.electiveRaw || '-'}</div>
-                          <div>转换后选科要求：{candidate.convertedRequirementMode || '-'}</div>
-                          <div>转换后次选科目：{candidate.convertedSecondSubject || '-'}</div>
-                        </div>
-                      </Card>
-                    ))}
-                  </Space>
-                </Radio.Group>
+  value={candidateChoice}
+  onChange={(event) => chooseCandidate(event.target.value)}
+  style={{ width: '100%' }}
+>
+  <Space direction="vertical" style={{ width: '100%' }}>
+    {activeRow.candidates.map((candidate) => {
+      const selected = candidateChoice === candidate.candidateId
+
+      return (
+        <Card
+          key={candidate.candidateId}
+          size="small"
+          hoverable
+          onClick={() => chooseCandidate(candidate.candidateId)}
+          style={{
+            cursor: 'pointer',
+            borderColor: selected ? '#1677ff' : undefined,
+            background: selected ? '#f0f7ff' : undefined,
+          }}
+        >
+          <Radio value={candidate.candidateId}>选择该招生计划记录</Radio>
+
+          <div style={{ marginTop: 10, marginLeft: 24, lineHeight: 1.8 }}>
+            <div>学校名称：{candidate.schoolName || '-'}</div>
+            <div>省份：{candidate.province || '-'}</div>
+            <div>一级层次：{candidate.level1 || '-'}</div>
+            <div>招生科类：{candidate.subjectCategory || '-'}</div>
+            <div>招生批次：{candidate.batch || '-'}</div>
+            <div>招生专业：{candidate.majorName || '-'}</div>
+            <div>专业备注（选填）：{candidate.majorRemark || '-'}</div>
+            <div>招生类型（选填）：{candidate.enrollmentType || '-'}</div>
+            <div>专业组代码：{candidate.groupCode || '-'}</div>
+          </div>
+        </Card>
+      )
+    })}
+  </Space>
+</Radio.Group>
               ) : (
                 <Empty description="当前没有候选招生计划记录，请手动补充" />
               )}

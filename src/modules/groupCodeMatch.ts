@@ -363,6 +363,35 @@ function buildReason(
   return ''
 }
 
+function normalizeGroupCodeForSort(value: string) {
+  return t(value)
+    .replace(/（/g, '(')
+    .replace(/）/g, ')')
+}
+
+function compareCandidateByGroupCode(a: GroupCodeCandidate, b: GroupCodeCandidate) {
+  const codeA = normalizeGroupCodeForSort(a.groupCode)
+  const codeB = normalizeGroupCodeForSort(b.groupCode)
+
+  if (!codeA && codeB) return 1
+  if (codeA && !codeB) return -1
+
+  return codeA.localeCompare(codeB, 'zh-Hans-CN', {
+    numeric: true,
+    sensitivity: 'base',
+  })
+}
+
+function getUniqueNonEmptyGroupCodes(candidates: GroupCodeCandidate[]) {
+  return Array.from(
+    new Set(
+      candidates
+        .map((item) => t(item.groupCode))
+        .filter(Boolean)
+    )
+  )
+}
+
 export function processGroupCodeMatch(params: {
   importRows: Record<string, unknown>[]
   planRows: Record<string, unknown>[]
@@ -404,6 +433,10 @@ export function processGroupCodeMatch(params: {
     planMap.get(matchKey)!.push(candidate)
   })
 
+planMap.forEach((candidates) => {
+  candidates.sort(compareCandidateByGroupCode)
+})
+
   const rows: GroupCodeMatchRow[] = importRows.map((row, rowNo) => {
     const matchKey = getImportMatchKey(row)
     const candidates = planMap.get(matchKey) || []
@@ -431,38 +464,56 @@ export function processGroupCodeMatch(params: {
     let resolvedRequirementMode = originalRequirementMode
     let resolvedSecondSubject = originalSecondSubject
 
-    if (originalGroupCode) {
-      status = 'existing'
-    } else if (duplicateInImport || duplicateInPlan) {
-      status = 'manual_required'
-      reason = buildReason(
-        duplicateInImport,
-        duplicateInPlan,
-        candidates.length,
-        requiresGroupCode,
-        candidates[0]?.groupCode || ''
-      )
-    } else if (candidates.length === 0) {
-      status = 'no_candidate'
-      reason = buildReason(false, false, 0, requiresGroupCode, '')
-    } else if (candidates.length === 1) {
-      const candidate = candidates[0]
+    const uniqueCandidateGroupCodes = getUniqueNonEmptyGroupCodes(candidates)
+const hasSameNonEmptyGroupCode =
+  requiresGroupCode &&
+  candidates.length > 1 &&
+  uniqueCandidateGroupCodes.length === 1
 
-      if (requiresGroupCode && !candidate.groupCode) {
-        status = 'manual_required'
-        reason = buildReason(false, false, 1, true, '')
-      } else {
-        status = 'auto'
-        resolvedGroupCode = requiresGroupCode ? candidate.groupCode : ''
-        if (requiresElectiveConversion) {
-          resolvedRequirementMode = candidate.convertedRequirementMode
-          resolvedSecondSubject = candidate.convertedSecondSubject
-        }
-      }
-    } else {
-      status = 'manual_required'
-      reason = '存在多条候选招生计划记录，需手动补充'
+if (originalGroupCode) {
+  status = 'existing'
+} else if (candidates.length === 0) {
+  status = 'no_candidate'
+  reason = buildReason(false, false, 0, requiresGroupCode, '')
+} else if (hasSameNonEmptyGroupCode) {
+  const sameGroupCode = uniqueCandidateGroupCodes[0]
+  const candidate =
+    candidates.find((item) => item.groupCode === sameGroupCode) || candidates[0]
+
+  status = 'auto'
+  resolvedGroupCode = sameGroupCode
+
+  if (requiresElectiveConversion) {
+    resolvedRequirementMode = candidate.convertedRequirementMode
+    resolvedSecondSubject = candidate.convertedSecondSubject
+  }
+} else if (duplicateInImport || duplicateInPlan) {
+  status = 'manual_required'
+  reason = buildReason(
+    duplicateInImport,
+    duplicateInPlan,
+    candidates.length,
+    requiresGroupCode,
+    candidates[0]?.groupCode || ''
+  )
+} else if (candidates.length === 1) {
+  const candidate = candidates[0]
+
+  if (requiresGroupCode && !candidate.groupCode) {
+    status = 'manual_required'
+    reason = buildReason(false, false, 1, true, '')
+  } else {
+    status = 'auto'
+    resolvedGroupCode = requiresGroupCode ? candidate.groupCode : ''
+    if (requiresElectiveConversion) {
+      resolvedRequirementMode = candidate.convertedRequirementMode
+      resolvedSecondSubject = candidate.convertedSecondSubject
     }
+  }
+} else {
+  status = 'manual_required'
+  reason = '存在多条候选招生计划记录，需手动补充'
+}
 
     if (status === 'existing' && candidates.length === 1 && requiresElectiveConversion) {
       resolvedRequirementMode = candidates[0].convertedRequirementMode
