@@ -153,16 +153,41 @@ export default function GroupCodeMatchTool() {
     })
   }, [manualRows, provinceFilter])
 
-  const activeRow = useMemo(() => {
-    return visibleManualRows.find((item) => item.rowId === activeRowId) || null
-  }, [visibleManualRows, activeRowId])
+    const activeRow = useMemo(() => {
+    if (!activeRowId) return null
 
-  const activeRowPosition = useMemo(() => {
-    return visibleManualRows.findIndex((item) => item.rowId === activeRowId)
-  }, [visibleManualRows, activeRowId])
+    return (
+      resolvedRows.find((item) => item.rowId === activeRowId) ||
+      visibleManualRows.find((item) => item.rowId === activeRowId) ||
+      null
+    )
+  }, [resolvedRows, visibleManualRows, activeRowId])
 
-  const nextManualRow = activeRowPosition >= 0 ? visibleManualRows[activeRowPosition + 1] : null
-  const prevManualRow = activeRowPosition > 0 ? visibleManualRows[activeRowPosition - 1] : null
+    const activeRowIndexInResolvedRows = useMemo(() => {
+    return resolvedRows.findIndex((item) => item.rowId === activeRowId)
+  }, [resolvedRows, activeRowId])
+
+  const nextManualRow = useMemo(() => {
+    if (activeRowIndexInResolvedRows < 0) return null
+
+    return (
+      visibleManualRows.find((item) => {
+        const index = resolvedRows.findIndex((row) => row.rowId === item.rowId)
+        return index > activeRowIndexInResolvedRows
+      }) || null
+    )
+  }, [activeRowIndexInResolvedRows, resolvedRows, visibleManualRows])
+
+  const prevManualRow = useMemo(() => {
+    if (activeRowIndexInResolvedRows < 0) return null
+
+    const previousRows = visibleManualRows.filter((item) => {
+      const index = resolvedRows.findIndex((row) => row.rowId === item.rowId)
+      return index < activeRowIndexInResolvedRows
+    })
+
+    return previousRows[previousRows.length - 1] || null
+  }, [activeRowIndexInResolvedRows, resolvedRows, visibleManualRows])
 
   const handleUploadImport = async (file: File) => {
     try {
