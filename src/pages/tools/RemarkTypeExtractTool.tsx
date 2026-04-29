@@ -30,6 +30,7 @@ function getRows(workbook: XLSX.WorkBook, sheetName: string) {
   return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     defval: '',
     raw: false,
+    blankrows: true,
   })
 }
 
