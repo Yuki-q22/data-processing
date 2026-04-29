@@ -280,18 +280,33 @@ export function buildProcessedRecords(
 
     const requirement = deriveRequirementFromPlan(matchedPlan)
 
-    const result: ScoreRecord = {
-      ...score,
-      batch: score.batch || matchedPlan?.batch,
-      level1: score.level1 || matchedPlan?.level1,
-      enrollmentType: score.enrollmentType || matchedPlan?.enrollmentType,
-      enrollmentPlan: score.enrollmentPlan ?? matchedPlan?.enrollmentPlan ?? null,
-      groupCode: score.groupCode || matchedPlan?.groupCode,
-      // 统一由匹配逻辑填入
-      subjectRequirementMode: requirement.subjectRequirementMode,
-      secondSubject: requirement.secondSubject,
-      dataSource: score.dataSource,
-    }
+    const shouldUsePlanCategory =
+  matchStatus === 'matched_manual' && !!matchedPlan?.subjectCategory
+
+const result: ScoreRecord = {
+  ...score,
+  subjectCategory: shouldUsePlanCategory
+    ? matchedPlan.subjectCategory
+    : score.subjectCategory,
+  rawSubjectCategory: shouldUsePlanCategory
+    ? matchedPlan.subjectCategory
+    : score.rawSubjectCategory,
+  subjectCategoryNeedsReview: shouldUsePlanCategory
+    ? false
+    : score.subjectCategoryNeedsReview,
+  subjectCategoryReviewReason: shouldUsePlanCategory
+    ? undefined
+    : score.subjectCategoryReviewReason,
+  batch: score.batch || matchedPlan?.batch,
+  level1: score.level1 || matchedPlan?.level1,
+  enrollmentType: score.enrollmentType || matchedPlan?.enrollmentType,
+  enrollmentPlan: score.enrollmentPlan ?? matchedPlan?.enrollmentPlan ?? null,
+  groupCode: score.groupCode || matchedPlan?.groupCode,
+  // 统一由匹配逻辑填入
+  subjectRequirementMode: requirement.subjectRequirementMode,
+  secondSubject: requirement.secondSubject,
+  dataSource: score.dataSource,
+}
 
     return {
       rowId: score.rowId,
