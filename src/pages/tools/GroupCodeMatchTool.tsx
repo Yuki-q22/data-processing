@@ -251,65 +251,52 @@ const saveManualSelection = () => {
     message.success('当前补充内容已保存')
   }
 
-const saveCandidateSelection = (candidateId: string) => {
-  if (!activeRow) return
+  const saveCandidateSelection = (candidateId: string) => {
+    if (!activeRow) return
 
-  const candidate = activeRow.candidates.find((item) => item.candidateId === candidateId)
-  if (!candidate) return
+    const candidate = activeRow.candidates.find((item) => item.candidateId === candidateId)
+    if (!candidate) return
 
-  const nextValue: ManualSelection = {
-    candidateId,
-    manualGroupCode: activeRow.requiresGroupCode ? candidate.groupCode || '' : '',
-    manualRequirementMode: activeRow.requiresElectiveConversion
+    const nextValue: ManualSelection = {
+      candidateId,
+      manualGroupCode: activeRow.requiresGroupCode ? candidate.groupCode || '' : '',
+      manualRequirementMode: activeRow.requiresElectiveConversion
+        ? candidate.convertedRequirementMode || ''
+        : manualRequirementMode,
+      manualSecondSubject: activeRow.requiresElectiveConversion
+        ? candidate.convertedSecondSubject || ''
+        : manualSecondSubject,
+    }
+
+    setManualSelections((prev) => ({
+      ...prev,
+      [activeRow.rowId]: nextValue,
+    }))
+
+    message.success('已自动保存当前记录')
+  }
+
+
+  const chooseCandidate = (candidateId: string) => {
+    setCandidateChoice(candidateId)
+
+    const candidate = activeRow?.candidates.find((item) => item.candidateId === candidateId)
+    if (!candidate || !activeRow) return
+
+    const nextGroupCode = activeRow.requiresGroupCode ? candidate.groupCode || '' : ''
+    const nextRequirementMode = activeRow.requiresElectiveConversion
       ? candidate.convertedRequirementMode || ''
-      : manualRequirementMode,
-    manualSecondSubject: activeRow.requiresElectiveConversion
+      : manualRequirementMode
+    const nextSecondSubject = activeRow.requiresElectiveConversion
       ? candidate.convertedSecondSubject || ''
-      : manualSecondSubject,
+      : manualSecondSubject
+
+    setManualGroupCode(nextGroupCode)
+    setManualRequirementMode(nextRequirementMode)
+    setManualSecondSubject(nextSecondSubject)
+
+    saveCandidateSelection(candidateId)
   }
-
-  setManualSelections((prev) => ({
-    ...prev,
-    [activeRow.rowId]: nextValue,
-  }))
-
-  message.success('已自动保存')
-
-  if (nextManualRow) {
-    setTimeout(() => {
-      openManualDrawer(nextManualRow)
-    }, 0)
-  } else {
-    setTimeout(() => {
-      setDrawerOpen(false)
-      setActiveRowId(null)
-    }, 0)
-  }
-}
-
-
-const chooseCandidate = (candidateId: string) => {
-  setCandidateChoice(candidateId)
-
-  const candidate = activeRow?.candidates.find((item) => item.candidateId === candidateId)
-  if (!candidate || !activeRow) return
-
-  const nextGroupCode = activeRow.requiresGroupCode ? candidate.groupCode || '' : ''
-  const nextRequirementMode = activeRow.requiresElectiveConversion
-    ? candidate.convertedRequirementMode || ''
-    : manualRequirementMode
-  const nextSecondSubject = activeRow.requiresElectiveConversion
-    ? candidate.convertedSecondSubject || ''
-    : manualSecondSubject
-
-  setManualGroupCode(nextGroupCode)
-  setManualRequirementMode(nextRequirementMode)
-  setManualSecondSubject(nextSecondSubject)
-
-  saveCandidateSelection(candidateId)
-}
-
-  
   
   const saveAndNext = () => {
     saveManualSelection()
