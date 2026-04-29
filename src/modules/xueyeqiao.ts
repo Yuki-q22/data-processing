@@ -635,7 +635,9 @@ export async function exportXueyeqiaoWorkbook(params: {
   ws.getRow(1).height = 350
 
   ws.getCell('A2').value = '招生年份'
-  ws.getCell('B2').value = params.yearValue
+ws.getCell('B2').value = params.yearValue
+ws.getCell('C2').value = null
+ws.getCell('D2').value = null
 
   OUTPUT_HEADERS.forEach((header, headerNo) => {
     const cell = ws.getCell(3, headerNo + 1)
