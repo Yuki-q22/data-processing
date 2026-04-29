@@ -116,18 +116,37 @@ export default function ExceptionStep() {
   }, [activeRowId, filteredRecords, exceptionRecords])
 
   const nextActionableRecord = useMemo(() => {
-    if (!activeRecord) return null
-    const currentIndex = filteredRecords.findIndex((item) => item.rowId === activeRecord.rowId)
-    if (currentIndex < 0) return null
+  if (!activeRowId) return null
 
-    for (let i = currentIndex + 1; i < filteredRecords.length; i += 1) {
-      const record = filteredRecords[i]
-      if (record.matchCandidates?.length) {
-        return record
+  const records = filteredRecords.length ? filteredRecords : exceptionRecords
+
+  const currentIndex = records.findIndex((item) => item.rowId === activeRowId)
+
+  const hasCandidates = (record: any) => !!record.matchCandidates?.length
+
+  if (currentIndex >= 0) {
+    for (let i = currentIndex + 1; i < records.length; i += 1) {
+      if (hasCandidates(records[i])) {
+        return records[i]
       }
     }
-    return null
-  }, [activeRecord, filteredRecords])
+  }
+
+  const currentRowNumber = Number(activeRowId)
+
+  if (!Number.isNaN(currentRowNumber)) {
+    const nextByRowId = records
+      .filter((item) => {
+        const rowNumber = Number(item.rowId)
+        return !Number.isNaN(rowNumber) && rowNumber > currentRowNumber && hasCandidates(item)
+      })
+      .sort((a, b) => Number(a.rowId) - Number(b.rowId))[0]
+
+    if (nextByRowId) return nextByRowId
+  }
+
+  return records.find((item) => item.rowId !== activeRowId && hasCandidates(item)) || null
+}, [activeRowId, filteredRecords, exceptionRecords])
 
   const rebuildWithManualSelections = (
     nextManualSelections: Record<string, string>
@@ -169,10 +188,10 @@ export default function ExceptionStep() {
   }
 
   const goNextRecord = () => {
-    if (nextActionableRecord) {
-      setActiveRowId(nextActionableRecord.rowId)
-    }
-  }
+  if (!nextActionableRecord) return
+
+  setActiveRowId(nextActionableRecord.rowId)
+}
 
   const columns = [
     {
@@ -478,12 +497,13 @@ export default function ExceptionStep() {
                   ) : null}
 
                   <Button
-                    size="small"
-                    onClick={goNextRecord}
-                    disabled={!nextActionableRecord}
-                  >
-                    下一个
-                  </Button>
+  size="small"
+  type="primary"
+  onClick={goNextRecord}
+  disabled={!nextActionableRecord}
+>
+  下一个
+</Button>
                 </Space>
               }
             >
