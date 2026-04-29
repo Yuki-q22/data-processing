@@ -264,6 +264,25 @@ function deriveRequirementFromPlan(
   return deriveSubjectRequirementFields(matchedPlan.majorSubjectRequirement)
 }
 
+function getFirstSubjectFromSubjectCategory(category: string | undefined): string | undefined {
+  const text = String(category || '').trim()
+
+  if (text.startsWith('物理类')) return '物'
+  if (text.startsWith('历史类')) return '历'
+
+  return undefined
+}
+
+function normalizeExportLevel(level: string | undefined): string | undefined {
+  const text = String(level || '').trim()
+
+  if (!text) return undefined
+  if (text.includes('本科')) return '本科'
+  if (text.includes('专科')) return '专科(高职)'
+
+  return text
+}
+
 export function buildProcessedRecords(
   scoreRecords: ScoreRecord[],
   planRecords: PlanRecord[],
@@ -280,52 +299,40 @@ export function buildProcessedRecords(
 
     const requirement = deriveRequirementFromPlan(matchedPlan)
 
-function getFirstSubjectFromSubjectCategory(category: string | undefined): string {
-  const text = String(category || '').trim()
-
-  if (text.startsWith('物理类')) return '物'
-  if (text.startsWith('历史类')) return '历'
-
-  return ''
-}
-
     const shouldUsePlanCategory =
-  matchStatus === 'matched_manual' && !!matchedPlan?.subjectCategory
+      matchStatus === 'matched_manual' && !!matchedPlan?.subjectCategory
 
-const finalSubjectCategory = shouldUsePlanCategory
-  ? matchedPlan.subjectCategory
-  : score.subjectCategory
+    const finalSubjectCategory = shouldUsePlanCategory
+      ? matchedPlan.subjectCategory
+      : score.subjectCategory
 
-const finalFirstSubject =
-  shouldUsePlanCategory &&
-  (finalSubjectCategory?.startsWith('物理类') ||
-    finalSubjectCategory?.startsWith('历史类'))
-    ? getFirstSubjectFromSubjectCategory(finalSubjectCategory)
-    : score.firstSubject
+    const finalFirstSubject = shouldUsePlanCategory
+      ? getFirstSubjectFromSubjectCategory(finalSubjectCategory) || score.firstSubject
+      : score.firstSubject
 
-const result: ScoreRecord = {
-  ...score,
-  subjectCategory: finalSubjectCategory,
-  rawSubjectCategory: shouldUsePlanCategory
-    ? matchedPlan.subjectCategory
-    : score.rawSubjectCategory,
-  firstSubject: finalFirstSubject,
-  subjectCategoryNeedsReview: shouldUsePlanCategory
-    ? false
-    : score.subjectCategoryNeedsReview,
-  subjectCategoryReviewReason: shouldUsePlanCategory
-    ? undefined
-    : score.subjectCategoryReviewReason,
-  batch: score.batch || matchedPlan?.batch,
-  level1: score.level1 || matchedPlan?.level1,
-  enrollmentType: score.enrollmentType || matchedPlan?.enrollmentType,
-  enrollmentPlan: score.enrollmentPlan ?? matchedPlan?.enrollmentPlan ?? null,
-  groupCode: score.groupCode || matchedPlan?.groupCode,
-  // 统一由匹配逻辑填入
-  subjectRequirementMode: requirement.subjectRequirementMode,
-  secondSubject: requirement.secondSubject,
-  dataSource: score.dataSource,
-}
+    const result: ScoreRecord = {
+      ...score,
+      subjectCategory: finalSubjectCategory,
+      rawSubjectCategory: shouldUsePlanCategory
+        ? matchedPlan.subjectCategory
+        : score.rawSubjectCategory,
+      subjectCategoryNeedsReview: shouldUsePlanCategory
+        ? false
+        : score.subjectCategoryNeedsReview,
+      subjectCategoryReviewReason: shouldUsePlanCategory
+        ? undefined
+        : score.subjectCategoryReviewReason,
+      firstSubject: finalFirstSubject,
+      batch: score.batch || matchedPlan?.batch,
+      level1: normalizeExportLevel(score.level1 || matchedPlan?.level1),
+      enrollmentType: score.enrollmentType || matchedPlan?.enrollmentType,
+      enrollmentPlan: score.enrollmentPlan ?? matchedPlan?.enrollmentPlan ?? null,
+      groupCode: score.groupCode || matchedPlan?.groupCode,
+      // 统一由匹配逻辑填入
+      subjectRequirementMode: requirement.subjectRequirementMode,
+      secondSubject: requirement.secondSubject,
+      dataSource: score.dataSource,
+    }
 
     return {
       rowId: score.rowId,

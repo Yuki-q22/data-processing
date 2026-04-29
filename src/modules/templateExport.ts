@@ -95,7 +95,7 @@ export async function exportProfessionalScoreTemplate(
     horizontal: 'left',
   }
 
-  worksheet.getCell('A2').value = '招生年'
+  worksheet.getCell('A2').value = '招生年份'
   worksheet.getCell('B2').value = exportYear
   worksheet.getCell('B2').numFmt = '@'
 

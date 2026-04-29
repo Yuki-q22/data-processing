@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
-import { Alert, Card, Col, Input, Row, Select, Space, Switch, Typography, message } from 'antd'
+import { Alert, Button, Card, Col, Input, Popconfirm, Row, Select, Space, Switch, Typography, message } from 'antd'
 import * as XLSX from 'xlsx'
 import FileUploadCard from '../components/FileUploadCard'
 import { validateUploadedHeaders } from '../modules/uploadValidation'
 import { useTaskStore } from '../stores/taskStore'
+import { usePreviewStore } from '../stores/previewStore'
 import type { UploadedWorkbook } from '../types/workbook'
 
 const { Paragraph, Text } = Typography
@@ -21,8 +22,14 @@ const DATA_SOURCE_OPTIONS = [
 
 const YEAR_OPTIONS = ['2025', '2026', '2027']
 
-// 原始专业分数据上传：不再按目标模板字段强校验
-// 因为原始表头可能完全随机，后续通过“字段映射”页面手工/自动匹配
+const REQUIRED_SCORE_FIELDS = [
+  '学校名称',
+  '省份',
+  '招生科类',
+  '招生专业',
+  '最低分',
+]
+
 const REQUIRED_PLAN_FIELDS = [
   '年份',
   '省份',
@@ -112,7 +119,10 @@ export default function UploadStep() {
     setTaskMeta,
     setWorkbook,
     setSheetName,
+    resetTask,
   } = useTaskStore()
+
+  const resetPreview = usePreviewStore((state) => state.resetPreview)
 
   const scoreHeaders = useMemo(
     () => getSheetHeaders(scoreWorkbook, scoreSheetName),
@@ -124,15 +134,9 @@ export default function UploadStep() {
     [planWorkbook, planSheetName]
   )
 
-  // 原始专业分文件：只做“是否成功识别字段”的检查，不做固定字段强校验
-  const scoreHeaderSummary = useMemo(() => {
+  const scoreValidation = useMemo(() => {
     if (!scoreHeaders.length) return undefined
-
-    return {
-      totalColumns: scoreHeaders.length,
-      detectedColumns: scoreHeaders,
-      hasHeaders: scoreHeaders.length > 0,
-    }
+    return validateUploadedHeaders(scoreHeaders, REQUIRED_SCORE_FIELDS)
   }, [scoreHeaders])
 
   const planValidation = useMemo(() => {
@@ -148,11 +152,14 @@ export default function UploadStep() {
     if (firstSheetName) {
       setSheetName('score', firstSheetName)
       const headers = getSheetHeaders(uploaded, firstSheetName)
+      const validation = validateUploadedHeaders(headers, REQUIRED_SCORE_FIELDS)
 
-      if (headers.length > 0) {
-        message.success(`原始专业分文件已上传：${file.name}。已识别 ${headers.length} 个字段，下一步请在“字段映射”中完成匹配。`)
+      if (validation.isValid) {
+        message.success(`原始专业分文件已上传，字段校验通过：${file.name}`)
       } else {
-        message.warning(`原始专业分文件已上传，但未识别到表头：${file.name}`)
+        message.warning(
+          `原始专业分文件已上传，但缺少字段：${validation.missingFields.join('、')}`
+        )
       }
     } else {
       message.warning(`原始专业分文件已上传，但未识别到 Sheet：${file.name}`)
@@ -181,9 +188,29 @@ export default function UploadStep() {
     }
   }
 
+  const handleResetCurrentPage = () => {
+    resetTask()
+    resetPreview()
+    message.success('已重置当前任务、上传文件、字段映射、处理结果和人工匹配记录')
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="基础信息" style={{ borderRadius: 12 }}>
+      <Card
+        title="基础信息"
+        extra={
+          <Popconfirm
+            title="确认重置当前页面？"
+            description="会清空上传文件、Sheet 选择、字段映射、处理结果和人工匹配记录。"
+            okText="确认重置"
+            cancelText="取消"
+            onConfirm={handleResetCurrentPage}
+          >
+            <Button danger>重置</Button>
+          </Popconfirm>
+        }
+        style={{ borderRadius: 12 }}
+      >
         <Row gutter={16}>
           <Col span={8}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
@@ -210,24 +237,24 @@ export default function UploadStep() {
             </Space>
           </Col>
 
-          <Col span={5}>
+          <Col span={6}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>默认数据来源</Text>
               <Select
-  value={defaultDataSource}
-  onChange={(value) => setTaskMeta({ defaultDataSource: value })}
-  style={{ width: '100%' }}
-  popupMatchSelectWidth={220}
-  optionLabelProp="label"
-  options={DATA_SOURCE_OPTIONS.map((item) => ({
-    label: item,
-    value: item,
-  }))}
-/>
+                value={defaultDataSource}
+                onChange={(value) => setTaskMeta({ defaultDataSource: value })}
+                style={{ width: '100%' }}
+                popupMatchSelectWidth={260}
+                optionLabelProp="label"
+                options={DATA_SOURCE_OPTIONS.map((item) => ({
+                  label: item,
+                  value: item,
+                }))}
+              />
             </Space>
           </Col>
 
-          <Col span={4}>
+          <Col span={3}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>学校名称（选填）</Text>
               <Input
@@ -251,7 +278,7 @@ export default function UploadStep() {
 
         <div style={{ marginTop: 12 }}>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            原始专业分数据支持随机表头，不要求直接符合最终导出模板。请先上传文件，再在第二步“字段映射”中完成原始字段与目标字段的对应关系。
+            模糊匹配用于在学校名称、专业名称、备注存在轻微差异时辅助匹配，但仍建议优先保证原始字段尽量标准。
           </Paragraph>
         </div>
       </Card>
@@ -262,7 +289,7 @@ export default function UploadStep() {
             title="原始专业分数据上传"
             workbook={scoreWorkbook}
             selectedSheet={scoreSheetName}
-            validation={undefined}
+            validation={scoreValidation}
             onSheetChange={(sheetName) => setSheetName('score', sheetName)}
             onUpload={handleScoreUpload}
           />
@@ -282,20 +309,20 @@ export default function UploadStep() {
 
       <Card title="上传结果检查" style={{ borderRadius: 12 }}>
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          {scoreHeaderSummary ? (
-            scoreHeaderSummary.hasHeaders ? (
+          {scoreValidation ? (
+            scoreValidation.isValid ? (
               <Alert
                 type="success"
                 showIcon
-                message="原始专业分数据已成功识别表头"
-                description={`已识别 ${scoreHeaderSummary.totalColumns} 个字段。原始专业分表头允许随机，下一步请在“字段映射”中完成匹配。`}
+                message="原始专业分数据字段校验通过"
+                description={`已识别 ${scoreValidation.totalColumns} 个字段，关键字段完整。`}
               />
             ) : (
               <Alert
                 type="warning"
                 showIcon
-                message="原始专业分数据未识别到表头"
-                description="请确认上传的 Sheet 第一行是否为字段标题。"
+                message="原始专业分数据字段不完整"
+                description={`缺失字段：${scoreValidation.missingFields.join('、')}`}
               />
             )
           ) : (
