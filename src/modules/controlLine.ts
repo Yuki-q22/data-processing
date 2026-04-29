@@ -691,10 +691,25 @@ export function resolveControlLineBatch(
 }
 
 export function resolveControlLine(
-  province: unknown,
-  enrollmentCategory: unknown,
-  enrollmentBatch: unknown
-): { category: string; batch: string } {
+  province: string,
+  enrollmentCategory: string,
+  enrollmentBatch: string,
+  year?: string | number,
+): {
+  category: string
+  batch: string
+} {
+  const yearText = String(year ?? '').trim()
+
+  // 这个省控线配置只适用于 2025 年。
+  // 年份为空、2024、2026 等其他年份，都禁止使用。
+  if (yearText !== '2025') {
+    return {
+      category: '',
+      batch: '',
+    }
+  }
+
   return {
     category: resolveControlLineCategory(province, enrollmentCategory),
     batch: resolveControlLineBatch(province, enrollmentBatch, enrollmentCategory),

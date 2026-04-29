@@ -793,14 +793,21 @@ export function buildCollegeTemplateRows(
   return aggregateCollegeCompareRows(compareRows.filter((row) => !row.exists)).map(
     (row) => {
       const source = row.sourceRow
-      const province = t(source['省份'])
-      const enrollmentCategory = t(
+      const year = t(source['年份'] || source['招生年'] || source['招生年份'])
+const province = t(source['省份'])
+const enrollmentCategory = t(
   source['招生类别'] || source['招生科类'] || source['科类']
 )
 const enrollmentBatch = t(
   source['招生批次'] || source['批次']
 )
-      const controlLine = resolveControlLine(province, enrollmentCategory, enrollmentBatch)
+
+const controlLine = resolveControlLine(
+  province,
+  enrollmentCategory,
+  enrollmentBatch,
+  year,
+)
 
       return {
         学校名称: t(source['学校']),
