@@ -63,11 +63,6 @@ function downloadBuffer(buffer: ArrayBuffer, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-function getExportYear(year: string, records: ProcessedRecord[]) {
-  const recordYear = records.find((record) => String(record.result.year ?? '').trim())?.result.year
-  return recordYear ? String(recordYear).trim() : String(year).trim()
-}
-
 export function getExportableRecords(records: ProcessedRecord[]) {
   return records.filter((record) => !record.issues.some((issue) => issue.level === 'error'))
 }
@@ -77,7 +72,6 @@ export async function exportProfessionalScoreTemplate(
   records: ProcessedRecord[]
 ) {
   const exportable = getExportableRecords(records)
-  const exportYear = getExportYear(year, exportable.length ? exportable : records)
 
   const workbook = new ExcelJS.Workbook()
   const worksheet = workbook.addWorksheet('Worksheet')
@@ -96,8 +90,7 @@ export async function exportProfessionalScoreTemplate(
   }
 
   worksheet.getCell('A2').value = '招生年份'
-  worksheet.getCell('B2').value = exportYear
-  worksheet.getCell('B2').numFmt = '@'
+  worksheet.getCell('B2').value = Number(year)
 
   HEADERS.forEach((header, index) => {
     const cell = worksheet.getCell(3, index + 1)
@@ -111,7 +104,7 @@ export async function exportProfessionalScoreTemplate(
     worksheet.getColumn(index + 1).width = width
   })
 
-  worksheet.getRow(1).height = 350
+  worksheet.getRow(1).height = 206
   worksheet.getRow(3).height = 14
 
   exportable.forEach((record, idx) => {
@@ -160,5 +153,5 @@ export async function exportProfessionalScoreTemplate(
   })
 
   const buffer = await workbook.xlsx.writeBuffer()
-  downloadBuffer(buffer as ArrayBuffer, `专业分批量导入模板_${exportYear}.xlsx`)
+  downloadBuffer(buffer as ArrayBuffer, `专业分批量导入模板_${year}.xlsx`)
 }

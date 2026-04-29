@@ -126,8 +126,11 @@ export function mergeSubjectRequirements(
 export function normalizeLevel1(level1?: string): string | undefined {
   const raw = (level1 || '').trim()
   if (!raw) return undefined
-  if (raw === '专科') return '专科（高职）'
-  return raw
+
+  const compact = raw.replace(/\s/g, '').replace(/（/g, '(').replace(/）/g, ')')
+  if (compact === '专科' || compact === '专科(高职)') return '专科(高职)'
+
+  return raw.replace(/（/g, '(').replace(/）/g, ')')
 }
 
 export function normalizeBatch(
@@ -139,60 +142,31 @@ export function normalizeBatch(
   if (batchRules[raw]) return batchRules[raw]
   return raw
 }
-
-function isTemplateRemarkBatchText(text: string): boolean {
-  const compact = text.replace(/\s/g, '')
-
-  return (
-    compact.includes('请删除示例') ||
-    compact.includes('以下为19年使用批次') ||
-    compact.includes('省份：必须填写') ||
-    compact.includes('招生人数：仅能填写数字') ||
-    compact.includes('批次：（以下为') ||
-    compact.includes('限定本科提前批') ||
-    compact.length > 120
-  )
-}
-
 export function normalizeBatchByCurrentTable(
   batch: string | undefined,
-  year: string | undefined,
   province: string | undefined,
-  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
+  year: string | undefined,
+  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>,
+  batchRules: Record<string, string> = {}
 ): string | undefined {
-  const raw = sanitizeText(batch)
+  const normalizedBatch = normalizeBatch(batch, batchRules)
 
-  if (!raw || !province) return undefined
+  if (!normalizedBatch) return undefined
+  if (!province || !year) return normalizedBatch
 
-  // 禁止使用“专业分模板备注说明”里的旧批次内容
-  if (isTemplateRemarkBatchText(raw)) return undefined
+  const yearDict = provinceCurrentBatchDictByYear?.[String(year)]
+  if (!yearDict) return normalizedBatch
 
-  const batchDict =
-    provinceCurrentBatchDictByYear[year || ''] ||
-    provinceCurrentBatchDictByYear['2025'] ||
-    {}
+  const key1 = `${province}-${normalizedBatch}`
+  const key2 = normalizedBatch
 
-  const currentBatches = batchDict[province] || []
+  const matched = yearDict[key1] || yearDict[key2]
 
-  if (!currentBatches.length) return undefined
+  if (Array.isArray(matched) && matched.length > 0) {
+    return matched[0]
+  }
 
-  const compactRaw = raw.replace(/\s/g, '')
-
-  const exactMatched = currentBatches.find(
-    (item) => item === raw || item.replace(/\s/g, '') === compactRaw
-  )
-
-  if (exactMatched) return exactMatched
-
-  // 按长度倒序，避免“本科批”先于“本科批A段（国家专项）”被误命中
-  const containsMatched = [...currentBatches]
-    .sort((a, b) => b.length - a.length)
-    .find((item) => {
-      const compactItem = item.replace(/\s/g, '')
-      return compactRaw.includes(compactItem)
-    })
-
-  return containsMatched
+  return normalizedBatch
 }
 
 export function splitMajorNameAndRemark(majorName?: string): {

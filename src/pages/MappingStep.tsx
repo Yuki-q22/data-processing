@@ -25,14 +25,14 @@ export default function MappingStep() {
   } = usePreviewStore()
 
   const {
-  year,
-  defaultDataSource,
-  manualSchoolName,
-  scoreWorkbook,
-  planWorkbook,
-  scoreSheetName,
-  planSheetName,
-} = useTaskStore()
+    year,
+    defaultDataSource,
+    scoreWorkbook,
+    planWorkbook,
+    scoreSheetName,
+    planSheetName,
+    manualSchoolName,
+  } = useTaskStore()
 
   const {
     fieldAliases,
@@ -97,14 +97,14 @@ export default function MappingStep() {
     provinceRules,
     categoryRules,
     batchRules,
-    provinceCurrentBatchDictByYear,
     provinceYearCategoryType,
-    remarkTypeRules,
+    provinceCurrentBatchDictByYear,
     manualSchoolName,
+    remarkTypeRules,
   }
 )
 
-const planRecords = buildPlanRecords(
+    const planRecords = buildPlanRecords(
   planRows,
   finalPlanMappings,
   year,
@@ -113,10 +113,9 @@ const planRecords = buildPlanRecords(
     provinceRules,
     categoryRules,
     batchRules,
-    provinceCurrentBatchDictByYear,
     provinceYearCategoryType,
+    provinceCurrentBatchDictByYear,
     remarkTypeRules,
-    manualSchoolName,
   }
 )
 

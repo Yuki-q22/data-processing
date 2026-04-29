@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Alert, Button, Card, Col, Input, Popconfirm, Row, Select, Space, Switch, Typography, message } from 'antd'
+import { Alert, Button, Card, Col, Input, Modal, Row, Select, Space, Switch, Typography, message } from 'antd'
 import * as XLSX from 'xlsx'
 import FileUploadCard from '../components/FileUploadCard'
 import { validateUploadedHeaders } from '../modules/uploadValidation'
@@ -21,14 +21,6 @@ const DATA_SOURCE_OPTIONS = [
 ]
 
 const YEAR_OPTIONS = ['2025', '2026', '2027']
-
-const REQUIRED_SCORE_FIELDS = [
-  '学校名称',
-  '省份',
-  '招生科类',
-  '招生专业',
-  '最低分',
-]
 
 const REQUIRED_PLAN_FIELDS = [
   '年份',
@@ -122,7 +114,7 @@ export default function UploadStep() {
     resetTask,
   } = useTaskStore()
 
-  const resetPreview = usePreviewStore((state) => state.resetPreview)
+  const { resetPreview } = usePreviewStore()
 
   const scoreHeaders = useMemo(
     () => getSheetHeaders(scoreWorkbook, scoreSheetName),
@@ -133,11 +125,6 @@ export default function UploadStep() {
     () => getSheetHeaders(planWorkbook, planSheetName),
     [planWorkbook, planSheetName]
   )
-
-  const scoreValidation = useMemo(() => {
-    if (!scoreHeaders.length) return undefined
-    return validateUploadedHeaders(scoreHeaders, REQUIRED_SCORE_FIELDS)
-  }, [scoreHeaders])
 
   const planValidation = useMemo(() => {
     if (!planHeaders.length) return undefined
@@ -151,16 +138,7 @@ export default function UploadStep() {
     const firstSheetName = uploaded.sheets?.[0]?.name
     if (firstSheetName) {
       setSheetName('score', firstSheetName)
-      const headers = getSheetHeaders(uploaded, firstSheetName)
-      const validation = validateUploadedHeaders(headers, REQUIRED_SCORE_FIELDS)
-
-      if (validation.isValid) {
-        message.success(`原始专业分文件已上传，字段校验通过：${file.name}`)
-      } else {
-        message.warning(
-          `原始专业分文件已上传，但缺少字段：${validation.missingFields.join('、')}`
-        )
-      }
+      message.success(`原始专业分文件已上传：${file.name}。该文件不强制校验固定字段，请在第二步完成字段映射。`)
     } else {
       message.warning(`原始专业分文件已上传，但未识别到 Sheet：${file.name}`)
     }
@@ -188,10 +166,25 @@ export default function UploadStep() {
     }
   }
 
-  const handleResetCurrentPage = () => {
-    resetTask()
-    resetPreview()
-    message.success('已重置当前任务、上传文件、字段映射、处理结果和人工匹配记录')
+  const handleResetPage = () => {
+    Modal.confirm({
+      title: '确认重置当前页面数据？',
+      content: '将清空已上传文件、Sheet 选择、字段映射、处理预览、异常人工匹配记录，并清理浏览器本地缓存。规则中心中的远程规则不会被删除。',
+      okText: '确认重置',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: () => {
+        resetTask()
+        resetPreview()
+        try {
+          localStorage.clear()
+          sessionStorage.clear()
+        } catch (error) {
+          console.warn('清理浏览器本地缓存失败：', error)
+        }
+        message.success('已重置上传文件、处理数据和本地缓存')
+      },
+    })
   }
 
   return (
@@ -199,15 +192,9 @@ export default function UploadStep() {
       <Card
         title="基础信息"
         extra={
-          <Popconfirm
-            title="确认重置当前页面？"
-            description="会清空上传文件、Sheet 选择、字段映射、处理结果和人工匹配记录。"
-            okText="确认重置"
-            cancelText="取消"
-            onConfirm={handleResetCurrentPage}
-          >
-            <Button danger>重置</Button>
-          </Popconfirm>
+          <Button danger onClick={handleResetPage}>
+            重置
+          </Button>
         }
         style={{ borderRadius: 12 }}
       >
@@ -237,15 +224,12 @@ export default function UploadStep() {
             </Space>
           </Col>
 
-          <Col span={6}>
+          <Col span={5}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>默认数据来源</Text>
               <Select
                 value={defaultDataSource}
                 onChange={(value) => setTaskMeta({ defaultDataSource: value })}
-                style={{ width: '100%' }}
-                popupMatchSelectWidth={260}
-                optionLabelProp="label"
                 options={DATA_SOURCE_OPTIONS.map((item) => ({
                   label: item,
                   value: item,
@@ -254,7 +238,7 @@ export default function UploadStep() {
             </Space>
           </Col>
 
-          <Col span={3}>
+          <Col span={4}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>学校名称（选填）</Text>
               <Input
@@ -278,7 +262,7 @@ export default function UploadStep() {
 
         <div style={{ marginTop: 12 }}>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            模糊匹配用于在学校名称、专业名称、备注存在轻微差异时辅助匹配，但仍建议优先保证原始字段尽量标准。
+            原始专业分数据支持随机表头，不要求直接符合最终导出模板。请先上传文件，再在第二步“字段映射”中完成原始字段与目标字段的对应关系。
           </Paragraph>
         </div>
       </Card>
@@ -289,7 +273,6 @@ export default function UploadStep() {
             title="原始专业分数据上传"
             workbook={scoreWorkbook}
             selectedSheet={scoreSheetName}
-            validation={scoreValidation}
             onSheetChange={(sheetName) => setSheetName('score', sheetName)}
             onUpload={handleScoreUpload}
           />
@@ -309,22 +292,13 @@ export default function UploadStep() {
 
       <Card title="上传结果检查" style={{ borderRadius: 12 }}>
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          {scoreValidation ? (
-            scoreValidation.isValid ? (
-              <Alert
-                type="success"
-                showIcon
-                message="原始专业分数据字段校验通过"
-                description={`已识别 ${scoreValidation.totalColumns} 个字段，关键字段完整。`}
-              />
-            ) : (
-              <Alert
-                type="warning"
-                showIcon
-                message="原始专业分数据字段不完整"
-                description={`缺失字段：${scoreValidation.missingFields.join('、')}`}
-              />
-            )
+          {scoreWorkbook ? (
+            <Alert
+              type="success"
+              showIcon
+              message="原始专业分数据已上传"
+              description={`已识别 ${scoreHeaders.length} 个表头字段。原始专业分来源随机性较强，不做固定字段强校验，请在第二步字段映射中选择对应关系。`}
+            />
           ) : (
             <Alert
               type="info"
