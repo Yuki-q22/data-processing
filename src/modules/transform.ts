@@ -5,7 +5,6 @@ import {
   extractEnrollmentTypeFromRemark,
   getCategoryTypeByYearProvince,
   mergeSubjectRequirements,
-  normalizeBatch,
   normalizeBatchByCurrentTable,
   normalizeLevel1,
   normalizeProvince,
