@@ -1,3 +1,25 @@
+/**
+ * 文件名称：通用专业分模板导出逻辑
+ *
+ * 文件作用：
+ * - 统一生成专业分模板 Excel
+ * - 控制模板表头、行高、字体、合并单元格、A2/B2/C2/D2 等内容
+ *
+ * 常改位置：
+ * - A1:U1 合并单元格
+ * - A2 招生年份
+ * - B2 年份值
+ * - C2/D2 是否清空
+ * - 表头字段
+ * - 行高
+ * - 红色字体
+ * - 单元格边框 / 对齐方式
+ *
+ * 注意：
+ * - 如果多个功能导出的专业分模板样式同时不对，优先检查本文件
+ * - 如果只有某一个工具导出不对，检查该工具自己的 modules 文件
+ */
+
 import ExcelJS from 'exceljs'
 import type { ProcessedRecord } from '../types/record'
 
@@ -91,6 +113,8 @@ export async function exportProfessionalScoreTemplate(
 
   worksheet.getCell('A2').value = '招生年份'
   worksheet.getCell('B2').value = Number(year)
+  worksheet.getCell('C2').value = null
+  worksheet.getCell('D2').value = null
 
   HEADERS.forEach((header, index) => {
     const cell = worksheet.getCell(3, index + 1)

@@ -1,3 +1,23 @@
+/**
+ * 文件名称：专业组代码匹配核心逻辑
+ *
+ * 文件作用：
+ * - 根据招生计划匹配专业组代码
+ * - 处理自动匹配和人工匹配后的数据
+ * - 生成最终专业分模板导出数据
+ *
+ * 常改位置：
+ * - 专业组代码自动匹配规则
+ * - 人工匹配后字段回填
+ * - 招生科类、首选科目、层次字段处理
+ * - 导出专业分模板 A2/B2/C2/D2
+ * - Excel 导出样式
+ *
+ * 注意：
+ * - 如果人工匹配弹框变空白，一般改 src/pages/tools/GroupCodeMatchTool.tsx
+ * - 如果导出内容不对，一般改本文件
+ */
+
 import ExcelJS from 'exceljs'
 
 export type GroupCodeCandidate = {
@@ -625,7 +645,9 @@ export async function exportMatchedProfessionalTemplate(params: {
   ws.getRow(1).height = 350
 
   ws.getCell('A2').value = '招生年份'
-  ws.getCell('B2').value = params.yearValue
+ws.getCell('B2').value = params.yearValue
+ws.getCell('C2').value = null
+ws.getCell('D2').value = null
 
   IMPORT_HEADERS.forEach((header, headerNo) => {
     const cell = ws.getCell(3, headerNo + 1)

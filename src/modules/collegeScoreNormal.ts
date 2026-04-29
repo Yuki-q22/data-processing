@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
+import { resolveControlLine } from './controlLine'
 
 export type NormalCollegeScoreOutputRow = {
   学校名称: string
@@ -229,11 +230,16 @@ function processRows(rows: Record<string, unknown>[]): NormalCollegeScoreOutputR
 
     const representative = sorted[0]
 
+    const province = t(representative['省份'])
+    const enrollmentCategory = t(representative['招生科类'])
+    const enrollmentBatch = t(representative['招生批次'])
+    const controlLine = resolveControlLine(province, enrollmentCategory, enrollmentBatch)
+
     output.push({
       学校名称: t(representative['学校名称']),
-      省份: t(representative['省份']),
-      招生类别: t(representative['招生科类']),
-      招生批次: t(representative['招生批次']),
+      省份: province,
+      招生类别: enrollmentCategory,
+      招生批次: enrollmentBatch,
       招生类型: t(representative['招生类型（选填）']),
       选测等级: '',
       最高分: maxNullable(groupRows.map((row) => row.__highestScore)),
@@ -245,8 +251,8 @@ function processRows(rows: Record<string, unknown>[]): NormalCollegeScoreOutputR
       录取人数: sumNullable(groupRows.map((row) => row.__admitCount)),
       招生人数: sumNullable(groupRows.map((row) => row.__enrollCount)),
       数据来源: t(representative['数据来源']),
-      省控线科类: '',
-      省控线批次: '',
+      省控线科类: controlLine.category,
+      省控线批次: controlLine.batch,
       省控线备注: '',
       专业组代码: t(representative['专业组代码']),
       首选科目: representative.__normalizedFirstSubject,

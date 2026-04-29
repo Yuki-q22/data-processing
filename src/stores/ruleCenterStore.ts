@@ -1,3 +1,22 @@
+/**
+ * 文件名称：规则中心本地状态管理
+ *
+ * 文件作用：
+ * - 保存规则中心中的各类规则
+ * - 控制规则新增、删除、更新
+ * - 控制规则本地持久化
+ *
+ * 常改位置：
+ * - addRemarkTypeRule
+ * - addSchoolNameRule
+ * - addMajorComboRule
+ * - 删除规则方法
+ * - localStorage 持久化
+ *
+ * 注意：
+ * - 如果本地规则无法新增、刷新丢失，优先检查本文件
+ */
+
 import { create } from 'zustand'
 import * as XLSX from 'xlsx'
 import {

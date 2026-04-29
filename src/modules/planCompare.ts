@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import { resolveControlLine } from './controlLine'
 
 export type PlanScoreCompareRow = {
   rowId: string
@@ -792,11 +793,16 @@ export function buildCollegeTemplateRows(
   return aggregateCollegeCompareRows(compareRows.filter((row) => !row.exists)).map(
     (row) => {
       const source = row.sourceRow
+      const province = t(source['省份'])
+      const enrollmentCategory = t(source['科类'])
+      const enrollmentBatch = t(source['批次'])
+      const controlLine = resolveControlLine(province, enrollmentCategory, enrollmentBatch)
+
       return {
         学校名称: t(source['学校']),
-        省份: t(source['省份']),
-        招生类别: t(source['科类']),
-        招生批次: t(source['批次']),
+        省份: province,
+        招生类别: enrollmentCategory,
+        招生批次: enrollmentBatch,
         招生类型: t(source['招生类型']),
         选测等级: '',
         最高分: null,
@@ -808,8 +814,8 @@ export function buildCollegeTemplateRows(
         录取人数: null,
         招生人数: row.aggregatedEnrollmentCount,
         数据来源: t(source['数据来源']),
-        省控线科类: '',
-        省控线批次: '',
+        省控线科类: controlLine.category,
+        省控线批次: controlLine.batch,
         省控线备注: '',
         专业组代码: stripCaret(source['专业组代码']),
         首选科目: getCollegeFirstSubjectFromCategory(source['科类']),
@@ -824,8 +830,13 @@ async function fillTemplateSheet<T extends Record<string, unknown>>(params: {
   yearValue: string
   headers: readonly string[]
   rows: T[]
+  meta?: {
+    yearLabel?: string
+    templateType?: number | null
+    templateTypeNote?: string | null
+  }
 }) {
-  const { worksheet, yearValue, headers, rows } = params
+  const { worksheet, yearValue, headers, rows, meta } = params
 
   worksheet.mergeCells('A1:U1')
   const noteCell = worksheet.getCell('A1')
@@ -838,10 +849,10 @@ async function fillTemplateSheet<T extends Record<string, unknown>>(params: {
   }
   worksheet.getRow(1).height = 350
 
-  worksheet.getCell('A2').value = '招生年份'
-worksheet.getCell('B2').value = yearValue
-worksheet.getCell('C2').value = null
-worksheet.getCell('D2').value = null
+  worksheet.getCell('A2').value = meta?.yearLabel ?? '招生年份'
+  worksheet.getCell('B2').value = yearValue
+  worksheet.getCell('C2').value = meta?.templateType ?? null
+  worksheet.getCell('D2').value = meta?.templateTypeNote ?? null
 
   headers.forEach((header, headerNo) => {
     const cell = worksheet.getCell(3, headerNo + 1)
@@ -894,6 +905,11 @@ export async function exportProfessionalCompareTemplate(params: {
     yearValue: params.yearValue,
     headers: PROFESSIONAL_TEMPLATE_HEADERS,
     rows: params.rows,
+    meta: {
+      yearLabel: '招生年份',
+      templateType: null,
+      templateTypeNote: null,
+    },
   })
 
   const buffer = await workbook.xlsx.writeBuffer()
@@ -914,6 +930,11 @@ export async function exportCollegeCompareTemplate(params: {
     yearValue: params.yearValue,
     headers: COLLEGE_TEMPLATE_HEADERS,
     rows: params.rows,
+    meta: {
+      yearLabel: '招生年',
+      templateType: 1,
+      templateTypeNote: '模板类型（模板标识不要更改）',
+    },
   })
 
   const buffer = await workbook.xlsx.writeBuffer()
