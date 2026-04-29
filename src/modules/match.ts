@@ -87,7 +87,7 @@ function scorePlanCandidate(
     scoreValue += 3
   }
 
-  if (score.level1 === '专科（高职）' && plan.batch?.includes('专科')) {
+  if (score.level1 === '专科(高职)' && plan.batch?.includes('专科')) {
     scoreValue += 2
   }
 
@@ -280,17 +280,36 @@ export function buildProcessedRecords(
 
     const requirement = deriveRequirementFromPlan(matchedPlan)
 
+function getFirstSubjectFromSubjectCategory(category: string | undefined): string {
+  const text = String(category || '').trim()
+
+  if (text.startsWith('物理类')) return '物'
+  if (text.startsWith('历史类')) return '历'
+
+  return ''
+}
+
     const shouldUsePlanCategory =
   matchStatus === 'matched_manual' && !!matchedPlan?.subjectCategory
 
+const finalSubjectCategory = shouldUsePlanCategory
+  ? matchedPlan.subjectCategory
+  : score.subjectCategory
+
+const finalFirstSubject =
+  shouldUsePlanCategory &&
+  (finalSubjectCategory?.startsWith('物理类') ||
+    finalSubjectCategory?.startsWith('历史类'))
+    ? getFirstSubjectFromSubjectCategory(finalSubjectCategory)
+    : score.firstSubject
+
 const result: ScoreRecord = {
   ...score,
-  subjectCategory: shouldUsePlanCategory
-    ? matchedPlan.subjectCategory
-    : score.subjectCategory,
+  subjectCategory: finalSubjectCategory,
   rawSubjectCategory: shouldUsePlanCategory
     ? matchedPlan.subjectCategory
     : score.rawSubjectCategory,
+  firstSubject: finalFirstSubject,
   subjectCategoryNeedsReview: shouldUsePlanCategory
     ? false
     : score.subjectCategoryNeedsReview,
