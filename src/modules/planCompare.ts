@@ -840,8 +840,6 @@ async function fillTemplateSheet<T extends Record<string, unknown>>(params: {
 
   worksheet.getCell('A2').value = '招生年份'
   worksheet.getCell('B2').value = yearValue
-  worksheet.getCell('C2').value = 1
-  worksheet.getCell('D2').value = '模板类型（模板标识不要更改）'
 
   headers.forEach((header, headerNo) => {
     const cell = worksheet.getCell(3, headerNo + 1)
