@@ -203,8 +203,10 @@ export default function PlanCompareTool() {
   }, [result])
 
   const collegeRows = useMemo(() => {
-    return result ? buildCollegeTemplateRows(result.planCollegeRows) : []
-  }, [result])
+  return result
+    ? buildCollegeTemplateRows(result.planCollegeRows, result.yearValue)
+    : []
+}, [result])
 
   const handleExportProfessional = async () => {
     if (!result) {

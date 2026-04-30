@@ -618,6 +618,42 @@ export function resolveControlLineCategory(province: unknown, enrollmentCategory
   return category
 }
 
+function isSpecialEnrollmentBatch(value: unknown): boolean {
+  const batch = normalizeText(value)
+  if (!batch) return false
+
+  // 这些批次不属于普通省控线批次，省控线科类和省控线批次都不填写
+  const specialKeywords = [
+    '提前',
+    '专项',
+    '特殊',
+    '特招',
+    '军队',
+    '公安',
+    '司法',
+    '消防',
+    '公费',
+    '优师',
+    '免费',
+    '定向',
+    '预科',
+    '民族班',
+    '少数民族班',
+    '强基',
+    '综评',
+    '综合评价',
+    '高校专项',
+    '国家专项',
+    '地方专项',
+    '卫生专项',
+    '教师专项',
+    '本科院校卫生专项',
+    '专科院校卫生专项',
+  ]
+
+  return specialKeywords.some((keyword) => batch.includes(keyword))
+}
+
 function getBatchKeywordScore(option: string, batch: string): number {
   const optionText = normalizeText(option)
   const batchText = normalizeText(batch)
@@ -724,6 +760,14 @@ export function resolveControlLine(
   // 这个省控线配置只适用于 2025 年。
   // 年份为空、2024、2026 等其他年份，都禁止使用。
   if (yearText !== '2025') {
+    return {
+      category: '',
+      batch: '',
+    }
+  }
+
+  // 提前批、专项计划、特殊类型等不属于普通省控线批次，不填写省控线科类和省控线批次。
+  if (isSpecialEnrollmentBatch(enrollmentBatch)) {
     return {
       category: '',
       batch: '',

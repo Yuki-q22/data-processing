@@ -667,32 +667,6 @@ export function processPlanCompare(params: {
 }
 
 
-function buildUniqueKey(
-  row: Record<string, unknown>,
-  fields: string[]
-): string {
-  return fields.map((field) => t(row[field])).join('||')
-}
-
-function dedupeCompareRows<T extends { sourceRow: Record<string, unknown> }>(
-  rows: T[],
-  fields: string[]
-): T[] {
-  const seen = new Set<string>()
-  const result: T[] = []
-
-  rows.forEach((row) => {
-    const key = buildUniqueKey(row.sourceRow, fields)
-
-    if (!seen.has(key)) {
-      seen.add(key)
-      result.push(row)
-    }
-  })
-
-  return result
-}
-
 function buildCollegeAggregateKey(row: Record<string, unknown>): string {
   return [
     t(row['年份']),
@@ -748,10 +722,9 @@ function aggregateCollegeCompareRows(
 export function buildProfessionalTemplateRows(
   compareRows: PlanScoreCompareRow[]
 ): ProfessionalTemplateRow[] {
-  return dedupeCompareRows(
-    compareRows.filter((row) => !row.exists),
-    ['年份', '省份', '学校', '科类', '批次', '专业', '层次', '专业组代码']
-  ).map((row) => {
+  return compareRows
+    .filter((row) => !row.exists)
+    .map((row) => {
       const source = row.sourceRow
       const electiveRaw = combineElectiveRequirement(source)
       const elective = convertElectiveRequirement(electiveRaw)
@@ -788,51 +761,64 @@ export function buildProfessionalTemplateRows(
 }
 
 export function buildCollegeTemplateRows(
-  compareRows: PlanCollegeCompareRow[]
+  compareRows: PlanCollegeCompareRow[],
+  yearValue?: string | number,
 ): CollegeTemplateRow[] {
   return aggregateCollegeCompareRows(compareRows.filter((row) => !row.exists)).map(
     (row) => {
       const source = row.sourceRow
-      const year = t(source['年份'] || source['招生年'] || source['招生年份'])
-const province = t(source['省份'])
-const enrollmentCategory = t(
-  source['招生类别'] || source['招生科类'] || source['科类']
-)
-const enrollmentBatch = t(
-  source['招生批次'] || source['批次']
-)
 
-const controlLine = resolveControlLine(
-  province,
-  enrollmentCategory,
-  enrollmentBatch,
-  year,
-)
+      const year = t(
+        source['年份'] ||
+        source['招生年'] ||
+        source['招生年份'] ||
+        yearValue,
+      )
+
+      const province = t(source['省份'])
+
+      const enrollmentCategory = t(
+        source['招生类别'] ||
+        source['招生科类'] ||
+        source['科类'],
+      )
+
+      const enrollmentBatch = t(
+        source['招生批次'] ||
+        source['批次'],
+      )
+
+      const controlLine = resolveControlLine(
+        province,
+        enrollmentCategory,
+        enrollmentBatch,
+        year,
+      )
 
       return {
-        学校名称: t(source['学校']),
-        省份: province,
-        招生类别: enrollmentCategory,
-        招生批次: enrollmentBatch,
-        招生类型: t(source['招生类型']),
-        选测等级: '',
-        最高分: null,
-        最低分: null,
-        平均分: null,
-        最高位次: null,
-        最低位次: null,
-        平均位次: null,
-        录取人数: null,
-        招生人数: row.aggregatedEnrollmentCount,
-        数据来源: t(source['数据来源']),
-        省控线科类: controlLine.category,
-        省控线批次: controlLine.batch,
-        省控线备注: '',
-        专业组代码: stripCaret(source['专业组代码']),
-        首选科目: getCollegeFirstSubjectFromCategory(source['科类']),
-        院校招生代码: stripCaret(source['招生代码']),
-        层次: normalizeLevelForExport(source['层次']),
-      }
+  学校名称: t(source['学校']),
+  省份: province,
+  招生类别: enrollmentCategory,
+  招生批次: enrollmentBatch,
+  招生类型: t(source['招生类型']),
+  选测等级: '',
+  最高分: null,
+  最低分: null,
+  平均分: null,
+  最高位次: null,
+  最低位次: null,
+  平均位次: null,
+  录取人数: null,
+  招生人数: row.aggregatedEnrollmentCount,
+  数据来源: t(source['数据来源']),
+  省控线科类: controlLine.category,
+  省控线批次: controlLine.batch,
+  省控线备注: '',
+  专业组代码: stripCaret(source['专业组代码']),
+  首选科目: getCollegeFirstSubjectFromCategory(source['科类']),
+  院校招生代码: stripCaret(source['招生代码']),
+  层次: normalizeLevelForExport(source['层次']),
+}
     })
 }
 
