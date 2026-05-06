@@ -14,6 +14,7 @@ export type PlanScoreCompareRow = {
   level: string
   groupCode: string
   enrollmentCode: string
+  majorCode: string
   sourceRow: Record<string, unknown>
 }
 
@@ -139,6 +140,8 @@ const SCORE_REQUIRED_HEADERS = [
   '层次',
   '备注',
   '专业组代码',
+  '招生代码',
+  '专业代码',
 ]
 
 const COLLEGE_REQUIRED_HEADERS = [
@@ -372,6 +375,9 @@ function convertElectiveRequirement(rawText: string): {
 
 function buildPlanScoreKey(row: Record<string, unknown>): string {
   const groupCode = stripCaret(row['专业组代码'])
+  const enrollmentCode = stripCaret(row['招生代码'])
+  const majorCode = stripCaret(row['专业代码'])
+
   const base = [
     t(row['年份']),
     t(row['省份']),
@@ -382,11 +388,16 @@ function buildPlanScoreKey(row: Record<string, unknown>): string {
     normalizeLevelForKey(row['层次']),
   ]
 
-  return groupCode ? [...base, groupCode].join('||') : base.join('||')
+  return groupCode
+    ? [...base, groupCode, enrollmentCode, majorCode].join('||')
+    : [...base, enrollmentCode, majorCode].join('||')
 }
 
 function buildScoreKey(row: Record<string, unknown>): string {
   const groupCode = stripCaret(row['专业组代码'])
+  const enrollmentCode = stripCaret(row['招生代码'])
+  const majorCode = stripCaret(row['专业代码'])
+
   const base = [
     t(row['年份']),
     t(row['省份']),
@@ -397,7 +408,9 @@ function buildScoreKey(row: Record<string, unknown>): string {
     normalizeLevelForKey(row['层次']),
   ]
 
-  return groupCode ? [...base, groupCode].join('||') : base.join('||')
+  return groupCode
+    ? [...base, groupCode, enrollmentCode, majorCode].join('||')
+    : [...base, enrollmentCode, majorCode].join('||')
 }
 
 function buildPlanCollegeKey(row: Record<string, unknown>): string {
@@ -610,26 +623,29 @@ export function processPlanCompare(params: {
   const enrollmentCodeWarnings = buildEnrollmentCodeWarnings(planRows, collegeRows)
   const groupCodeWarnings = buildGroupCodeWarnings(planRows, collegeRows)
 
-  const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
-    const key = buildPlanScoreKey(row)
-    const exists = scoreKeySet.has(key)
+const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
+  const key = buildPlanScoreKey(row)
+  const exists = scoreKeySet.has(key)
+  const enrollmentCode = stripCaret(row['招生代码'])
+  const majorCode = stripCaret(row['专业代码'])
 
-    return {
-      rowId: `ps_${rowNo + 1}`,
-      matchKey: key,
-      exists,
-      reason: exists ? '已在专业分文件中存在' : '专业分文件中不存在该组合键',
-      school: t(row['学校']),
-      province: t(row['省份']),
-      category: t(row['科类']),
-      batch: t(row['批次']),
-      major: t(row['专业']),
-      level: normalizeLevelForKey(row['层次']),
-      groupCode: stripCaret(row['专业组代码']),
-      enrollmentCode: stripCaret(row['招生代码']),
-      sourceRow: row,
-    }
-  })
+  return {
+    rowId: `ps_${rowNo + 1}`,
+    matchKey: key,
+    exists,
+    reason: exists ? '已在专业分文件中存在' : '专业分文件中不存在该组合键',
+    school: t(row['学校']),
+    province: t(row['省份']),
+    category: t(row['科类']),
+    batch: t(row['批次']),
+    major: t(row['专业']),
+    level: normalizeLevelForKey(row['层次']),
+    groupCode: stripCaret(row['专业组代码']),
+    enrollmentCode,
+    majorCode,
+    sourceRow: row,
+  }
+})
 
   const planCollegeRows: PlanCollegeCompareRow[] = planRows.map((row, rowNo) => {
     const key = buildPlanCollegeKey(row)
