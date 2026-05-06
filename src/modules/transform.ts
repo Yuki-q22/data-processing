@@ -5,7 +5,7 @@ import {
   extractEnrollmentTypeFromRemark,
   getCategoryTypeByYearProvince,
   mergeSubjectRequirements,
-  normalizeBatchByCurrentTable,
+  normalizeBatch,
   normalizeLevel1,
   normalizeProvince,
   normalizeSubjectCategoryByRaw,
@@ -43,7 +43,6 @@ type StandardizeOptions = {
   provinceRules: Record<string, string>
   categoryRules: Record<string, string>
   batchRules: Record<string, string>
-  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
   provinceYearCategoryType: Record<string, Record<string, string>>
   remarkTypeRules: Array<{ keyword: string; output: string; priority: number }>
   manualSchoolName?: string
@@ -78,10 +77,10 @@ export function buildScoreRecords(
       sanitizeText(toText(mapped['学校名称'])) || sanitizeText(options.manualSchoolName)
 
     const derivedFromRaw = deriveFieldsFromRawSubjectCategory(
-  rawCategory,
-  province,
-  categoryType
-)
+      rawCategory,
+      province,
+      categoryType
+    )
 
     return {
       rowId: String(index + 1),
@@ -91,12 +90,7 @@ export function buildScoreRecords(
       subjectCategory:
         derivedFromRaw.subjectCategory ||
         normalizeSubjectCategoryByRaw(rawCategory, categoryType),
-            batch: normalizeBatchByCurrentTable(
-  toText(mapped['招生批次']),
-  province,
-  year,
-  options.provinceCurrentBatchDictByYear
-),
+      batch: normalizeBatch(toText(mapped['招生批次']), options.batchRules),
       majorName: sanitizeText(splitMajor.majorName),
       majorDirection: sanitizeText(toText(mapped['专业方向'])),
       majorRemark: finalRemark,
@@ -165,7 +159,7 @@ export function buildPlanRecords(
       schoolName,
       province,
       subjectCategory: normalizeSubjectCategoryByRaw(rawCategory, categoryType),
-      batch: sanitizeText(toText(mapped['招生批次'])),
+      batch: normalizeBatch(toText(mapped['招生批次']), options.batchRules),
       majorName: sanitizeText(splitMajor.majorName),
       majorDirection: sanitizeText(toText(mapped['专业方向'])),
       majorRemark: finalRemark,

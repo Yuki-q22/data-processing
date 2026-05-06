@@ -94,13 +94,13 @@ function normalizeRawCategoryToken(rawCategory: string | undefined): string {
   return (rawCategory || '').replace(/\s/g, '').trim()
 }
 
-export function normalizeSubjectCategoryByRaw(
-  rawCategory: string | undefined,
-  categoryType: string | undefined
-): string | undefined {
+function getSubjectCategorySide(rawCategory: string | undefined): {
+  raw: string
+  isScienceLike: boolean
+  isLiberalLike: boolean
+  isMixedScienceLiberal: boolean
+} {
   const raw = normalizeRawCategoryToken(rawCategory)
-
-  if (!raw || !categoryType) return undefined
 
   const isScienceLike =
     raw.includes('理工') ||
@@ -116,6 +116,34 @@ export function normalizeSubjectCategoryByRaw(
     raw.includes('史') ||
     raw === '文' ||
     raw === '历'
+
+  return {
+    raw,
+    isScienceLike,
+    isLiberalLike,
+    isMixedScienceLiberal: isScienceLike && isLiberalLike,
+  }
+}
+
+export function normalizeSubjectCategoryByRaw(
+  rawCategory: string | undefined,
+  categoryType: string | undefined
+): string | undefined {
+  const {
+    raw,
+    isScienceLike,
+    isLiberalLike,
+    isMixedScienceLiberal,
+  } = getSubjectCategorySide(rawCategory)
+
+  if (!raw || !categoryType) return undefined
+
+  /**
+   * “物理类/历史类”“文科/理科”这类同时包含两种科类的值，不能强行归到某一侧。
+   * 返回 undefined 后，匹配逻辑中的 isEqualOrIgnored 会把科类视为可忽略项，避免候选被错误过滤掉。
+   * “理工/物理类”“文史/历史类”属于同侧表达，不会进入这里。
+   */
+  if (isMixedScienceLiberal) return undefined
 
   if (categoryType === '综合') {
     if (raw.includes('艺术')) return '艺术类'
@@ -396,94 +424,86 @@ export function deriveFieldsFromRawSubjectCategory(
   reviewReason?: string
 } {
   const raw = normalizeRawCategoryForReview(rawCategory)
-const p = province || ''
+  const p = province || ''
 
-if (!raw || !p) {
-  return {}
-}
+  if (!raw || !p) {
+    return {}
+  }
 
-const isScienceLike =
-  raw.includes('理工') ||
-  raw.includes('理科') ||
-  raw.includes('物理') ||
-  raw === '理' ||
-  raw === '物'
+  const {
+    isScienceLike,
+    isLiberalLike,
+    isMixedScienceLiberal,
+  } = getSubjectCategorySide(raw)
 
-const isLiberalLike =
-  raw.includes('文史') ||
-  raw.includes('文科') ||
-  raw.includes('历史') ||
-  raw.includes('史') ||
-  raw === '文' ||
-  raw === '历'
+  /**
+   * 先处理“同侧混写”：
+   * - 理工/物理类：根据年份省份制度转成 物理类 或 理科
+   * - 文史/历史类：根据年份省份制度转成 历史类 或 文科
+   *
+   * 但“物理类/历史类”“文科/理科”这种左右两侧同时出现的值，不强行归类，避免匹配候选被过滤。
+   */
+  if (categoryType === '物理类/历史类' && !isMixedScienceLiberal) {
+    if (isScienceLike) {
+      return {
+        rawSubjectCategory: raw,
+        subjectCategory: '物理类',
+        firstSubject: '物',
+      }
+    }
 
-/**
- * 优先按“年份 + 省份”的科类制度处理。
- * 例如：
- * - 2025 四川：理工/物理类 => 物理类
- * - 2022 四川：理工/物理类 => 理科
- */
-if (categoryType === '物理类/历史类') {
-  if (isScienceLike) {
-    return {
-      rawSubjectCategory: raw,
-      subjectCategory: '物理类',
-      firstSubject: '物',
+    if (isLiberalLike) {
+      return {
+        rawSubjectCategory: raw,
+        subjectCategory: '历史类',
+        firstSubject: '历',
+      }
     }
   }
 
-  if (isLiberalLike) {
-    return {
-      rawSubjectCategory: raw,
-      subjectCategory: '历史类',
-      firstSubject: '历',
+  if (categoryType === '文科/理科' && !isMixedScienceLiberal) {
+    if (isScienceLike) {
+      return {
+        rawSubjectCategory: raw,
+        subjectCategory: '理科',
+        firstSubject: undefined,
+      }
     }
-  }
-}
 
-if (categoryType === '文科/理科') {
-  if (isScienceLike) {
-    return {
-      rawSubjectCategory: raw,
-      subjectCategory: '理科',
-      firstSubject: undefined,
-    }
-  }
-
-  if (isLiberalLike) {
-    return {
-      rawSubjectCategory: raw,
-      subjectCategory: '文科',
-      firstSubject: undefined,
-    }
-  }
-}
-
-if (categoryType === '综合') {
-  if (raw.includes('艺术')) {
-    return {
-      rawSubjectCategory: raw,
-      subjectCategory: '艺术类',
+    if (isLiberalLike) {
+      return {
+        rawSubjectCategory: raw,
+        subjectCategory: '文科',
+        firstSubject: undefined,
+      }
     }
   }
 
-  if (raw.includes('体育')) {
+  if (categoryType === '综合') {
+    if (raw.includes('艺术')) {
+      return {
+        rawSubjectCategory: raw,
+        subjectCategory: '艺术类',
+      }
+    }
+
+    if (raw.includes('体育')) {
+      return {
+        rawSubjectCategory: raw,
+        subjectCategory: '体育类',
+      }
+    }
+
     return {
       rawSubjectCategory: raw,
-      subjectCategory: '体育类',
+      subjectCategory: '综合',
     }
   }
 
-  return {
-    rawSubjectCategory: raw,
-    subjectCategory: '综合',
-  }
-}
-
-if (isAmbiguousSubjectCategoryText(raw)) {
+  if (isAmbiguousSubjectCategoryText(raw)) {
     return {
       rawSubjectCategory: raw,
-      subjectCategory: raw,
+      subjectCategory: undefined,
       firstSubject: undefined,
       needsReview: true,
       reviewReason: `原始科类“${raw}”包含多个候选值，请人工确认招生科类与首选科目`,
