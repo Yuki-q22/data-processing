@@ -237,6 +237,11 @@ function t(value: unknown): string {
   return String(value).trim()
 }
 
+function isTibetProvince(value: unknown): boolean {
+  const text = t(value)
+  return text === '西藏' || text === '西藏自治区'
+}
+
 function n(value: unknown): number | null {
   const text = t(value).replace(/,/g, '')
   if (!text) return null
@@ -760,6 +765,7 @@ export function buildProfessionalTemplateRows(
     })
 }
 
+
 export function buildCollegeTemplateRows(
   compareRows: PlanCollegeCompareRow[],
   yearValue?: string | number,
@@ -795,6 +801,8 @@ export function buildCollegeTemplateRows(
         year,
       )
 
+const isTibet = t(source['省份']) === '西藏' || t(source['省份']) === '西藏自治区'
+
       return {
   学校名称: t(source['学校']),
   省份: province,
@@ -811,8 +819,8 @@ export function buildCollegeTemplateRows(
   录取人数: null,
   招生人数: row.aggregatedEnrollmentCount,
   数据来源: t(source['数据来源']),
-  省控线科类: controlLine.category,
-  省控线批次: controlLine.batch,
+  省控线科类: isTibet ? '' : controlLine.category,
+省控线批次: isTibet ? '' : controlLine.batch,
   省控线备注: '',
   专业组代码: stripCaret(source['专业组代码']),
   首选科目: getCollegeFirstSubjectFromCategory(source['科类']),
