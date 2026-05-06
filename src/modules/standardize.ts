@@ -386,7 +386,8 @@ function isAmbiguousSubjectCategoryText(text: string) {
  */
 export function deriveFieldsFromRawSubjectCategory(
   rawCategory: string | undefined,
-  province: string | undefined
+  province: string | undefined,
+  categoryType?: string
 ): {
   rawSubjectCategory?: string
   subjectCategory?: string
@@ -395,13 +396,91 @@ export function deriveFieldsFromRawSubjectCategory(
   reviewReason?: string
 } {
   const raw = normalizeRawCategoryForReview(rawCategory)
-  const p = province || ''
+const p = province || ''
 
-  if (!raw || !p) {
-    return {}
+if (!raw || !p) {
+  return {}
+}
+
+const isScienceLike =
+  raw.includes('理工') ||
+  raw.includes('理科') ||
+  raw.includes('物理') ||
+  raw === '理' ||
+  raw === '物'
+
+const isLiberalLike =
+  raw.includes('文史') ||
+  raw.includes('文科') ||
+  raw.includes('历史') ||
+  raw.includes('史') ||
+  raw === '文' ||
+  raw === '历'
+
+/**
+ * 优先按“年份 + 省份”的科类制度处理。
+ * 例如：
+ * - 2025 四川：理工/物理类 => 物理类
+ * - 2022 四川：理工/物理类 => 理科
+ */
+if (categoryType === '物理类/历史类') {
+  if (isScienceLike) {
+    return {
+      rawSubjectCategory: raw,
+      subjectCategory: '物理类',
+      firstSubject: '物',
+    }
   }
 
-  if (isAmbiguousSubjectCategoryText(raw)) {
+  if (isLiberalLike) {
+    return {
+      rawSubjectCategory: raw,
+      subjectCategory: '历史类',
+      firstSubject: '历',
+    }
+  }
+}
+
+if (categoryType === '文科/理科') {
+  if (isScienceLike) {
+    return {
+      rawSubjectCategory: raw,
+      subjectCategory: '理科',
+      firstSubject: undefined,
+    }
+  }
+
+  if (isLiberalLike) {
+    return {
+      rawSubjectCategory: raw,
+      subjectCategory: '文科',
+      firstSubject: undefined,
+    }
+  }
+}
+
+if (categoryType === '综合') {
+  if (raw.includes('艺术')) {
+    return {
+      rawSubjectCategory: raw,
+      subjectCategory: '艺术类',
+    }
+  }
+
+  if (raw.includes('体育')) {
+    return {
+      rawSubjectCategory: raw,
+      subjectCategory: '体育类',
+    }
+  }
+
+  return {
+    rawSubjectCategory: raw,
+    subjectCategory: '综合',
+  }
+}
+
+if (isAmbiguousSubjectCategoryText(raw)) {
     return {
       rawSubjectCategory: raw,
       subjectCategory: raw,
@@ -418,12 +497,14 @@ export function deriveFieldsFromRawSubjectCategory(
         subjectCategory: '艺术类',
       }
     }
+
     if (raw.includes('体育')) {
       return {
         rawSubjectCategory: raw,
         subjectCategory: '体育类',
       }
     }
+
     return {
       rawSubjectCategory: raw,
       subjectCategory: '综合',
@@ -437,12 +518,14 @@ export function deriveFieldsFromRawSubjectCategory(
         subjectCategory: '理科',
       }
     }
+
     if (raw.includes('文')) {
       return {
         rawSubjectCategory: raw,
         subjectCategory: '文科',
       }
     }
+
     return {
       rawSubjectCategory: raw,
     }
@@ -471,14 +554,14 @@ export function deriveFieldsFromRawSubjectCategory(
     }
   }
 
-  if (normalized === '理科') {
+  if (normalized === '理科' || normalized === '理工' || normalized === '理工类') {
     return {
       rawSubjectCategory: raw,
       subjectCategory: '理科',
     }
   }
 
-  if (normalized === '文科') {
+  if (normalized === '文科' || normalized === '文史' || normalized === '文史类') {
     return {
       rawSubjectCategory: raw,
       subjectCategory: '文科',
