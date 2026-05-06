@@ -795,15 +795,15 @@ export function buildCollegeTemplateRows(
       )
 
       const controlLine = resolveControlLine(
-        province,
-        enrollmentCategory,
-        enrollmentBatch,
-        year,
-      )
+  province,
+  enrollmentCategory,
+  enrollmentBatch,
+  year,
+)
 
-const isTibet = t(source['省份']) === '西藏' || t(source['省份']) === '西藏自治区'
+const isTibet = isTibetProvince(province)
 
-      return {
+return {
   学校名称: t(source['学校']),
   省份: province,
   招生类别: enrollmentCategory,
@@ -820,7 +820,7 @@ const isTibet = t(source['省份']) === '西藏' || t(source['省份']) === '西
   招生人数: row.aggregatedEnrollmentCount,
   数据来源: t(source['数据来源']),
   省控线科类: isTibet ? '' : controlLine.category,
-省控线批次: isTibet ? '' : controlLine.batch,
+  省控线批次: isTibet ? '' : controlLine.batch,
   省控线备注: '',
   专业组代码: stripCaret(source['专业组代码']),
   首选科目: getCollegeFirstSubjectFromCategory(source['科类']),

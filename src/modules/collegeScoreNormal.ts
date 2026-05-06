@@ -259,38 +259,38 @@ function processRows(
     )
 
     const controlLine = resolveControlLine(
-      province,
-      enrollmentCategory,
-      enrollmentBatch,
-      year,
-    )
+  province,
+  enrollmentCategory,
+  enrollmentBatch,
+  year,
+)
 
-const isTibet = province === '西藏' || province === '西藏自治区'
-    
-    output.push({
-      学校名称: t(representative['学校名称']),
-      省份: province,
-      招生类别: enrollmentCategory,
-      招生批次: enrollmentBatch,
-      招生类型: t(representative['招生类型（选填）']),
-      选测等级: '',
-      最高分: maxNullable(groupRows.map((row) => row.__highestScore)),
-      最低分: representative.__lowestScore,
-      平均分: representative.__avgScore,
-      最高位次: null,
-      最低位次: representative.__lowestRank,
-      平均位次: null,
-      录取人数: sumNullable(groupRows.map((row) => row.__admitCount)),
-      招生人数: sumNullable(groupRows.map((row) => row.__enrollCount)),
-      数据来源: t(representative['数据来源']),
-      省控线科类: isTibet ? '' : controlLine.category,
-省控线批次: isTibet ? '' : controlLine.batch,
-      省控线备注: '',
-      专业组代码: t(representative['专业组代码']),
-      首选科目: representative.__normalizedFirstSubject,
-      院校招生代码: t(representative['招生代码']),
-      __sortNo: representative.__rowNo,
-    })
+const isTibet = isTibetProvince(province)
+
+output.push({
+  学校名称: t(representative['学校名称']),
+  省份: province,
+  招生类别: enrollmentCategory,
+  招生批次: enrollmentBatch,
+  招生类型: t(representative['招生类型（选填）']),
+  选测等级: '',
+  最高分: maxNullable(groupRows.map((row) => row.__highestScore)),
+  最低分: representative.__lowestScore,
+  平均分: representative.__avgScore,
+  最高位次: null,
+  最低位次: representative.__lowestRank,
+  平均位次: null,
+  录取人数: sumNullable(groupRows.map((row) => row.__admitCount)),
+  招生人数: sumNullable(groupRows.map((row) => row.__enrollCount)),
+  数据来源: t(representative['数据来源']),
+  省控线科类: isTibet ? '' : controlLine.category,
+  省控线批次: isTibet ? '' : controlLine.batch,
+  省控线备注: '',
+  专业组代码: t(representative['专业组代码']),
+  首选科目: representative.__normalizedFirstSubject,
+  院校招生代码: t(representative['招生代码']),
+  __sortNo: representative.__rowNo,
+})
   }
 
   return output
