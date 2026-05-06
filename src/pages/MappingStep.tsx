@@ -98,7 +98,6 @@ export default function MappingStep() {
     categoryRules,
     batchRules,
     provinceYearCategoryType,
-    provinceCurrentBatchDictByYear,
     manualSchoolName,
     remarkTypeRules,
   }
@@ -114,7 +113,6 @@ export default function MappingStep() {
     categoryRules,
     batchRules,
     provinceYearCategoryType,
-    provinceCurrentBatchDictByYear,
     remarkTypeRules,
   }
 )
