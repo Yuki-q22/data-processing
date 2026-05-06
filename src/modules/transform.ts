@@ -43,14 +43,6 @@ type StandardizeOptions = {
   provinceRules: Record<string, string>
   categoryRules: Record<string, string>
   batchRules: Record<string, string>
-
-  /**
-   * 这里保留是为了兼容 MappingStep.tsx 传入的参数。
-   * 注意：不要在 buildScoreRecords() 里用它改写原始专业分批次，
-   * 否则会导致专业分和招生计划批次标准不一致，进而匹配不到招生计划。
-   */
-  provinceCurrentBatchDictByYear?: Record<string, Record<string, string[]>>
-
   provinceYearCategoryType: Record<string, Record<string, string>>
   remarkTypeRules: Array<{ keyword: string; output: string; priority: number }>
   manualSchoolName?: string
@@ -84,6 +76,12 @@ export function buildScoreRecords(
     const schoolName =
       sanitizeText(toText(mapped['学校名称'])) || sanitizeText(options.manualSchoolName)
 
+    /**
+     * 这里是本次唯一核心改动：
+     * 把 categoryType 传进去，让原始专业分科类可以按“年份 + 省份”的科类制度转换。
+     *
+     * 不改批次、不改学校、不改专业、不改匹配组合键。
+     */
     const derivedFromRaw = deriveFieldsFromRawSubjectCategory(
       rawCategory,
       province,
@@ -166,8 +164,13 @@ export function buildPlanRecords(
       year,
       schoolName,
       province,
+      /**
+       * 这里保持原来的招生计划处理方式，只是 normalizeSubjectCategoryByRaw
+       * 现在能识别“理工/文史/物理类/历史类”等同义科类。
+       * 这样专业分侧和招生计划侧会转成同一套标准科类，避免组合键不一致。
+       */
       subjectCategory: normalizeSubjectCategoryByRaw(rawCategory, categoryType),
-      batch: normalizeBatch(toText(mapped['招生批次']), options.batchRules),
+      batch: sanitizeText(toText(mapped['招生批次'])),
       majorName: sanitizeText(splitMajor.majorName),
       majorDirection: sanitizeText(toText(mapped['专业方向'])),
       majorRemark: finalRemark,

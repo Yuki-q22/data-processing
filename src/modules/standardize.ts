@@ -1,22 +1,3 @@
-/**
- * 文件名称：字段标准化逻辑
- *
- * 文件作用：
- * - 统一处理科类、批次、层次、学校名称、专业名称等字段
- * - 把不同来源文件中的不同写法转换成统一写法
- *
- * 常改位置：
- * - 理工类 -> 理科
- * - 文史类 -> 文科
- * - 物理 / 历史类处理
- * - 专科层次名称处理
- * - 批次名称标准化
- * - 学校名称清洗
- *
- * 注意：
- * - 如果匹配失败是因为字段名称写法不一致，优先检查本文件
- */
-
 const PROVINCE_KEYWORDS = [
   '北京', '天津', '上海', '重庆', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
   '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', '湖北', '湖南', '广东',
@@ -91,59 +72,48 @@ export function getCategoryTypeByYearProvince(
 }
 
 function normalizeRawCategoryToken(rawCategory: string | undefined): string {
-  return (rawCategory || '').replace(/\s/g, '').trim()
+  return (rawCategory || '')
+    .replace(/\s/g, '')
+    .replace(/／/g, '/')
+    .replace(/\|/g, '/')
+    .trim()
 }
 
-function getSubjectCategorySide(rawCategory: string | undefined): {
-  raw: string
-  isScienceLike: boolean
-  isLiberalLike: boolean
-  isMixedScienceLiberal: boolean
-} {
-  const raw = normalizeRawCategoryToken(rawCategory)
-
-  const isScienceLike =
+function isScienceLikeCategory(raw: string): boolean {
+  return (
     raw.includes('理工') ||
     raw.includes('理科') ||
     raw.includes('物理') ||
     raw === '理' ||
     raw === '物'
+  )
+}
 
-  const isLiberalLike =
+function isLiberalLikeCategory(raw: string): boolean {
+  return (
     raw.includes('文史') ||
     raw.includes('文科') ||
     raw.includes('历史') ||
     raw.includes('史') ||
     raw === '文' ||
     raw === '历'
-
-  return {
-    raw,
-    isScienceLike,
-    isLiberalLike,
-    isMixedScienceLiberal: isScienceLike && isLiberalLike,
-  }
+  )
 }
 
+/**
+ * 按“年份 + 省份”的科类制度，将原始科类转成标准招生科类。
+ *
+ * 只处理科类，不改批次、学校、专业、匹配逻辑。
+ */
 export function normalizeSubjectCategoryByRaw(
   rawCategory: string | undefined,
   categoryType: string | undefined
 ): string | undefined {
-  const {
-    raw,
-    isScienceLike,
-    isLiberalLike,
-    isMixedScienceLiberal,
-  } = getSubjectCategorySide(rawCategory)
-
+  const raw = normalizeRawCategoryToken(rawCategory)
   if (!raw || !categoryType) return undefined
 
-  /**
-   * “物理类/历史类”“文科/理科”这类同时包含两种科类的值，不能强行归到某一侧。
-   * 返回 undefined 后，匹配逻辑中的 isEqualOrIgnored 会把科类视为可忽略项，避免候选被错误过滤掉。
-   * “理工/物理类”“文史/历史类”属于同侧表达，不会进入这里。
-   */
-  if (isMixedScienceLiberal) return undefined
+  const isScienceLike = isScienceLikeCategory(raw)
+  const isLiberalLike = isLiberalLikeCategory(raw)
 
   if (categoryType === '综合') {
     if (raw.includes('艺术')) return '艺术类'
@@ -152,14 +122,14 @@ export function normalizeSubjectCategoryByRaw(
   }
 
   if (categoryType === '物理类/历史类') {
-    if (isScienceLike) return '物理类'
-    if (isLiberalLike) return '历史类'
+    if (isScienceLike && !isLiberalLike) return '物理类'
+    if (isLiberalLike && !isScienceLike) return '历史类'
     return undefined
   }
 
   if (categoryType === '文科/理科') {
-    if (isScienceLike) return '理科'
-    if (isLiberalLike) return '文科'
+    if (isScienceLike && !isLiberalLike) return '理科'
+    if (isLiberalLike && !isScienceLike) return '文科'
     return undefined
   }
 
@@ -188,11 +158,8 @@ export function mergeSubjectRequirements(
 export function normalizeLevel1(level1?: string): string | undefined {
   const raw = (level1 || '').trim()
   if (!raw) return undefined
-
-  const compact = raw.replace(/\s/g, '').replace(/（/g, '(').replace(/）/g, ')')
-  if (compact === '专科' || compact === '专科(高职)') return '专科(高职)'
-
-  return raw.replace(/（/g, '(').replace(/）/g, ')')
+  if (raw === '专科') return '专科（高职）'
+  return raw
 }
 
 export function normalizeBatch(
@@ -203,32 +170,6 @@ export function normalizeBatch(
   if (!raw) return undefined
   if (batchRules[raw]) return batchRules[raw]
   return raw
-}
-export function normalizeBatchByCurrentTable(
-  batch: string | undefined,
-  province: string | undefined,
-  year: string | undefined,
-  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>,
-  batchRules: Record<string, string> = {}
-): string | undefined {
-  const normalizedBatch = normalizeBatch(batch, batchRules)
-
-  if (!normalizedBatch) return undefined
-  if (!province || !year) return normalizedBatch
-
-  const yearDict = provinceCurrentBatchDictByYear?.[String(year)]
-  if (!yearDict) return normalizedBatch
-
-  const key1 = `${province}-${normalizedBatch}`
-  const key2 = normalizedBatch
-
-  const matched = yearDict[key1] || yearDict[key2]
-
-  if (Array.isArray(matched) && matched.length > 0) {
-    return matched[0]
-  }
-
-  return normalizedBatch
 }
 
 export function splitMajorNameAndRemark(majorName?: string): {
@@ -367,8 +308,8 @@ function hasAny(text: string, keywords: string[]) {
 function detectCategoryFamilies(text: string) {
   const physics = hasAny(text, ['物理类', '物理'])
   const history = hasAny(text, ['历史类', '历史'])
-  const science = hasAny(text, ['理科'])
-  const liberal = hasAny(text, ['文科'])
+  const science = hasAny(text, ['理工类', '理工', '理科'])
+  const liberal = hasAny(text, ['文史类', '文史', '文科'])
   const comprehensive = hasAny(text, ['综合'])
   const art = hasAny(text, ['艺术类', '艺术文', '艺术理', '艺术'])
   const sport = hasAny(text, ['体育类', '体育文', '体育理', '体育'])
@@ -387,10 +328,6 @@ function detectCategoryFamilies(text: string) {
 function isAmbiguousSubjectCategoryText(text: string) {
   if (!text) return false
 
-  if (text.includes('/') || text.includes('或')) {
-    return true
-  }
-
   const families = detectCategoryFamilies(text)
   const count = [
     families.physics || families.science,
@@ -400,6 +337,10 @@ function isAmbiguousSubjectCategoryText(text: string) {
     families.sport,
   ].filter(Boolean).length
 
+  if (text.includes('/') || text.includes('或')) {
+    return count > 1
+  }
+
   return count > 1
 }
 
@@ -408,9 +349,10 @@ function isAmbiguousSubjectCategoryText(text: string) {
  * - 招生科类
  * - 首选科目
  *
- * 多候选值：
- * - 不强行归类
- * - 标记需要人工核查
+ * 本次只新增：
+ * - 当原始专业分科类为“理工/物理类、文史/历史类”等时，
+ *   按年份 + 省份对应的科类制度转成：
+ *   物理类/历史类 或 理科/文科。
  */
 export function deriveFieldsFromRawSubjectCategory(
   rawCategory: string | undefined,
@@ -430,21 +372,19 @@ export function deriveFieldsFromRawSubjectCategory(
     return {}
   }
 
-  const {
-    isScienceLike,
-    isLiberalLike,
-    isMixedScienceLiberal,
-  } = getSubjectCategorySide(raw)
+  const isScienceLike = isScienceLikeCategory(raw)
+  const isLiberalLike = isLiberalLikeCategory(raw)
 
   /**
-   * 先处理“同侧混写”：
-   * - 理工/物理类：根据年份省份制度转成 物理类 或 理科
-   * - 文史/历史类：根据年份省份制度转成 历史类 或 文科
+   * 只在能明确判断为单一方向时处理。
+   * 例如：
+   * - 理工/物理类：scienceLike=true, liberalLike=false
+   * - 文史/历史类：liberalLike=true, scienceLike=false
    *
-   * 但“物理类/历史类”“文科/理科”这种左右两侧同时出现的值，不强行归类，避免匹配候选被过滤。
+   * 这种不是歧义，应该自动归类。
    */
-  if (categoryType === '物理类/历史类' && !isMixedScienceLiberal) {
-    if (isScienceLike) {
+  if (categoryType === '物理类/历史类') {
+    if (isScienceLike && !isLiberalLike) {
       return {
         rawSubjectCategory: raw,
         subjectCategory: '物理类',
@@ -452,7 +392,7 @@ export function deriveFieldsFromRawSubjectCategory(
       }
     }
 
-    if (isLiberalLike) {
+    if (isLiberalLike && !isScienceLike) {
       return {
         rawSubjectCategory: raw,
         subjectCategory: '历史类',
@@ -461,49 +401,30 @@ export function deriveFieldsFromRawSubjectCategory(
     }
   }
 
-  if (categoryType === '文科/理科' && !isMixedScienceLiberal) {
-    if (isScienceLike) {
+  if (categoryType === '文科/理科') {
+    if (isScienceLike && !isLiberalLike) {
       return {
         rawSubjectCategory: raw,
         subjectCategory: '理科',
-        firstSubject: undefined,
       }
     }
 
-    if (isLiberalLike) {
+    if (isLiberalLike && !isScienceLike) {
       return {
         rawSubjectCategory: raw,
         subjectCategory: '文科',
-        firstSubject: undefined,
       }
     }
   }
 
-  if (categoryType === '综合') {
-    if (raw.includes('艺术')) {
-      return {
-        rawSubjectCategory: raw,
-        subjectCategory: '艺术类',
-      }
-    }
-
-    if (raw.includes('体育')) {
-      return {
-        rawSubjectCategory: raw,
-        subjectCategory: '体育类',
-      }
-    }
-
-    return {
-      rawSubjectCategory: raw,
-      subjectCategory: '综合',
-    }
-  }
-
+  /**
+   * 下面保留原有逻辑。
+   * 不改变原来的匹配、批次、专业、学校处理方式。
+   */
   if (isAmbiguousSubjectCategoryText(raw)) {
     return {
       rawSubjectCategory: raw,
-      subjectCategory: undefined,
+      subjectCategory: raw,
       firstSubject: undefined,
       needsReview: true,
       reviewReason: `原始科类“${raw}”包含多个候选值，请人工确认招生科类与首选科目`,
@@ -517,14 +438,12 @@ export function deriveFieldsFromRawSubjectCategory(
         subjectCategory: '艺术类',
       }
     }
-
     if (raw.includes('体育')) {
       return {
         rawSubjectCategory: raw,
         subjectCategory: '体育类',
       }
     }
-
     return {
       rawSubjectCategory: raw,
       subjectCategory: '综合',
@@ -538,14 +457,12 @@ export function deriveFieldsFromRawSubjectCategory(
         subjectCategory: '理科',
       }
     }
-
     if (raw.includes('文')) {
       return {
         rawSubjectCategory: raw,
         subjectCategory: '文科',
       }
     }
-
     return {
       rawSubjectCategory: raw,
     }
