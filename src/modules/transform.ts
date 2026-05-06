@@ -77,7 +77,11 @@ export function buildScoreRecords(
     const schoolName =
       sanitizeText(toText(mapped['学校名称'])) || sanitizeText(options.manualSchoolName)
 
-    const derivedFromRaw = deriveFieldsFromRawSubjectCategory(rawCategory, province)
+    const derivedFromRaw = deriveFieldsFromRawSubjectCategory(
+  rawCategory,
+  province,
+  categoryType
+)
 
     return {
       rowId: String(index + 1),
@@ -88,11 +92,11 @@ export function buildScoreRecords(
         derivedFromRaw.subjectCategory ||
         normalizeSubjectCategoryByRaw(rawCategory, categoryType),
             batch: normalizeBatchByCurrentTable(
-        toText(mapped['招生批次']),
-        year,
-        province,
-        options.provinceCurrentBatchDictByYear
-      ),
+  toText(mapped['招生批次']),
+  province,
+  year,
+  options.provinceCurrentBatchDictByYear
+),
       majorName: sanitizeText(splitMajor.majorName),
       majorDirection: sanitizeText(toText(mapped['专业方向'])),
       majorRemark: finalRemark,

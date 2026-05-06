@@ -100,7 +100,22 @@ export function normalizeSubjectCategoryByRaw(
 ): string | undefined {
   const raw = normalizeRawCategoryToken(rawCategory)
 
-  if (!categoryType) return undefined
+  if (!raw || !categoryType) return undefined
+
+  const isScienceLike =
+    raw.includes('理工') ||
+    raw.includes('理科') ||
+    raw.includes('物理') ||
+    raw === '理' ||
+    raw === '物'
+
+  const isLiberalLike =
+    raw.includes('文史') ||
+    raw.includes('文科') ||
+    raw.includes('历史') ||
+    raw.includes('史') ||
+    raw === '文' ||
+    raw === '历'
 
   if (categoryType === '综合') {
     if (raw.includes('艺术')) return '艺术类'
@@ -109,14 +124,14 @@ export function normalizeSubjectCategoryByRaw(
   }
 
   if (categoryType === '物理类/历史类') {
-    if (raw.includes('物理') || raw === '物') return '物理类'
-    if (raw.includes('历史') || raw === '历' || raw === '史') return '历史类'
+    if (isScienceLike) return '物理类'
+    if (isLiberalLike) return '历史类'
     return undefined
   }
 
   if (categoryType === '文科/理科') {
-    if (raw === '理科') return '理科'
-    if (raw === '文科') return '文科'
+    if (isScienceLike) return '理科'
+    if (isLiberalLike) return '文科'
     return undefined
   }
 
