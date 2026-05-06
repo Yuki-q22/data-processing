@@ -43,6 +43,14 @@ type StandardizeOptions = {
   provinceRules: Record<string, string>
   categoryRules: Record<string, string>
   batchRules: Record<string, string>
+
+  /**
+   * 这里保留是为了兼容 MappingStep.tsx 传入的参数。
+   * 注意：不要在 buildScoreRecords() 里用它改写原始专业分批次，
+   * 否则会导致专业分和招生计划批次标准不一致，进而匹配不到招生计划。
+   */
+  provinceCurrentBatchDictByYear?: Record<string, Record<string, string[]>>
+
   provinceYearCategoryType: Record<string, Record<string, string>>
   remarkTypeRules: Array<{ keyword: string; output: string; priority: number }>
   manualSchoolName?: string
