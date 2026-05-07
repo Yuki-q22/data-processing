@@ -142,28 +142,65 @@ export default function ExceptionStep() {
   const result = activeRecord.result as any
   const source = activeRecord.source as any
 
+  const currentRemark =
+    result.majorRemark ??
+    result.remark ??
+    source.majorRemark ??
+    source.remark ??
+    source.rawRemark ??
+    ''
+
+  const currentDirection =
+    result.direction ??
+    source.direction ??
+    source.rawDirection ??
+    ''
+
+  const currentEnrollmentType =
+    result.enrollmentType ??
+    source.enrollmentType ??
+    source.recruitType ??
+    source.rawEnrollmentType ??
+    ''
+
   return getBestRemarkMatchedCandidate(
     {
       rowId: activeRecord.rowId,
-      majorRemark: result.majorRemark ?? source.majorRemark ?? '',
-      remark: result.majorRemark ?? source.majorRemark ?? source.remark ?? '',
-      direction: result.direction ?? source.direction ?? '',
-      enrollmentType:
-        result.enrollmentType ??
-        source.enrollmentType ??
-        source.recruitType ??
-        '',
-      majorName: result.majorName ?? source.majorName ?? '',
+      remark: currentRemark,
+      majorRemark: currentRemark,
+      direction: currentDirection,
+      enrollmentType: currentEnrollmentType,
     },
-    activeRecord.matchCandidates.map((candidate: any) => ({
-      rowId: candidate.rowId,
-      id: candidate.rowId,
-      majorRemark: candidate.majorRemark ?? candidate.remark ?? '',
-      remark: candidate.majorRemark ?? candidate.remark ?? '',
-      direction: candidate.direction ?? '',
-      enrollmentType: candidate.enrollmentType ?? candidate.recruitType ?? '',
-      majorName: candidate.majorName ?? '',
-    }))
+    activeRecord.matchCandidates.map((candidate: any) => {
+      const candidateRemark =
+        candidate.majorRemark ??
+        candidate.remark ??
+        candidate.planRemark ??
+        candidate.备注 ??
+        ''
+
+      const candidateDirection =
+        candidate.direction ??
+        candidate.planDirection ??
+        candidate.方向 ??
+        ''
+
+      const candidateEnrollmentType =
+        candidate.enrollmentType ??
+        candidate.recruitType ??
+        candidate.planRecruitType ??
+        candidate.招生类型 ??
+        ''
+
+      return {
+        rowId: candidate.rowId,
+        id: candidate.rowId,
+        remark: candidateRemark,
+        majorRemark: candidateRemark,
+        direction: candidateDirection,
+        enrollmentType: candidateEnrollmentType,
+      }
+    })
   )
 }, [activeRecord])
 
@@ -660,8 +697,8 @@ export default function ExceptionStep() {
                     {activeRecord.matchCandidates.map((candidate: any) => {
                       const selected = activeSelectedId === candidate.rowId
                       const isBestRemarkMatch =
-                        remarkBestMatch.bestScore > 0 &&
-                        remarkBestMatch.bestKey === String(candidate.rowId)
+  remarkBestMatch.bestScore >= 30 &&
+  remarkBestMatch.bestKey === String(candidate.rowId)
 
                       return (
                         <Card
@@ -698,10 +735,10 @@ export default function ExceptionStep() {
                               </span>
 
                               {isBestRemarkMatch ? (
-                                <Tag color="gold">
-                                  备注最相近
-                                </Tag>
-                              ) : null}
+  <Tag color="gold">
+    备注最相近 {remarkBestMatch.bestScore}
+  </Tag>
+) : null}
 
                               {selected ? (
                                 <Tag color="blue">

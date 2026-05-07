@@ -16,9 +16,8 @@ type RemarkLikeInput = {
   招生类型?: unknown
   planRecruitType?: unknown
 
-  majorName?: unknown
-  专业?: unknown
-  专业名称?: unknown
+  batch?: unknown
+  批次?: unknown
 }
 
 function toText(value: unknown) {
@@ -46,23 +45,44 @@ function collectRemarkText(record: RemarkLikeInput) {
     record.enrollmentType,
     record.招生类型,
     record.planRecruitType,
-    record.majorName,
-    record.专业,
-    record.专业名称,
   ]
     .map(toText)
     .filter(Boolean)
     .join(' ')
 }
 
+function extractBracketTokens(value: string) {
+  const tokens: string[] = []
+  const matches = value.match(/\(([^)]{1,50})\)/g) ?? []
+
+  matches.forEach((item: string) => {
+    const clean = item.replace(/[()]/g, '').trim()
+
+    if (clean) {
+      tokens.push(normalizeText(clean))
+    }
+  })
+
+  return tokens
+}
+
 function splitUsefulTokens(value: unknown) {
-  const text = normalizeText(value)
+  const rawText = toText(value)
+  const text = normalizeText(rawText)
 
   if (!text) return []
 
   const tokens = new Set<string>()
 
   const keywordList = [
+    '少数民族',
+    '少数民族预科',
+    '预科',
+    '民族班',
+    '藏区专项',
+    '革命老区专项',
+    '其他民族地区专项',
+    '不区分民族成分',
     '中外合作',
     '中外合作办学',
     '校企合作',
@@ -70,8 +90,6 @@ function splitUsefulTokens(value: unknown) {
     '国家专项',
     '高校专项',
     '定向',
-    '民族班',
-    '预科',
     '护理',
     '师范',
     '非师范',
@@ -90,8 +108,10 @@ function splitUsefulTokens(value: unknown) {
     '专项',
     '合作',
     '师范类',
-    '不招',
-    '只招',
+    '建档立卡',
+    '本科c段',
+    '本科普通',
+    '本科',
   ]
 
   keywordList.forEach((keyword) => {
@@ -102,17 +122,26 @@ function splitUsefulTokens(value: unknown) {
     }
   })
 
-  const bracketMatches: string[] = text.match(/\(([^)]{1,30})\)/g) ?? []
-
-bracketMatches.forEach((item: string) => {
-  const clean = item.replace(/[()]/g, '')
-
-  if (clean) {
-    tokens.add(clean)
-  }
-})
+  extractBracketTokens(rawText).forEach((token) => {
+    if (token) {
+      tokens.add(token)
+    }
+  })
 
   return Array.from(tokens)
+}
+
+function hasNegativeConflict(recordText: string, candidateText: string) {
+  // “非师范”不能被普通“师范”误判为相近
+  if (recordText.includes('非师范')) {
+    return candidateText.includes('师范') && !candidateText.includes('非师范')
+  }
+
+  if (candidateText.includes('非师范')) {
+    return recordText.includes('师范') && !recordText.includes('非师范')
+  }
+
+  return false
 }
 
 export function getManualMatchRemarkScore(
@@ -125,68 +154,75 @@ export function getManualMatchRemarkScore(
   const recordText = normalizeText(recordRawText)
   const candidateText = normalizeText(candidateRawText)
 
-  if (!recordText || !candidateText) {
-    return 0
+  // 当前记录没有备注时，不做备注智能高亮
+  if (!recordText) return 0
+
+  // 候选没有备注、方向、类型时，不参与高亮
+  if (!candidateText) return 0
+
+  if (hasNegativeConflict(recordText, candidateText)) {
+    return -999
   }
 
   let score = 0
 
-  const tokens = splitUsefulTokens(recordRawText)
+  // 完全相同，最高优先级
+  if (recordText === candidateText) {
+    score += 100
+  }
 
-  tokens.forEach((token) => {
+  // 双向包含
+  if (candidateText.includes(recordText)) {
+    score += 60
+  }
+
+  if (recordText.includes(candidateText)) {
+    score += 40
+  }
+
+  const recordTokens = splitUsefulTokens(recordRawText)
+  const candidateTokens = splitUsefulTokens(candidateRawText)
+
+  recordTokens.forEach((token) => {
+    if (!token) return
+
     if (candidateText.includes(token)) {
-      score += 10
+      score += token.length >= 4 ? 20 : 10
+    }
+
+    if (candidateTokens.includes(token)) {
+      score += token.length >= 4 ? 20 : 10
     }
   })
 
-  if (candidateText.includes(recordText) || recordText.includes(candidateText)) {
-    score += 20
-  }
+  // 重点业务词额外加权
+  const strongKeywords = [
+    '藏区专项',
+    '革命老区专项',
+    '其他民族地区专项',
+    '少数民族',
+    '少数民族预科',
+    '民族班',
+    '中外合作',
+    '地方专项',
+    '国家专项',
+    '高校专项',
+    '建档立卡',
+  ]
 
-  if (recordText.includes('非师范')) {
-    if (candidateText.includes('非师范')) {
-      score += 30
+  strongKeywords.forEach((keyword) => {
+    const clean = normalizeText(keyword)
+
+    if (recordText.includes(clean) && candidateText.includes(clean)) {
+      score += 50
     }
+  })
 
-    if (!candidateText.includes('非师范') && candidateText.includes('师范')) {
-      score -= 20
-    }
-  }
+  // 原始记录是“普通类/无特殊备注”，候选也无明显特殊备注，才给低分
+  const specialTokens = recordTokens.filter((token) => token.length >= 2)
 
-  if (recordText.includes('师范') && !recordText.includes('非师范')) {
-    if (candidateText.includes('师范') && !candidateText.includes('非师范')) {
-      score += 15
-    }
-  }
-
-  if (recordText.includes('中外合作')) {
-    if (candidateText.includes('中外合作')) {
-      score += 30
-    }
-
-    if (!candidateText.includes('中外合作') && candidateText.includes('合作')) {
-      score += 10
-    }
-  }
-
-  if (recordText.includes('地方专项') && candidateText.includes('地方专项')) {
-    score += 30
-  }
-
-  if (recordText.includes('国家专项') && candidateText.includes('国家专项')) {
-    score += 30
-  }
-
-  if (recordText.includes('高校专项') && candidateText.includes('高校专项')) {
-    score += 30
-  }
-
-  if (recordText.includes('预科') && candidateText.includes('预科')) {
-    score += 25
-  }
-
-  if (recordText.includes('民族班') && candidateText.includes('民族班')) {
-    score += 25
+  if (!specialTokens.length && !candidateTokens.length) {
+    score += 5
   }
 
   return score
