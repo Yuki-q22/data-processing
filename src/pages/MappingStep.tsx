@@ -1,4 +1,14 @@
-import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography, message } from 'antd'
+import {
+  Button,
+  Card,
+  Checkbox,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from 'antd'
 import { usePreviewStore } from '../stores/previewStore'
 import { TARGET_FIELDS } from '../constants/targetFields'
 import { useTaskStore } from '../stores/taskStore'
@@ -8,7 +18,6 @@ import { matchFields } from '../utils/mapping'
 import { buildScoreRecords, buildPlanRecords } from '../modules/transform'
 import { buildProcessedRecords } from '../modules/match'
 import { attachValidationIssues } from '../modules/validate'
-import { useRuleCenterStore } from '../stores/ruleCenterStore'
 
 const { Paragraph } = Typography
 
@@ -35,8 +44,6 @@ export default function MappingStep() {
     manualSchoolName,
   } = useTaskStore()
 
-  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
-
   const {
     fieldAliases,
     provinceRules,
@@ -62,10 +69,16 @@ export default function MappingStep() {
     const scoreHeaderRows = getSheetRows(scoreWorkbook.workbook, scoreSheetName)
     const planHeaderRows = getSheetRows(planWorkbook.workbook, planSheetName)
 
-    const scoreHeaders = (scoreHeaderRows[0] || []).map((v: unknown) => String(v)).filter(Boolean)
-    const planHeaders = (planHeaderRows[0] || []).map((v: unknown) => String(v)).filter(Boolean)
+    const scoreHeaders = (scoreHeaderRows[0] || [])
+      .map((v: unknown) => String(v))
+      .filter(Boolean)
+
+    const planHeaders = (planHeaderRows[0] || [])
+      .map((v: unknown) => String(v))
+      .filter(Boolean)
 
     const autoScoreMappings = matchFields(scoreHeaders, fieldAliases)
+
     const autoPlanMappings = matchFields(planHeaders, fieldAliases).filter(
       (item) => !ignoredPlanSourceFields.includes(item.sourceField)
     )
@@ -85,40 +98,42 @@ export default function MappingStep() {
     const scoreRows = getSheetJson(scoreWorkbook.workbook, scoreSheetName)
     const planRows = getSheetJson(planWorkbook.workbook, planSheetName)
 
-    const finalScoreMappings = scoreMappings
-      .filter((item) => !item.ignored && item.targetField)
+    const finalScoreMappings = scoreMappings.filter(
+      (item) => !item.ignored && item.targetField
+    )
 
-    const finalPlanMappings = planMappings
-      .filter((item) => !item.ignored && item.targetField)
+    const finalPlanMappings = planMappings.filter(
+      (item) => !item.ignored && item.targetField
+    )
 
     const scoreRecords = buildScoreRecords(
-  scoreRows,
-  finalScoreMappings,
-  year,
-  defaultDataSource,
-  {
-    provinceRules,
-    categoryRules,
-    batchRules,
-    provinceYearCategoryType,
-    manualSchoolName,
-    remarkTypeRules,
-  }
-)
+      scoreRows,
+      finalScoreMappings,
+      year,
+      defaultDataSource,
+      {
+        provinceRules,
+        categoryRules,
+        batchRules,
+        provinceYearCategoryType,
+        manualSchoolName,
+        remarkTypeRules,
+      }
+    )
 
     const planRecords = buildPlanRecords(
-  planRows,
-  finalPlanMappings,
-  year,
-  defaultDataSource,
-  {
-    provinceRules,
-    categoryRules,
-    batchRules,
-    provinceYearCategoryType,
-    remarkTypeRules,
-  }
-)
+      planRows,
+      finalPlanMappings,
+      year,
+      defaultDataSource,
+      {
+        provinceRules,
+        categoryRules,
+        batchRules,
+        provinceYearCategoryType,
+        remarkTypeRules,
+      }
+    )
 
     setScoreRecords(scoreRecords)
     setPlanRecords(planRecords)
@@ -131,8 +146,7 @@ export default function MappingStep() {
 
     const validated = attachValidationIssues(
       processed,
-      provinceCurrentBatchDictByYear,
-      { validSchoolNames, validMajorCombos }
+      provinceCurrentBatchDictByYear
     )
 
     setProcessedRecords(validated)
@@ -140,9 +154,7 @@ export default function MappingStep() {
     message.success('映射已应用，预览数据已重新生成')
   }
 
-  const commonColumns = (
-    type: 'score' | 'plan'
-  ) => [
+  const commonColumns = (type: 'score' | 'plan') => [
     {
       title: '忽略',
       dataIndex: 'ignored',
@@ -212,6 +224,7 @@ export default function MappingStep() {
       width: 100,
       render: (value: number) => {
         const color = value >= 95 ? 'green' : value >= 88 ? 'orange' : 'red'
+
         return <Tag color={color}>{value}%</Tag>
       },
     },

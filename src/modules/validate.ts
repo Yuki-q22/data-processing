@@ -1,15 +1,15 @@
 import type { ProcessedRecord, ValidationIssue } from '../types/record'
-import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
 
 function isValidDataSource(value?: string) {
   const allowed = [
-  '官方考试院',
-  '大红本数据',
-  '学校官网',
-  '销售',
-  '学业桥',
-  '学业桥非普通',
-]
+    '官方考试院',
+    '大红本数据',
+    '学校官网',
+    '销售',
+    '学业桥',
+    '学业桥非普通',
+  ]
+
   return !value || allowed.includes(value)
 }
 
@@ -19,11 +19,7 @@ function needsFirstSubject(subjectCategory?: string) {
 
 export function attachValidationIssues(
   processedRecords: ProcessedRecord[],
-  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>,
-  ruleCenterOptions: {
-    validSchoolNames?: string[]
-    validMajorCombos?: string[]
-  } = {}
+  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
 ): ProcessedRecord[] {
   return processedRecords.map((item) => {
     const issues: ValidationIssue[] = [...(item.issues || [])]
@@ -121,20 +117,18 @@ export function attachValidationIssues(
       })
     }
 
-
-    validateSchoolAndMajorCombo({
-      validSchoolNames: ruleCenterOptions.validSchoolNames,
-      validMajorCombos: ruleCenterOptions.validMajorCombos,
-      schoolName: result.schoolName,
-      majorName: result.majorName,
-      level: result.level1,
-    }).forEach((message) => {
-      issues.push({
-        code: message.startsWith('学校名称') ? 'rule_center_school_unmatched' : 'rule_center_major_combo_unmatched',
-        level: 'warning',
-        message,
-      })
-    })
+    /**
+     * 注意：
+     * 规则中心的“学校名称校验”和“专业名称+层次校验”不在异常处理阶段执行。
+     *
+     * 原因：
+     * - 这里生成的问题会进入“异常处理”列表，干扰人工匹配流程。
+     * - 专业名称+层次应在人工匹配完成后、导出阶段最后校验。
+     *
+     * 因此：
+     * - 匹配异常、科类异常、分数异常、批次异常仍在这里处理。
+     * - 规则中心校验结果只在导出文件最后两列展示。
+     */
 
     if (result.year && result.province && result.batch) {
       const validBatches =

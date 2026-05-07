@@ -45,7 +45,9 @@ export default function ExceptionStep() {
   const { provinceCurrentBatchDictByYear } = useRuleStore()
 
   const [keyword, setKeyword] = useState('')
-  const [matchStatusFilter, setMatchStatusFilter] = useState<string | undefined>()
+  const [matchStatusFilter, setMatchStatusFilter] = useState<
+    string | undefined
+  >()
   const [issueCodeFilter, setIssueCodeFilter] = useState<string | undefined>()
   const [issueLevelFilter, setIssueLevelFilter] = useState<string | undefined>()
 
@@ -54,7 +56,8 @@ export default function ExceptionStep() {
 
   const exceptionRecords = useMemo(() => {
     return processedRecords.filter((item) => {
-      const hasIssues = item.matchStatus === 'unmatched' || item.issues.length > 0
+      const hasIssues =
+        item.matchStatus === 'unmatched' || item.issues.length > 0
       const hasManualSelection = !!manualMatchSelections[item.rowId]
 
       return hasIssues || hasManualSelection
@@ -132,77 +135,71 @@ export default function ExceptionStep() {
   }, [activeRowId, filteredRecords, exceptionRecords])
 
   const remarkBestMatch = useMemo(() => {
-  if (!activeRecord?.matchCandidates?.length) {
-    return {
-      bestKey: '',
-      bestScore: 0,
-    }
-  }
-
-  const result = activeRecord.result as any
-  const source = activeRecord.source as any
-
-  const currentRemark =
-    result.majorRemark ??
-    result.remark ??
-    source.majorRemark ??
-    source.remark ??
-    source.rawRemark ??
-    ''
-
-  const currentDirection =
-    result.direction ??
-    source.direction ??
-    source.rawDirection ??
-    ''
-
-  const currentEnrollmentType =
-    result.enrollmentType ??
-    source.enrollmentType ??
-    source.recruitType ??
-    source.rawEnrollmentType ??
-    ''
-
-  return getBestRemarkMatchedCandidate(
-    {
-      rowId: activeRecord.rowId,
-      remark: currentRemark,
-      majorRemark: currentRemark,
-      direction: currentDirection,
-      enrollmentType: currentEnrollmentType,
-    },
-    activeRecord.matchCandidates.map((candidate: any) => {
-      const candidateRemark =
-        candidate.majorRemark ??
-        candidate.remark ??
-        candidate.planRemark ??
-        candidate.备注 ??
-        ''
-
-      const candidateDirection =
-        candidate.direction ??
-        candidate.planDirection ??
-        candidate.方向 ??
-        ''
-
-      const candidateEnrollmentType =
-        candidate.enrollmentType ??
-        candidate.recruitType ??
-        candidate.planRecruitType ??
-        candidate.招生类型 ??
-        ''
-
+    if (!activeRecord?.matchCandidates?.length) {
       return {
-        rowId: candidate.rowId,
-        id: candidate.rowId,
-        remark: candidateRemark,
-        majorRemark: candidateRemark,
-        direction: candidateDirection,
-        enrollmentType: candidateEnrollmentType,
+        bestKey: '',
+        bestScore: 0,
       }
-    })
-  )
-}, [activeRecord])
+    }
+
+    const result = activeRecord.result as any
+    const source = activeRecord.source as any
+
+    const currentRemark =
+      result.majorRemark ??
+      result.remark ??
+      source.majorRemark ??
+      source.remark ??
+      source.rawRemark ??
+      ''
+
+    const currentDirection =
+      result.direction ?? source.direction ?? source.rawDirection ?? ''
+
+    const currentEnrollmentType =
+      result.enrollmentType ??
+      source.enrollmentType ??
+      source.recruitType ??
+      source.rawEnrollmentType ??
+      ''
+
+    return getBestRemarkMatchedCandidate(
+      {
+        rowId: activeRecord.rowId,
+        remark: currentRemark,
+        majorRemark: currentRemark,
+        direction: currentDirection,
+        enrollmentType: currentEnrollmentType,
+      },
+      activeRecord.matchCandidates.map((candidate: any) => {
+        const candidateRemark =
+          candidate.majorRemark ??
+          candidate.remark ??
+          candidate.planRemark ??
+          candidate.备注 ??
+          ''
+
+        const candidateDirection =
+          candidate.direction ?? candidate.planDirection ?? candidate.方向 ?? ''
+
+        const candidateEnrollmentType =
+          candidate.enrollmentType ??
+          candidate.recruitType ??
+          candidate.planRecruitType ??
+          candidate.招生类型 ??
+          ''
+
+        return {
+          rowId: candidate.rowId,
+          id: candidate.rowId,
+          remark: candidateRemark,
+          majorRemark: candidateRemark,
+          direction: candidateDirection,
+          enrollmentType: candidateEnrollmentType,
+        }
+      })
+    )
+  }, [activeRecord])
 
   const nextActionableRecord = useMemo(() => {
     if (!activeRowId) return null
@@ -406,7 +403,10 @@ export default function ExceptionStep() {
             }}
           >
             {issues
-              .map((issue) => `【${getIssueLevelLabel(issue.level)}】${issue.message}`)
+              .map(
+                (issue) =>
+                  `【${getIssueLevelLabel(issue.level)}】${issue.message}`
+              )
               .join('\n')}
           </div>
         )
@@ -520,8 +520,9 @@ export default function ExceptionStep() {
     },
   ]
 
-  const activeSelectedId =
-    activeRecord ? manualMatchSelections[activeRecord.rowId] : undefined
+  const activeSelectedId = activeRecord
+    ? manualMatchSelections[activeRecord.rowId]
+    : undefined
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -611,7 +612,9 @@ export default function ExceptionStep() {
                 bordered
                 style={{ fontSize: UI_FONT_SIZE }}
               >
-                <Descriptions.Item label="行号">{activeRecord.rowId}</Descriptions.Item>
+                <Descriptions.Item label="行号">
+                  {activeRecord.rowId}
+                </Descriptions.Item>
                 <Descriptions.Item label="年份">
                   {activeRecord.result.year || '-'}
                 </Descriptions.Item>
@@ -654,13 +657,13 @@ export default function ExceptionStep() {
 
             <Card
               size="small"
-              title={`候选招生计划（${activeRecord.matchCandidates?.length || 0} 条）`}
+              title={`候选招生计划（${
+                activeRecord.matchCandidates?.length || 0
+              } 条）`}
               extra={
                 <Space>
-                  {remarkBestMatch.bestScore > 0 ? (
-                    <Tag color="gold">
-                      已按备注高亮最相近候选
-                    </Tag>
+                  {remarkBestMatch.bestScore >= 30 ? (
+                    <Tag color="gold">已按备注高亮最相近候选</Tag>
                   ) : null}
 
                   {activeSelectedId ? (
@@ -696,9 +699,10 @@ export default function ExceptionStep() {
                   <Space direction="vertical" style={{ width: '100%' }} size={12}>
                     {activeRecord.matchCandidates.map((candidate: any) => {
                       const selected = activeSelectedId === candidate.rowId
+
                       const isBestRemarkMatch =
-  remarkBestMatch.bestScore >= 30 &&
-  remarkBestMatch.bestKey === String(candidate.rowId)
+                        remarkBestMatch.bestScore >= 30 &&
+                        remarkBestMatch.bestKey === String(candidate.rowId)
 
                       return (
                         <Card
@@ -706,7 +710,10 @@ export default function ExceptionStep() {
                           size="small"
                           hoverable
                           onClick={() =>
-                            handleApplyManual(activeRecord.rowId, candidate.rowId)
+                            handleApplyManual(
+                              activeRecord.rowId,
+                              candidate.rowId
+                            )
                           }
                           style={{
                             cursor: 'pointer',
@@ -715,7 +722,9 @@ export default function ExceptionStep() {
                               : isBestRemarkMatch
                                 ? '1px solid #faad14'
                                 : undefined,
-                            background: isBestRemarkMatch ? '#fffbe6' : undefined,
+                            background: isBestRemarkMatch
+                              ? '#fffbe6'
+                              : undefined,
                           }}
                         >
                           <Radio
@@ -735,15 +744,13 @@ export default function ExceptionStep() {
                               </span>
 
                               {isBestRemarkMatch ? (
-  <Tag color="gold">
-    备注最相近 {remarkBestMatch.bestScore}
-  </Tag>
-) : null}
+                                <Tag color="gold">
+                                  备注最相近 {remarkBestMatch.bestScore}
+                                </Tag>
+                              ) : null}
 
                               {selected ? (
-                                <Tag color="blue">
-                                  当前已选
-                                </Tag>
+                                <Tag color="blue">当前已选</Tag>
                               ) : null}
                             </Space>
                           </Radio>
