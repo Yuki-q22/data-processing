@@ -10,6 +10,7 @@ import {
   SettingOutlined,
   PictureOutlined,
 } from '@ant-design/icons'
+import readmeText from '../README.md?raw'
 
 import ProfessionalScorePlatform from './pages/ProfessionalScorePlatform'
 import RuleCenterPage from './pages/RuleCenterPage'
@@ -70,33 +71,18 @@ export default function App() {
   const showReadme = () => {
     Modal.info({
       title: '使用规则 / README',
-      width: 760,
+      width: 900,
       content: (
-        <div style={{ lineHeight: 1.8 }}>
-          <p>
-            1. 使用前建议先在“规则中心”上传学校名称规则、招生专业组合规则和备注招生类型规则。
-          </p>
-          <p>
-            2. 学校名称规则用于校验各工具导出结果中的学校名称是否在规则中心范围内。
-          </p>
-          <p>
-            3. 招生专业组合规则建议使用“专业名称 + 层次”的形式，例如：临床医学本科(普通)、大数据技术专科(高职)。
-          </p>
-          <p>
-            4. 专业分模板智能填充需要先上传原始专业分数据和招生计划数据，再在第二步完成字段映射。
-          </p>
-          <p>
-            5. 专业分模板智能填充、院校分提取、学业桥专业分处理、专业组代码匹配、招生计划数据比对等工具，导出结果最后会追加“学校名称校验结果”和“专业名称校验结果”。
-          </p>
-          <p>
-            6. 学业桥专业分处理的专业校验按专业名称匹配，会自动忽略本科(普通)、本科(职业)、专科(高职)这些层次后缀。
-          </p>
-          <p>
-            7. 各工具中的“重置”按钮只清空当前工具上传文件、处理结果、筛选条件、人工操作记录和临时缓存，不会删除规则中心规则。
-          </p>
-          <p>
-            8. 如果导出结果中出现“未匹配”，需要优先检查规则中心规则文件中的学校名称、专业名称、层次写法是否和业务数据一致。
-          </p>
+        <div
+          style={{
+            maxHeight: '70vh',
+            overflowY: 'auto',
+            whiteSpace: 'pre-wrap',
+            lineHeight: 1.7,
+            fontSize: 13,
+          }}
+        >
+          {readmeText}
         </div>
       ),
     })
