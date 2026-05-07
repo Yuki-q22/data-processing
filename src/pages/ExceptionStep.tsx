@@ -164,41 +164,27 @@ export default function ExceptionStep() {
       ''
 
     return getBestRemarkMatchedCandidate(
-      {
-        rowId: activeRecord.rowId,
-        remark: currentRemark,
-        majorRemark: currentRemark,
-        direction: currentDirection,
-        enrollmentType: currentEnrollmentType,
-      },
-      activeRecord.matchCandidates.map((candidate: any) => {
-        const candidateRemark =
-          candidate.majorRemark ??
-          candidate.remark ??
-          candidate.planRemark ??
-          candidate.备注 ??
-          ''
+  {
+    rowId: activeRecord.rowId,
+    remark: currentRemark,
+    majorRemark: currentRemark,
+  },
+  activeRecord.matchCandidates.map((candidate: any) => {
+    const candidateRemark =
+      candidate.majorRemark ??
+      candidate.remark ??
+      candidate.planRemark ??
+      candidate.备注 ??
+      ''
 
-        const candidateDirection =
-          candidate.direction ?? candidate.planDirection ?? candidate.方向 ?? ''
-
-        const candidateEnrollmentType =
-          candidate.enrollmentType ??
-          candidate.recruitType ??
-          candidate.planRecruitType ??
-          candidate.招生类型 ??
-          ''
-
-        return {
-          rowId: candidate.rowId,
-          id: candidate.rowId,
-          remark: candidateRemark,
-          majorRemark: candidateRemark,
-          direction: candidateDirection,
-          enrollmentType: candidateEnrollmentType,
-        }
-      })
-    )
+    return {
+      rowId: candidate.rowId,
+      id: candidate.rowId,
+      remark: candidateRemark,
+      majorRemark: candidateRemark,
+    }
+  })
+)
   }, [activeRecord])
 
   const nextActionableRecord = useMemo(() => {
