@@ -103,17 +103,21 @@ export function processRemarkTypeExtract(params: {
     }
   }
 
-  const type = extractRecruitmentType(remark, rules)
   const matchedReviewKeywords = getMatchedReviewKeywords(remark, exclusionKeywords)
-  const review = remarkNeedsReview(remark, matchedReviewKeywords)
+const review = remarkNeedsReview(remark, matchedReviewKeywords)
 
-  return {
-    rowId: String(index + 1),
-    备注: remark,
-    招生类型: type,
-    需要核查: review,
-    命中核查关键词: matchedReviewKeywords,
-  }
+// 命中核查关键词时，不再提取招生类型，避免把“不含、除外、没有、除”等否定语境误判为招生类型。
+const type = matchedReviewKeywords
+  ? ''
+  : extractRecruitmentType(remark, rules)
+
+return {
+  rowId: String(index + 1),
+  备注: remark,
+  招生类型: type,
+  需要核查: review,
+  命中核查关键词: matchedReviewKeywords,
+}
 })
 
   return {
