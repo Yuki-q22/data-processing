@@ -21,6 +21,7 @@ import {
   type ArtCollegeScoreProcessResult,
 } from '../../modules/collegeScoreArt'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
+import { confirmToolReset } from '../../utils/toolReset'
 
 const { Dragger } = Upload
 const { Paragraph } = Typography
@@ -156,9 +157,21 @@ export default function CollegeScoreArtTool() {
     }
   }
 
+  const handleResetPage = () => {
+    confirmToolReset({
+      title: '确认重置院校分提取（艺体类）？',
+      onReset: () => {
+        setLoadedWorkbook(null)
+        setSheetName(undefined)
+        setProcessing(false)
+        setResult(null)
+      },
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="院校分提取（艺体类）" style={{ borderRadius: 12 }}>
+      <Card title="院校分提取（艺体类）" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
         <Paragraph>
           已按最新规则更新：从 B2 读取年份、从第 3 行读取正文、校验固定列、按分组规则取最低分代表行，并导出成院校分模板。
         </Paragraph>

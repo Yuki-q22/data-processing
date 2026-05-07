@@ -34,6 +34,7 @@ import {
 import { InboxOutlined } from '@ant-design/icons'
 import * as XLSX from 'xlsx'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
+import { confirmToolReset } from '../../utils/toolReset'
 import {
   downloadBlob,
   exportXueyeqiaoWorkbook,
@@ -221,9 +222,21 @@ export default function XueyeqiaoTool() {
     }
   }
 
+  const handleResetPage = () => {
+    confirmToolReset({
+      title: '确认重置学业桥专业分处理？',
+      onReset: () => {
+        setLoadedWorkbook(null)
+        setSheetName(undefined)
+        setProcessing(false)
+        setResult(null)
+      },
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="学业桥专业分处理" style={{ borderRadius: 12 }}>
+      <Card title="学业桥专业分处理" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
         <Paragraph>
           已按规则文档更新：按第一行表头读取学业桥数据，校验字段、处理学校名称规则、按批次和学校名称推断一级层次、解析报考要求、生成专业组代码、处理备注，并导出成专业分模板。
         </Paragraph>

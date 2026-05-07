@@ -20,6 +20,7 @@ import {
   imagesToPdfBlob,
   type ExtractedImageItem,
 } from '../../modules/employmentReport'
+import { confirmToolReset } from '../../utils/toolReset'
 
 const { Paragraph, Text } = Typography
 
@@ -86,9 +87,22 @@ export default function EmploymentReportImageTool() {
     }
   }
 
+  const handleResetPage = () => {
+    confirmToolReset({
+      title: '确认重置就业质量报告图片提取？',
+      onReset: () => {
+        cleanupImageObjectUrls(images)
+        setUrl('')
+        setLoading(false)
+        setPdfLoading(false)
+        setImages([])
+      },
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="就业质量报告图片提取" style={{ borderRadius: 12 }}>
+      <Card title="就业质量报告图片提取" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
         <Paragraph>
           输入就业质量报告网页链接，提取静态页面中的图片，预览后合成 PDF 下载。
         </Paragraph>

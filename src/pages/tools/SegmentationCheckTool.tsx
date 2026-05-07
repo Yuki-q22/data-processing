@@ -3,6 +3,7 @@ import { Button, Card, Descriptions, Empty, Space, Statistic, Typography, Upload
 import { InboxOutlined } from '@ant-design/icons'
 import { processSegmentationWorkbook } from '../../modules/segmentation'
 import { downloadBlob } from '../../modules/xueyeqiao'
+import { confirmToolReset } from '../../utils/toolReset'
 
 const { Dragger } = Upload
 const { Paragraph } = Typography
@@ -42,9 +43,20 @@ export default function SegmentationCheckTool() {
     downloadBlob(result.blob, file.name.replace(/\.xlsx$/i, '_校验结果.xlsx'))
   }
 
+  const handleResetPage = () => {
+    confirmToolReset({
+      title: '确认重置一分一段校验？',
+      onReset: () => {
+        setFile(null)
+        setProcessing(false)
+        setResult(null)
+      },
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="一分一段校验" style={{ borderRadius: 12 }}>
+      <Card title="一分一段校验" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
         <Paragraph>
           这个页面会做年份校验、自动补断点、自动补人数，并在表中写入累计人数校验结果与分数校验结果。
         </Paragraph>

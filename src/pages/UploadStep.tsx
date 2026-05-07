@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
-import { Alert, Button, Card, Col, Input, Modal, Row, Select, Space, Switch, Typography, message } from 'antd'
+import { Alert, Button, Card, Col, Input, Row, Select, Space, Switch, Typography, message } from 'antd'
 import * as XLSX from 'xlsx'
 import FileUploadCard from '../components/FileUploadCard'
 import { validateUploadedHeaders } from '../modules/uploadValidation'
 import { useTaskStore } from '../stores/taskStore'
 import { usePreviewStore } from '../stores/previewStore'
+import { confirmToolReset } from '../utils/toolReset'
 import type { UploadedWorkbook } from '../types/workbook'
 
 const { Paragraph, Text } = Typography
@@ -167,22 +168,14 @@ export default function UploadStep() {
   }
 
   const handleResetPage = () => {
-    Modal.confirm({
-      title: '确认重置当前页面数据？',
-      content: '将清空已上传文件、Sheet 选择、字段映射、处理预览、异常人工匹配记录，并清理浏览器本地缓存。规则中心中的远程规则不会被删除。',
-      okText: '确认重置',
-      cancelText: '取消',
-      okType: 'danger',
-      onOk: () => {
+    confirmToolReset({
+      title: '确认重置专业分模板智能填充？',
+      content:
+        '将清空已上传文件、Sheet 选择、字段映射、处理预览和异常人工匹配记录，并清理工具运行缓存。规则中心规则不会被删除。',
+      successMessage: '已重置专业分模板智能填充数据和运行缓存',
+      onReset: () => {
         resetTask()
         resetPreview()
-        try {
-          localStorage.clear()
-          sessionStorage.clear()
-        } catch (error) {
-          console.warn('清理浏览器本地缓存失败：', error)
-        }
-        message.success('已重置上传文件、处理数据和本地缓存')
       },
     })
   }

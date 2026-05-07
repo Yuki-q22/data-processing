@@ -46,6 +46,7 @@ import {
   type GroupCodeMatchRow,
 } from '../../modules/groupCodeMatch'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
+import { confirmToolReset } from '../../utils/toolReset'
 
 const { Dragger } = Upload
 const { Paragraph, Text } = Typography
@@ -355,9 +356,33 @@ const saveManualSelection = () => {
     }
   }
 
+  const handleResetPage = () => {
+    confirmToolReset({
+      title: '确认重置专业组代码匹配？',
+      onReset: () => {
+        setImportWorkbook(null)
+        setPlanWorkbook(null)
+        setImportSheetName(undefined)
+        setPlanSheetName(undefined)
+        setYearValue('')
+        setProcessing(false)
+        setRows([])
+        setManualSelections({})
+        setProvinceFilter('全部')
+        setManualOnly(false)
+        setDrawerOpen(false)
+        setActiveRowId(null)
+        setCandidateChoice('')
+        setManualGroupCode('')
+        setManualRequirementMode('')
+        setManualSecondSubject('')
+      },
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="专业组代码匹配" style={{ borderRadius: 12 }}>
+      <Card title="专业组代码匹配" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
         <Paragraph>
           已按最新规则更新：按“学校名称 + 省份 + 一级层次 + 招生科类 + 招生批次 + 招生专业”构造组合键进行匹配；任一文件存在重复项则进入手动补充；2025 年及以后仅对河北、辽宁、山东、浙江、重庆、贵州、青海这些新高考但无专业组代码的省份同步转换选科要求与次选科目。
         </Paragraph>

@@ -46,6 +46,7 @@ import {
   type PlanScoreCompareRow,
 } from '../../modules/planCompare'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
+import { confirmToolReset } from '../../utils/toolReset'
 
 const { Dragger } = Upload
 const { Paragraph, Text } = Typography
@@ -249,6 +250,22 @@ export default function PlanCompareTool() {
     }
   }
 
+  const handleResetPage = () => {
+    confirmToolReset({
+      title: '确认重置招生计划数据比对？',
+      onReset: () => {
+        setPlanWorkbook(null)
+        setScoreWorkbook(null)
+        setCollegeWorkbook(null)
+        setProcessing(false)
+        setResult(null)
+        setProvinceFilter('全部')
+        setScoreFilter('all')
+        setCollegeFilter('all')
+      },
+    })
+  }
+
   const planScoreColumns = [
     { title: '学校', dataIndex: 'school', key: 'school', width: 180 },
     { title: '省份', dataIndex: 'province', key: 'province', width: 100 },
@@ -299,7 +316,7 @@ export default function PlanCompareTool() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontSize: 15 }}>
-      <Card title={<span style={cardTitleStyle}>招生计划数据比对与转换</span>} style={{ borderRadius: 12 }}>
+      <Card title={<span style={cardTitleStyle}>招生计划数据比对与转换</span>} extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
         <Paragraph style={paragraphStyle}>
           已按规则文档更新：支持招生计划 vs 专业分、招生计划 vs 院校分两组比对；按文档指定组合键检查是否存在，并将招生计划中未匹配的数据导出为对应模板。专业组选科要求和新高考选科要求会先合并，`^` 符号会先去掉再参与匹配与导出。
         </Paragraph>

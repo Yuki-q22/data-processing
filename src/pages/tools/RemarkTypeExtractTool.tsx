@@ -28,6 +28,7 @@ import {
   type RemarkTypeExtractResult,
 } from '../../modules/remarkTypeExtract'
 import { downloadBlob } from '../../modules/xueyeqiao'
+import { confirmToolReset } from '../../utils/toolReset'
 
 const { Dragger } = Upload
 const { Paragraph } = Typography
@@ -149,9 +150,22 @@ export default function RemarkTypeExtractTool() {
     downloadBlob(blob, loaded.fileName.replace(/\.xlsx$/i, '_备注提取结果.xlsx'))
   }
 
+  const handleResetPage = () => {
+    confirmToolReset({
+      title: '确认重置备注招生类型提取？',
+      onReset: () => {
+        setLoaded(null)
+        setSheetName(undefined)
+        setRemarkColumn(undefined)
+        setProcessing(false)
+        setResult(null)
+      },
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="备注招生类型提取" style={{ borderRadius: 12 }}>
+      <Card title="备注招生类型提取" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
         <Paragraph>
           这个工具按规则中心里的“备注招生类型规则”和“需要核查关键词”处理备注列。原工具也是按关键词命中与优先级提取招生类型，并对包含“除了、不含、除外、没有、除”的记录标记需要核查。
         </Paragraph>
