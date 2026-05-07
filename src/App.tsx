@@ -1,5 +1,6 @@
 import { Button, Layout, Menu, Modal, Typography } from 'antd'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import {
   FileTextOutlined,
   FileSearchOutlined,
@@ -38,8 +39,25 @@ type MenuKey =
   | 'plan-compare'
   | 'remark-type-extract'
 
+const README_NAV_ITEMS = [
+  { id: 'rule-center', label: '1. 规则中心', keyword: '1. 规则中心' },
+  { id: 'professional-score-platform', label: '2. 专业分模板智能填充', keyword: '2. 专业分模板智能填充' },
+  { id: 'college-score-normal', label: '3. 院校分提取（普通类）', keyword: '3. 院校分提取（普通类）' },
+  { id: 'college-score-art', label: '4. 院校分提取（艺体类）', keyword: '4. 院校分提取（艺体类）' },
+  { id: 'xueyeqiao', label: '5. 学业桥专业分处理', keyword: '5. 学业桥专业分处理' },
+  { id: 'segmentation-check', label: '6. 一分一段校验', keyword: '6. 一分一段校验' },
+  { id: 'group-code-match', label: '7. 专业组代码匹配', keyword: '7. 专业组代码匹配' },
+  { id: 'plan-compare', label: '8. 招生计划数据比对', keyword: '8. 招生计划数据比对' },
+  { id: 'employment-report-image', label: '9. 就业质量报告图片提取', keyword: '9. 就业质量报告图片提取' },
+  { id: 'remark-type-extract', label: '10. 备注招生类型提取', keyword: '10. 备注招生类型提取' },
+  { id: 'local-dev', label: '本地运行', keyword: '本地运行' },
+  { id: 'deploy', label: '部署说明', keyword: '部署说明' },
+  { id: 'notice', label: '数据处理注意事项', keyword: '数据处理注意事项' },
+]
+
 export default function App() {
   const [activeKey, setActiveKey] = useState<MenuKey>('rule-center')
+  const readmeContentRef = useRef<HTMLDivElement | null>(null)
 
   const content = useMemo(() => {
     switch (activeKey) {
@@ -69,24 +87,92 @@ export default function App() {
   }, [activeKey])
 
   const showReadme = () => {
-    Modal.info({
-      title: '使用规则 / README',
-      width: 900,
-      content: (
+  const scrollToReadmeSection = (keyword: string) => {
+    const container = readmeContentRef.current
+    if (!container) return
+
+    const headings = Array.from(
+      container.querySelectorAll('h1, h2, h3, h4, h5, h6')
+    )
+
+    const target = headings.find((heading) =>
+      String(heading.textContent || '').includes(keyword)
+    )
+
+    if (target) {
+      target.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }
+  }
+
+  Modal.info({
+    title: '使用规则 / README',
+    width: 1100,
+    icon: null,
+    content: (
+      <div
+        style={{
+          display: 'flex',
+          gap: 16,
+          height: '72vh',
+        }}
+      >
         <div
           style={{
-            maxHeight: '70vh',
+            width: 230,
+            borderRight: '1px solid #f0f0f0',
+            paddingRight: 12,
             overflowY: 'auto',
-            whiteSpace: 'pre-wrap',
-            lineHeight: 1.7,
+          }}
+        >
+          <div
+            style={{
+              fontWeight: 600,
+              marginBottom: 10,
+            }}
+          >
+            目录
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {README_NAV_ITEMS.map((item) => (
+              <Button
+                key={item.id}
+                type="link"
+                size="small"
+                style={{
+                  justifyContent: 'flex-start',
+                  padding: 0,
+                  height: 'auto',
+                  whiteSpace: 'normal',
+                  textAlign: 'left',
+                }}
+                onClick={() => scrollToReadmeSection(item.keyword)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div
+          ref={readmeContentRef}
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            paddingRight: 12,
+            lineHeight: 1.75,
             fontSize: 13,
           }}
         >
-          {readmeText}
+          <ReactMarkdown>{readmeText}</ReactMarkdown>
         </div>
-      ),
-    })
-  }
+      </div>
+    ),
+  })
+}
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
