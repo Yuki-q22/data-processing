@@ -17,7 +17,7 @@ import { usePreviewStore } from '../stores/previewStore'
 import { useRuleStore } from '../stores/ruleStore'
 import { buildProcessedRecords } from '../modules/match'
 import { attachValidationIssues } from '../modules/validate'
-import { useRuleCenterStore } from '../stores/ruleCenterStore'
+import { getBestRemarkMatchedCandidate } from '../modules/manualMatchHint'
 import {
   getIssueCodeLabel,
   getIssueLevelLabel,
@@ -43,7 +43,6 @@ export default function ExceptionStep() {
   } = usePreviewStore()
 
   const { provinceCurrentBatchDictByYear } = useRuleStore()
-  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
 
   const [keyword, setKeyword] = useState('')
   const [matchStatusFilter, setMatchStatusFilter] = useState<string | undefined>()
@@ -57,15 +56,18 @@ export default function ExceptionStep() {
     return processedRecords.filter((item) => {
       const hasIssues = item.matchStatus === 'unmatched' || item.issues.length > 0
       const hasManualSelection = !!manualMatchSelections[item.rowId]
+
       return hasIssues || hasManualSelection
     })
   }, [processedRecords, manualMatchSelections])
 
   const issueCodeOptions = useMemo(() => {
     const codes = new Set<string>()
+
     exceptionRecords.forEach((item) => {
       item.issues.forEach((issue) => codes.add(issue.code))
     })
+
     return Array.from(codes).map((code) => ({
       label: getIssueCodeLabel(code),
       value: code,
@@ -84,7 +86,9 @@ export default function ExceptionStep() {
       const rawSubjectCategory = item.source.rawSubjectCategory || ''
       const matchedSubjectCategory = item.result.subjectCategory || ''
       const issueMessages = item.issues.map((issue) => issue.message).join(' ')
-      const issueCodes = item.issues.map((issue) => getIssueCodeLabel(issue.code)).join(' ')
+      const issueCodes = item.issues
+        .map((issue) => getIssueCodeLabel(issue.code))
+        .join(' ')
 
       const keywordOk =
         !kw ||
@@ -98,18 +102,28 @@ export default function ExceptionStep() {
         issueMessages.toLowerCase().includes(kw) ||
         issueCodes.toLowerCase().includes(kw)
 
-      const matchStatusOk = !matchStatusFilter || item.matchStatus === matchStatusFilter
+      const matchStatusOk =
+        !matchStatusFilter || item.matchStatus === matchStatusFilter
       const issueCodeOk =
-        !issueCodeFilter || item.issues.some((issue) => issue.code === issueCodeFilter)
+        !issueCodeFilter ||
+        item.issues.some((issue) => issue.code === issueCodeFilter)
       const issueLevelOk =
-        !issueLevelFilter || item.issues.some((issue) => issue.level === issueLevelFilter)
+        !issueLevelFilter ||
+        item.issues.some((issue) => issue.level === issueLevelFilter)
 
       return keywordOk && matchStatusOk && issueCodeOk && issueLevelOk
     })
-  }, [exceptionRecords, keyword, matchStatusFilter, issueCodeFilter, issueLevelFilter])
+  }, [
+    exceptionRecords,
+    keyword,
+    matchStatusFilter,
+    issueCodeFilter,
+    issueLevelFilter,
+  ])
 
   const activeRecord = useMemo(() => {
     if (!activeRowId) return null
+
     return (
       filteredRecords.find((item) => item.rowId === activeRowId) ||
       exceptionRecords.find((item) => item.rowId === activeRowId) ||
@@ -117,38 +131,81 @@ export default function ExceptionStep() {
     )
   }, [activeRowId, filteredRecords, exceptionRecords])
 
-  const nextActionableRecord = useMemo(() => {
-  if (!activeRowId) return null
-
-  const records = filteredRecords.length ? filteredRecords : exceptionRecords
-
-  const currentIndex = records.findIndex((item) => item.rowId === activeRowId)
-
-  const hasCandidates = (record: any) => !!record.matchCandidates?.length
-
-  if (currentIndex >= 0) {
-    for (let i = currentIndex + 1; i < records.length; i += 1) {
-      if (hasCandidates(records[i])) {
-        return records[i]
-      }
+  const remarkBestMatch = useMemo(() => {
+  if (!activeRecord?.matchCandidates?.length) {
+    return {
+      bestKey: '',
+      bestScore: 0,
     }
   }
 
-  const currentRowNumber = Number(activeRowId)
+  const result = activeRecord.result as any
+  const source = activeRecord.source as any
 
-  if (!Number.isNaN(currentRowNumber)) {
-    const nextByRowId = records
-      .filter((item) => {
-        const rowNumber = Number(item.rowId)
-        return !Number.isNaN(rowNumber) && rowNumber > currentRowNumber && hasCandidates(item)
-      })
-      .sort((a, b) => Number(a.rowId) - Number(b.rowId))[0]
+  return getBestRemarkMatchedCandidate(
+    {
+      rowId: activeRecord.rowId,
+      majorRemark: result.majorRemark ?? source.majorRemark ?? '',
+      remark: result.majorRemark ?? source.majorRemark ?? source.remark ?? '',
+      direction: result.direction ?? source.direction ?? '',
+      enrollmentType:
+        result.enrollmentType ??
+        source.enrollmentType ??
+        source.recruitType ??
+        '',
+      majorName: result.majorName ?? source.majorName ?? '',
+    },
+    activeRecord.matchCandidates.map((candidate: any) => ({
+      rowId: candidate.rowId,
+      id: candidate.rowId,
+      majorRemark: candidate.majorRemark ?? candidate.remark ?? '',
+      remark: candidate.majorRemark ?? candidate.remark ?? '',
+      direction: candidate.direction ?? '',
+      enrollmentType: candidate.enrollmentType ?? candidate.recruitType ?? '',
+      majorName: candidate.majorName ?? '',
+    }))
+  )
+}, [activeRecord])
 
-    if (nextByRowId) return nextByRowId
-  }
+  const nextActionableRecord = useMemo(() => {
+    if (!activeRowId) return null
 
-  return records.find((item) => item.rowId !== activeRowId && hasCandidates(item)) || null
-}, [activeRowId, filteredRecords, exceptionRecords])
+    const records = filteredRecords.length ? filteredRecords : exceptionRecords
+    const currentIndex = records.findIndex((item) => item.rowId === activeRowId)
+
+    const hasCandidates = (record: any) => !!record.matchCandidates?.length
+
+    if (currentIndex >= 0) {
+      for (let i = currentIndex + 1; i < records.length; i += 1) {
+        if (hasCandidates(records[i])) {
+          return records[i]
+        }
+      }
+    }
+
+    const currentRowNumber = Number(activeRowId)
+
+    if (!Number.isNaN(currentRowNumber)) {
+      const nextByRowId = records
+        .filter((item) => {
+          const rowNumber = Number(item.rowId)
+
+          return (
+            !Number.isNaN(rowNumber) &&
+            rowNumber > currentRowNumber &&
+            hasCandidates(item)
+          )
+        })
+        .sort((a, b) => Number(a.rowId) - Number(b.rowId))[0]
+
+      if (nextByRowId) return nextByRowId
+    }
+
+    return (
+      records.find((item) => item.rowId !== activeRowId && hasCandidates(item)) ||
+      null
+    )
+  }, [activeRowId, filteredRecords, exceptionRecords])
 
   const rebuildWithManualSelections = (
     nextManualSelections: Record<string, string>
@@ -159,10 +216,12 @@ export default function ExceptionStep() {
       provinceCurrentBatchDictByYear,
       nextManualSelections
     )
-    const validated = attachValidationIssues(processed, provinceCurrentBatchDictByYear, {
-      validSchoolNames,
-      validMajorCombos,
-    })
+
+    const validated = attachValidationIssues(
+      processed,
+      provinceCurrentBatchDictByYear
+    )
+
     setProcessedRecords(validated)
   }
 
@@ -171,13 +230,16 @@ export default function ExceptionStep() {
       ...manualMatchSelections,
       [sourceRowId]: planRowId,
     }
+
     setManualMatchSelection(sourceRowId, planRowId)
     rebuildWithManualSelections(nextSelections)
   }
 
   const handleClearManual = (sourceRowId: string) => {
     const nextSelections = { ...manualMatchSelections }
+
     delete nextSelections[sourceRowId]
+
     clearManualMatchSelection(sourceRowId)
     rebuildWithManualSelections(nextSelections)
   }
@@ -193,10 +255,10 @@ export default function ExceptionStep() {
   }
 
   const goNextRecord = () => {
-  if (!nextActionableRecord) return
+    if (!nextActionableRecord) return
 
-  setActiveRowId(nextActionableRecord.rowId)
-}
+    setActiveRowId(nextActionableRecord.rowId)
+  }
 
   const columns = [
     {
@@ -212,7 +274,9 @@ export default function ExceptionStep() {
       key: 'year',
       width: 90,
       fixed: 'left' as const,
-      render: (value: string) => <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>,
+      render: (value: string) => (
+        <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>
+      ),
     },
     {
       title: '学校',
@@ -220,7 +284,9 @@ export default function ExceptionStep() {
       key: 'schoolName',
       width: 180,
       fixed: 'left' as const,
-      render: (value: string) => <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>,
+      render: (value: string) => (
+        <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>
+      ),
     },
     {
       title: '省份',
@@ -228,7 +294,9 @@ export default function ExceptionStep() {
       key: 'province',
       width: 100,
       fixed: 'left' as const,
-      render: (value: string) => <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>,
+      render: (value: string) => (
+        <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>
+      ),
     },
     {
       title: '原始科类',
@@ -237,9 +305,15 @@ export default function ExceptionStep() {
       width: 140,
       render: (value: string, record: any) => {
         const needsReview = record?.source?.subjectCategoryNeedsReview
-        if (!value) return <span style={{ fontSize: UI_FONT_SIZE }}>-</span>
+
+        if (!value) {
+          return <span style={{ fontSize: UI_FONT_SIZE }}>-</span>
+        }
+
         return needsReview ? (
-          <Tag color="orange" style={{ fontSize: UI_TAG_FONT_SIZE }}>{value}</Tag>
+          <Tag color="orange" style={{ fontSize: UI_TAG_FONT_SIZE }}>
+            {value}
+          </Tag>
         ) : (
           <span style={{ fontSize: UI_FONT_SIZE }}>{value}</span>
         )
@@ -250,21 +324,27 @@ export default function ExceptionStep() {
       dataIndex: ['result', 'subjectCategory'],
       key: 'subjectCategory',
       width: 140,
-      render: (value: string) => <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>,
+      render: (value: string) => (
+        <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>
+      ),
     },
     {
       title: '专业',
       dataIndex: ['result', 'majorName'],
       key: 'majorName',
       width: 180,
-      render: (value: string) => <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>,
+      render: (value: string) => (
+        <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>
+      ),
     },
     {
       title: '专业备注',
       dataIndex: ['result', 'majorRemark'],
       key: 'majorRemark',
       width: 150,
-      render: (value: string) => <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>,
+      render: (value: string) => (
+        <span style={{ fontSize: UI_FONT_SIZE }}>{value || '-'}</span>
+      ),
     },
     {
       title: '问题说明',
@@ -273,10 +353,21 @@ export default function ExceptionStep() {
       width: 340,
       render: (issues: { message: string; level: string }[]) => {
         if (!issues.length) {
-          return <div style={{ fontSize: UI_FONT_SIZE, lineHeight: 1.8 }}>当前无问题，保留用于人工回看</div>
+          return (
+            <div style={{ fontSize: UI_FONT_SIZE, lineHeight: 1.8 }}>
+              当前无问题，保留用于人工回看
+            </div>
+          )
         }
+
         return (
-          <div style={{ whiteSpace: 'pre-line', lineHeight: 1.8, fontSize: UI_FONT_SIZE }}>
+          <div
+            style={{
+              whiteSpace: 'pre-line',
+              lineHeight: 1.8,
+              fontSize: UI_FONT_SIZE,
+            }}
+          >
             {issues
               .map((issue) => `【${getIssueLevelLabel(issue.level)}】${issue.message}`)
               .join('\n')}
@@ -291,12 +382,19 @@ export default function ExceptionStep() {
       width: 120,
       render: (issues: { level: string }[]) => {
         const levels = Array.from(new Set(issues.map((issue) => issue.level)))
-        if (!levels.length) return <span style={{ fontSize: UI_FONT_SIZE }}>-</span>
+
+        if (!levels.length) {
+          return <span style={{ fontSize: UI_FONT_SIZE }}>-</span>
+        }
 
         return (
           <Space wrap>
             {levels.map((level) => (
-              <Tag key={level} color={ISSUE_LEVEL_COLOR_MAP[level] || 'default'} style={{ fontSize: UI_TAG_FONT_SIZE }}>
+              <Tag
+                key={level}
+                color={ISSUE_LEVEL_COLOR_MAP[level] || 'default'}
+                style={{ fontSize: UI_TAG_FONT_SIZE }}
+              >
                 {getIssueLevelLabel(level)}
               </Tag>
             ))}
@@ -310,7 +408,10 @@ export default function ExceptionStep() {
       key: 'issueCodes',
       width: 180,
       render: (issues: { code: string }[]) => {
-        if (!issues.length) return <span style={{ fontSize: UI_FONT_SIZE }}>-</span>
+        if (!issues.length) {
+          return <span style={{ fontSize: UI_FONT_SIZE }}>-</span>
+        }
+
         return (
           <Space wrap>
             {issues.map((issue) => (
@@ -328,7 +429,10 @@ export default function ExceptionStep() {
       key: 'matchStatus',
       width: 140,
       render: (status: string) => (
-        <Tag color={MATCH_STATUS_COLOR_MAP[status] || 'default'} style={{ fontSize: UI_TAG_FONT_SIZE }}>
+        <Tag
+          color={MATCH_STATUS_COLOR_MAP[status] || 'default'}
+          style={{ fontSize: UI_TAG_FONT_SIZE }}
+        >
           {getMatchStatusLabel(status)}
         </Tag>
       ),
@@ -339,8 +443,11 @@ export default function ExceptionStep() {
       width: 140,
       render: (_: any, record: any) => {
         const selected = manualMatchSelections[record.rowId]
+
         return selected ? (
-          <Tag color="blue" style={{ fontSize: UI_TAG_FONT_SIZE }}>已人工指定</Tag>
+          <Tag color="blue" style={{ fontSize: UI_TAG_FONT_SIZE }}>
+            已人工指定
+          </Tag>
         ) : (
           <Tag style={{ fontSize: UI_TAG_FONT_SIZE }}>未指定</Tag>
         )
@@ -356,7 +463,11 @@ export default function ExceptionStep() {
         const hasManual = !!manualMatchSelections[record.rowId]
 
         if (!hasCandidates && !hasManual) {
-          return <Text type="secondary" style={{ fontSize: UI_FONT_SIZE }}>无候选</Text>
+          return (
+            <Text type="secondary" style={{ fontSize: UI_FONT_SIZE }}>
+              无候选
+            </Text>
+          )
         }
 
         return (
@@ -457,11 +568,22 @@ export default function ExceptionStep() {
         ) : (
           <Space direction="vertical" style={{ width: '100%' }} size={16}>
             <Card size="small" title="当前异常记录">
-              <Descriptions column={2} size="small" bordered style={{ fontSize: UI_FONT_SIZE }}>
+              <Descriptions
+                column={2}
+                size="small"
+                bordered
+                style={{ fontSize: UI_FONT_SIZE }}
+              >
                 <Descriptions.Item label="行号">{activeRecord.rowId}</Descriptions.Item>
-                <Descriptions.Item label="年份">{activeRecord.result.year || '-'}</Descriptions.Item>
-                <Descriptions.Item label="学校">{activeRecord.result.schoolName || '-'}</Descriptions.Item>
-                <Descriptions.Item label="省份">{activeRecord.result.province || '-'}</Descriptions.Item>
+                <Descriptions.Item label="年份">
+                  {activeRecord.result.year || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="学校">
+                  {activeRecord.result.schoolName || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="省份">
+                  {activeRecord.result.province || '-'}
+                </Descriptions.Item>
                 <Descriptions.Item label="原始科类">
                   {activeRecord.source.rawSubjectCategory || '-'}
                 </Descriptions.Item>
@@ -483,7 +605,10 @@ export default function ExceptionStep() {
                 <Descriptions.Item label="问题说明" span={2}>
                   {activeRecord.issues.length
                     ? activeRecord.issues
-                        .map((issue: any) => `【${getIssueLevelLabel(issue.level)}】${issue.message}`)
+                        .map(
+                          (issue: any) =>
+                            `【${getIssueLevelLabel(issue.level)}】${issue.message}`
+                        )
                         .join('；')
                     : '当前无问题，保留用于人工回看'}
                 </Descriptions.Item>
@@ -495,20 +620,29 @@ export default function ExceptionStep() {
               title={`候选招生计划（${activeRecord.matchCandidates?.length || 0} 条）`}
               extra={
                 <Space>
+                  {remarkBestMatch.bestScore > 0 ? (
+                    <Tag color="gold">
+                      已按备注高亮最相近候选
+                    </Tag>
+                  ) : null}
+
                   {activeSelectedId ? (
-                    <Button size="small" onClick={() => handleClearManual(activeRecord.rowId)}>
+                    <Button
+                      size="small"
+                      onClick={() => handleClearManual(activeRecord.rowId)}
+                    >
                       清除人工指定
                     </Button>
                   ) : null}
 
                   <Button
-  size="small"
-  type="primary"
-  onClick={goNextRecord}
-  disabled={!nextActionableRecord}
->
-  下一个
-</Button>
+                    size="small"
+                    type="primary"
+                    onClick={goNextRecord}
+                    disabled={!nextActionableRecord}
+                  >
+                    下一个
+                  </Button>
                 </Space>
               }
             >
@@ -518,44 +652,83 @@ export default function ExceptionStep() {
                 <Radio.Group
                   style={{ width: '100%', fontSize: UI_FONT_SIZE }}
                   value={activeSelectedId}
-                  onChange={(e) => handleApplyManual(activeRecord.rowId, e.target.value)}
+                  onChange={(e) =>
+                    handleApplyManual(activeRecord.rowId, e.target.value)
+                  }
                 >
                   <Space direction="vertical" style={{ width: '100%' }} size={12}>
                     {activeRecord.matchCandidates.map((candidate: any) => {
-  const selected = activeSelectedId === candidate.rowId
+                      const selected = activeSelectedId === candidate.rowId
+                      const isBestRemarkMatch =
+                        remarkBestMatch.bestScore > 0 &&
+                        remarkBestMatch.bestKey === String(candidate.rowId)
 
-  return (
-    <Card
-      key={candidate.rowId}
-      size="small"
-      hoverable
-      onClick={() => handleApplyManual(activeRecord.rowId, candidate.rowId)}
-      style={{
-        cursor: 'pointer',
-        border: selected ? '1px solid #1677ff' : undefined,
-      }}
-    >
-      <Radio
-        value={candidate.rowId}
-        style={{ fontSize: UI_FONT_SIZE }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <span style={{ fontWeight: 500, fontSize: UI_TITLE_FONT_SIZE }}>
-          {candidate.schoolName || '-'} / {candidate.majorName || '-'}
-        </span>
-      </Radio>
+                      return (
+                        <Card
+                          key={candidate.rowId}
+                          size="small"
+                          hoverable
+                          onClick={() =>
+                            handleApplyManual(activeRecord.rowId, candidate.rowId)
+                          }
+                          style={{
+                            cursor: 'pointer',
+                            border: selected
+                              ? '1px solid #1677ff'
+                              : isBestRemarkMatch
+                                ? '1px solid #faad14'
+                                : undefined,
+                            background: isBestRemarkMatch ? '#fffbe6' : undefined,
+                          }}
+                        >
+                          <Radio
+                            value={candidate.rowId}
+                            style={{ fontSize: UI_FONT_SIZE }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Space wrap>
+                              <span
+                                style={{
+                                  fontWeight: 500,
+                                  fontSize: UI_TITLE_FONT_SIZE,
+                                }}
+                              >
+                                {candidate.schoolName || '-'} /{' '}
+                                {candidate.majorName || '-'}
+                              </span>
 
-                        <div style={{ marginTop: 8, marginLeft: 24, lineHeight: 1.9, fontSize: UI_FONT_SIZE }}>
-                          <div>省份：{candidate.province || '-'}</div>
-                          <div>科类：{candidate.subjectCategory || '-'}</div>
-                          <div>备注：{candidate.majorRemark || '-'}</div>
-                          <div>批次：{candidate.batch || '-'}</div>
-                          <div>层次：{candidate.level1 || '-'}</div>
-                          <div>类型：{candidate.enrollmentType || '-'}</div>
-                        </div>
-                          </Card>
-  )
-})}
+                              {isBestRemarkMatch ? (
+                                <Tag color="gold">
+                                  备注最相近
+                                </Tag>
+                              ) : null}
+
+                              {selected ? (
+                                <Tag color="blue">
+                                  当前已选
+                                </Tag>
+                              ) : null}
+                            </Space>
+                          </Radio>
+
+                          <div
+                            style={{
+                              marginTop: 8,
+                              marginLeft: 24,
+                              lineHeight: 1.9,
+                              fontSize: UI_FONT_SIZE,
+                            }}
+                          >
+                            <div>省份：{candidate.province || '-'}</div>
+                            <div>科类：{candidate.subjectCategory || '-'}</div>
+                            <div>备注：{candidate.majorRemark || '-'}</div>
+                            <div>批次：{candidate.batch || '-'}</div>
+                            <div>层次：{candidate.level1 || '-'}</div>
+                            <div>类型：{candidate.enrollmentType || '-'}</div>
+                          </div>
+                        </Card>
+                      )
+                    })}
                   </Space>
                 </Radio.Group>
               )}

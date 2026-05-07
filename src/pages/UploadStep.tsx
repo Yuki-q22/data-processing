@@ -1,10 +1,24 @@
 import { useMemo } from 'react'
-import { Alert, Button, Card, Col, Input, Row, Select, Space, Switch, Typography, message } from 'antd'
+import {
+  Alert,
+  AutoComplete,
+  Button,
+  Card,
+  Col,
+  Input,
+  Row,
+  Select,
+  Space,
+  Switch,
+  Typography,
+  message,
+} from 'antd'
 import * as XLSX from 'xlsx'
 import FileUploadCard from '../components/FileUploadCard'
 import { validateUploadedHeaders } from '../modules/uploadValidation'
 import { useTaskStore } from '../stores/taskStore'
 import { usePreviewStore } from '../stores/previewStore'
+import { useRuleCenterStore } from '../stores/ruleCenterStore'
 import { confirmToolReset } from '../utils/toolReset'
 import type { UploadedWorkbook } from '../types/workbook'
 
@@ -45,6 +59,10 @@ function normalizeHeader(value: unknown) {
   return String(value ?? '').trim()
 }
 
+function normalizeSchoolSearchText(value: unknown) {
+  return String(value ?? '').replace(/\s+/g, '').trim()
+}
+
 async function parseUploadedWorkbook(file: File): Promise<UploadedWorkbook> {
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array' })
@@ -82,9 +100,14 @@ async function parseUploadedWorkbook(file: File): Promise<UploadedWorkbook> {
   }
 }
 
-function getSheetHeaders(workbook?: UploadedWorkbook, selectedSheet?: string): string[] {
+function getSheetHeaders(
+  workbook?: UploadedWorkbook,
+  selectedSheet?: string
+): string[] {
   if (!workbook || !selectedSheet) return []
+
   const sheet = workbook.workbook.Sheets[selectedSheet]
+
   if (!sheet) return []
 
   const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
@@ -114,6 +137,23 @@ export default function UploadStep() {
   } = useTaskStore()
 
   const { resetPreview } = usePreviewStore()
+  const { validSchoolNames } = useRuleCenterStore()
+
+  const schoolNameOptions = useMemo(() => {
+    const keyword = normalizeSchoolSearchText(manualSchoolName)
+
+    return validSchoolNames
+      .filter((name) => {
+        const cleanName = normalizeSchoolSearchText(name)
+
+        return !keyword || cleanName.includes(keyword)
+      })
+      .slice(0, 30)
+      .map((name) => ({
+        value: name,
+        label: name,
+      }))
+  }, [manualSchoolName, validSchoolNames])
 
   const scoreHeaders = useMemo(
     () => getSheetHeaders(scoreWorkbook, scoreSheetName),
@@ -127,17 +167,22 @@ export default function UploadStep() {
 
   const planValidation = useMemo(() => {
     if (!planHeaders.length) return undefined
+
     return validateUploadedHeaders(planHeaders, REQUIRED_PLAN_FIELDS)
   }, [planHeaders])
 
   const handleScoreUpload = async (file: File) => {
     const uploaded = await parseUploadedWorkbook(file)
+
     setWorkbook('score', uploaded)
 
     const firstSheetName = uploaded.sheets?.[0]?.name
+
     if (firstSheetName) {
       setSheetName('score', firstSheetName)
-      message.success(`原始专业分文件已上传：${file.name}。该文件不强制校验固定字段，请在第二步完成字段映射。`)
+      message.success(
+        `原始专业分文件已上传：${file.name}。该文件不强制校验固定字段，请在第二步完成字段映射。`
+      )
     } else {
       message.warning(`原始专业分文件已上传，但未识别到 Sheet：${file.name}`)
     }
@@ -145,11 +190,14 @@ export default function UploadStep() {
 
   const handlePlanUpload = async (file: File) => {
     const uploaded = await parseUploadedWorkbook(file)
+
     setWorkbook('plan', uploaded)
 
     const firstSheetName = uploaded.sheets?.[0]?.name
+
     if (firstSheetName) {
       setSheetName('plan', firstSheetName)
+
       const headers = getSheetHeaders(uploaded, firstSheetName)
       const validation = validateUploadedHeaders(headers, REQUIRED_PLAN_FIELDS)
 
@@ -216,28 +264,32 @@ export default function UploadStep() {
           </Col>
 
           <Col span={6}>
-  <Space direction="vertical" style={{ width: '100%' }} size={6}>
-    <Text>默认数据来源</Text>
-    <Select
-      value={defaultDataSource}
-      onChange={(value) => setTaskMeta({ defaultDataSource: value })}
-      style={{ width: '100%' }}
-      popupMatchSelectWidth={false}
-      options={DATA_SOURCE_OPTIONS.map((item) => ({
-        label: item,
-        value: item,
-      }))}
-    />
-  </Space>
-</Col>
+            <Space direction="vertical" style={{ width: '100%' }} size={6}>
+              <Text>默认数据来源</Text>
+              <Select
+                value={defaultDataSource}
+                onChange={(value) => setTaskMeta({ defaultDataSource: value })}
+                style={{ width: '100%' }}
+                popupMatchSelectWidth={false}
+                options={DATA_SOURCE_OPTIONS.map((item) => ({
+                  label: item,
+                  value: item,
+                }))}
+              />
+            </Space>
+          </Col>
 
           <Col span={5}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>学校名称（选填）</Text>
-              <Input
+              <AutoComplete
                 value={manualSchoolName}
-                onChange={(e) => setTaskMeta({ manualSchoolName: e.target.value })}
-                placeholder="原始文件无学校名时可手填"
+                options={schoolNameOptions}
+                onChange={(value) => setTaskMeta({ manualSchoolName: value })}
+                onSelect={(value) => setTaskMeta({ manualSchoolName: value })}
+                filterOption={false}
+                placeholder="输入学校关键词"
+                style={{ width: '100%' }}
               />
             </Space>
           </Col>
