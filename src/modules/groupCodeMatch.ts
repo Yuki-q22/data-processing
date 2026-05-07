@@ -19,7 +19,7 @@
  */
 
 import ExcelJS from 'exceljs'
-import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
+import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
 
 export type GroupCodeCandidate = {
   candidateId: string
@@ -68,6 +68,8 @@ export type GroupCodeMatchRow = {
   status: 'existing' | 'auto' | 'manual_required' | 'manual_done' | 'no_candidate'
   reason: string
   ruleCenterIssues: string[]
+  schoolValidationResult: string
+  majorValidationResult: string
 
   candidates: GroupCodeCandidate[]
   sourceRow: Record<string, unknown>
@@ -111,6 +113,8 @@ const IMPORT_HEADERS = [
   '最低分数区间位次低',
   '最低分数区间位次高',
   '录取人数（选填）',
+  '学校名称校验结果',
+  '专业名称校验结果',
 ] as const
 
 const TEMPLATE_NOTE = `备注：请删除示例后再填写；
@@ -544,13 +548,14 @@ if (originalGroupCode) {
       resolvedSecondSubject = candidates[0].convertedSecondSubject
     }
 
-    const ruleCenterIssues = validateSchoolAndMajorCombo({
+    const ruleCenterValidation = validateSchoolAndMajorComboDetailed({
       validSchoolNames,
       validMajorCombos,
       schoolName,
       majorName,
       level: level1,
     })
+    const ruleCenterIssues = ruleCenterValidation.issues
 
     if (ruleCenterIssues.length) {
       reason = [reason, ...ruleCenterIssues].filter(Boolean).join('；')
@@ -585,6 +590,8 @@ if (originalGroupCode) {
       status,
       reason,
       ruleCenterIssues,
+      schoolValidationResult: ruleCenterValidation.schoolResult,
+      majorValidationResult: ruleCenterValidation.majorResult,
       candidates,
       sourceRow: row,
     }
@@ -682,6 +689,8 @@ ws.getCell('D2').value = null
   专业组代码: row.resolvedGroupCode,
   选科要求: row.resolvedRequirementMode,
   次选科目: row.resolvedSecondSubject,
+  学校名称校验结果: row.schoolValidationResult,
+  专业名称校验结果: row.majorValidationResult,
 }
 
     IMPORT_HEADERS.forEach((header, colNo) => {
@@ -729,6 +738,8 @@ ws.getCell('D2').value = null
     X: 18,
     Y: 18,
     Z: 14,
+    AA: 18,
+    AB: 18,
   }
 
   Object.entries(widths).forEach(([col, width]) => {

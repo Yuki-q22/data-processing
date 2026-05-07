@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
+import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
 
 export type ArtCollegeScoreOutputRow = {
   学校名称: string
@@ -13,6 +14,8 @@ export type ArtCollegeScoreOutputRow = {
   专业组: string
   备注: string
   是否校考: string
+  学校名称校验结果: string
+  专业名称校验结果: string
 }
 
 export type ArtCollegeScoreProcessResult = {
@@ -60,6 +63,8 @@ const OUTPUT_HEADERS = [
   '专业组',
   '备注',
   '是否校考',
+  '学校名称校验结果',
+  '专业名称校验结果',
 ] as const
 
 const TEMPLATE_NOTE = `备注：请删除示例后再填写；
@@ -165,7 +170,10 @@ function buildGroupKey(row: InputRow): string {
   return base.join('||')
 }
 
-function processRows(rows: Record<string, unknown>[]): ArtCollegeScoreOutputRow[] {
+function processRows(
+  rows: Record<string, unknown>[],
+  ruleCenterOptions: { validSchoolNames?: string[]; validMajorCombos?: string[] } = {},
+): ArtCollegeScoreOutputRow[] {
   const normalizedRows: InputRow[] = rows
     .map((row, rowNo) => ({
       ...row,
@@ -200,9 +208,27 @@ function processRows(rows: Record<string, unknown>[]): ArtCollegeScoreOutputRow[
     })
 
     const representative = sorted[0]
+    const schoolName = t(representative['学校名称'])
+    const schoolValidation = validateSchoolAndMajorComboDetailed({
+      validSchoolNames: ruleCenterOptions.validSchoolNames,
+      schoolName,
+    })
+    const majorValidations = groupRows.map((item) =>
+      validateSchoolAndMajorComboDetailed({
+        validMajorCombos: ruleCenterOptions.validMajorCombos,
+        majorName: item['专业'],
+        level: item['专业层次'],
+      })
+    )
+    const majorResult =
+      (ruleCenterOptions.validMajorCombos || []).length === 0
+        ? '未启用专业规则'
+        : majorValidations.some((item) => item.majorResult !== '匹配')
+          ? '未匹配'
+          : '匹配'
 
     output.push({
-      学校名称: t(representative['学校名称']),
+      学校名称: schoolName,
       省份: t(representative['省份']),
       招生类别: t(representative['招生类别']),
       招生批次: t(representative['招生批次']),
@@ -213,6 +239,8 @@ function processRows(rows: Record<string, unknown>[]): ArtCollegeScoreOutputRow[
       专业组: t(representative['专业组代码']),
       备注: buildRemark(representative),
       是否校考: representative.__normalizedExamFlag,
+      学校名称校验结果: schoolValidation.schoolResult,
+      专业名称校验结果: majorResult,
       __sortNo: representative.__rowNo,
     })
   }
@@ -224,7 +252,8 @@ function processRows(rows: Record<string, unknown>[]): ArtCollegeScoreOutputRow[
 
 export function processArtCollegeScoreWorkbook(
   workbook: XLSX.WorkBook,
-  sheetName: string
+  sheetName: string,
+  ruleCenterOptions: { validSchoolNames?: string[]; validMajorCombos?: string[] } = {},
 ): ArtCollegeScoreProcessResult {
   const sheet = workbook.Sheets[sheetName]
   if (!sheet) {
@@ -252,7 +281,7 @@ export function processArtCollegeScoreWorkbook(
     defval: '',
   })
 
-  const outputRows = processRows(rows)
+  const outputRows = processRows(rows, ruleCenterOptions)
 
   return {
     year,
@@ -325,6 +354,8 @@ export async function exportArtCollegeScoreWorkbook(
     I: 14,
     J: 24,
     K: 10,
+    L: 18,
+    M: 18,
   }
 
   Object.entries(widths).forEach(([col, width]) => {

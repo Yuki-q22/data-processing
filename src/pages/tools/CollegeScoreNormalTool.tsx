@@ -55,6 +55,8 @@ type PreviewRow = {
   院校招生代码: string
   数据是否有问题: string
   问题列表: string
+  学校名称校验结果: string
+  专业名称校验结果: string
 }
 
 const TABLE_COLUMNS = [
@@ -75,6 +77,8 @@ const TABLE_COLUMNS = [
   { title: '院校招生代码', dataIndex: '院校招生代码', key: '院校招生代码', width: 140 },
   { title: '数据是否有问题', dataIndex: '数据是否有问题', key: '数据是否有问题', width: 130 },
   { title: '问题列表', dataIndex: '问题列表', key: '问题列表', width: 260 },
+  { title: '学校名称校验结果', dataIndex: '学校名称校验结果', key: '学校名称校验结果', width: 150 },
+  { title: '专业名称校验结果', dataIndex: '专业名称校验结果', key: '专业名称校验结果', width: 150 },
 ]
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
@@ -100,7 +104,7 @@ function buildRowKey(row: PreviewRow) {
 }
 
 export default function CollegeScoreNormalTool() {
-  const { validSchoolNames } = useRuleCenterStore()
+  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
 
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
@@ -132,6 +136,7 @@ export default function CollegeScoreNormalTool() {
     try {
       const processed = processNormalCollegeScoreWorkbook(loadedWorkbook.workbook, sheetName, {
         validSchoolNames,
+        validMajorCombos,
       })
       setResult(processed)
 

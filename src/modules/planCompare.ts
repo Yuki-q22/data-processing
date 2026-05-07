@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs'
 import { resolveControlLine } from './controlLine'
-import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
+import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
 
 export type PlanScoreCompareRow = {
   rowId: string
@@ -8,6 +8,8 @@ export type PlanScoreCompareRow = {
   exists: boolean
   reason: string
   ruleCenterIssues: string[]
+  schoolValidationResult: string
+  majorValidationResult: string
   school: string
   province: string
   category: string
@@ -26,6 +28,8 @@ export type PlanCollegeCompareRow = {
   exists: boolean
   reason: string
   ruleCenterIssues: string[]
+  schoolValidationResult: string
+  majorValidationResult: string
   school: string
   province: string
   category: string
@@ -85,6 +89,8 @@ export type ProfessionalTemplateRow = {
   最低分数区间位次低: string
   最低分数区间位次高: string
   '录取人数（选填）': number | null
+  学校名称校验结果: string
+  专业名称校验结果: string
 }
 
 export type CollegeTemplateRow = {
@@ -110,6 +116,8 @@ export type CollegeTemplateRow = {
   首选科目: string
   院校招生代码: string
   层次: string
+  学校名称校验结果: string
+  专业名称校验结果: string
 }
 
 const PLAN_REQUIRED_HEADERS = [
@@ -185,6 +193,8 @@ const PROFESSIONAL_TEMPLATE_HEADERS = [
   '最低分数区间位次低',
   '最低分数区间位次高',
   '录取人数（选填）',
+  '学校名称校验结果',
+  '专业名称校验结果',
 ] as const
 
 const COLLEGE_TEMPLATE_HEADERS = [
@@ -210,6 +220,8 @@ const COLLEGE_TEMPLATE_HEADERS = [
   '首选科目',
   '院校招生代码',
   '层次',
+  '学校名称校验结果',
+  '专业名称校验结果',
 ] as const
 
 const TEMPLATE_NOTE = `备注：请删除示例后再填写；
@@ -636,13 +648,14 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
   const school = t(row['学校'])
   const major = t(row['专业'])
   const level = normalizeLevelForKey(row['层次'])
-  const ruleCenterIssues = validateSchoolAndMajorCombo({
+  const ruleCenterValidation = validateSchoolAndMajorComboDetailed({
     validSchoolNames,
     validMajorCombos,
     schoolName: school,
     majorName: major,
     level,
   })
+  const ruleCenterIssues = ruleCenterValidation.issues
 
   return {
     rowId: `ps_${rowNo + 1}`,
@@ -650,6 +663,8 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
     exists,
     reason: [exists ? '已在专业分文件中存在' : '专业分文件中不存在该组合键', ...ruleCenterIssues].filter(Boolean).join('；'),
     ruleCenterIssues,
+    schoolValidationResult: ruleCenterValidation.schoolResult,
+    majorValidationResult: ruleCenterValidation.majorResult,
     school,
     province: t(row['省份']),
     category: t(row['科类']),
@@ -669,10 +684,16 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
     const planEnrollmentCode = stripCaret(row['招生代码'])
     const missingEnrollmentCodeFlag = !planEnrollmentCode
     const school = t(row['学校'])
-    const ruleCenterIssues = validateSchoolAndMajorCombo({
+    const major = t(row['专业'])
+    const level = normalizeLevelForKey(row['层次'])
+    const ruleCenterValidation = validateSchoolAndMajorComboDetailed({
       validSchoolNames,
+      validMajorCombos,
       schoolName: school,
+      majorName: major,
+      level,
     })
+    const ruleCenterIssues = ruleCenterValidation.issues
 
     let reason = exists ? '已在院校分文件中存在' : '院校分文件中不存在该组合键'
     if (missingEnrollmentCodeFlag) {
@@ -688,11 +709,13 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
       exists,
       reason,
       ruleCenterIssues,
+      schoolValidationResult: ruleCenterValidation.schoolResult,
+      majorValidationResult: ruleCenterValidation.majorResult,
       school,
       province: t(row['省份']),
       category: t(row['科类']),
       batch: t(row['批次']),
-      level: normalizeLevelForKey(row['层次']),
+      level,
       groupCode: stripCaret(row['专业组代码']),
       enrollmentCode: planEnrollmentCode,
       missingEnrollmentCodeFlag,
@@ -755,6 +778,16 @@ function aggregateCollegeCompareRows(
         (existed.aggregatedEnrollmentCount || 0) + currentCount
       existed.hasEnrollmentCount = true
     }
+
+    existed.ruleCenterIssues = Array.from(
+      new Set([...existed.ruleCenterIssues, ...row.ruleCenterIssues])
+    )
+    if (row.schoolValidationResult === '未匹配') {
+      existed.schoolValidationResult = '未匹配'
+    }
+    if (row.majorValidationResult === '未匹配') {
+      existed.majorValidationResult = '未匹配'
+    }
   })
 
   return Array.from(map.values()).map((row) => ({
@@ -802,6 +835,8 @@ export function buildProfessionalTemplateRows(
         最低分数区间位次低: '',
         最低分数区间位次高: '',
         '录取人数（选填）': null,
+        学校名称校验结果: row.schoolValidationResult,
+        专业名称校验结果: row.majorValidationResult,
       }
     })
 }
@@ -867,6 +902,8 @@ return {
   首选科目: getCollegeFirstSubjectFromCategory(source['科类']),
   院校招生代码: stripCaret(source['招生代码']),
   层次: normalizeLevelForExport(source['层次']),
+  学校名称校验结果: row.schoolValidationResult,
+  专业名称校验结果: row.majorValidationResult,
 }
     })
 }

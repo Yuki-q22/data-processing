@@ -20,6 +20,7 @@ import {
   processArtCollegeScoreWorkbook,
   type ArtCollegeScoreProcessResult,
 } from '../../modules/collegeScoreArt'
+import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 
 const { Dragger } = Upload
 const { Paragraph } = Typography
@@ -42,6 +43,8 @@ type PreviewRow = {
   专业组: string
   备注: string
   是否校考: string
+  学校名称校验结果: string
+  专业名称校验结果: string
 }
 
 const TABLE_COLUMNS = [
@@ -56,6 +59,8 @@ const TABLE_COLUMNS = [
   { title: '专业组', dataIndex: '专业组', key: '专业组', width: 140 },
   { title: '备注', dataIndex: '备注', key: '备注', width: 220 },
   { title: '是否校考', dataIndex: '是否校考', key: '是否校考', width: 100 },
+  { title: '学校名称校验结果', dataIndex: '学校名称校验结果', key: '学校名称校验结果', width: 150 },
+  { title: '专业名称校验结果', dataIndex: '专业名称校验结果', key: '专业名称校验结果', width: 150 },
 ]
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
@@ -83,6 +88,8 @@ function buildRowKey(row: PreviewRow) {
 }
 
 export default function CollegeScoreArtTool() {
+  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
   const [processing, setProcessing] = useState(false)
@@ -111,7 +118,10 @@ export default function CollegeScoreArtTool() {
 
     setProcessing(true)
     try {
-      const processed = processArtCollegeScoreWorkbook(loadedWorkbook.workbook, sheetName)
+      const processed = processArtCollegeScoreWorkbook(loadedWorkbook.workbook, sheetName, {
+        validSchoolNames,
+        validMajorCombos,
+      })
       setResult(processed)
 
       if (processed.missingColumns.length > 0) {

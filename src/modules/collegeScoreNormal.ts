@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 import { resolveControlLine } from './controlLine'
-import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
+import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
 
 export type NormalCollegeScoreOutputRow = {
   学校名称: string
@@ -27,6 +27,8 @@ export type NormalCollegeScoreOutputRow = {
   院校招生代码: string
   数据是否有问题: string
   问题列表: string
+  学校名称校验结果: string
+  专业名称校验结果: string
 }
 
 export type NormalCollegeScoreProcessResult = {
@@ -91,6 +93,8 @@ const OUTPUT_HEADERS = [
   '院校招生代码',
   '数据是否有问题',
   '问题列表',
+  '学校名称校验结果',
+  '专业名称校验结果',
 ] as const
 
 const TEMPLATE_NOTE = `备注：请删除示例后再填写；
@@ -206,7 +210,7 @@ function sumNullable(values: Array<number | null>): number | null {
 function processRows(
   rows: Record<string, unknown>[],
   yearValue?: string | number,
-  ruleCenterOptions: { validSchoolNames?: string[] } = {},
+  ruleCenterOptions: { validSchoolNames?: string[]; validMajorCombos?: string[] } = {},
 ): NormalCollegeScoreOutputRow[] {
   const normalizedRows: InputRow[] = rows
     .map((row, rowNo) => ({
@@ -273,10 +277,29 @@ function processRows(
 
 const isTibet = isTibetProvince(province)
 const schoolName = t(representative['学校名称'])
-const ruleCenterIssues = validateSchoolAndMajorCombo({
+const schoolValidation = validateSchoolAndMajorComboDetailed({
   validSchoolNames: ruleCenterOptions.validSchoolNames,
   schoolName,
 })
+const majorValidations = groupRows.map((item) =>
+  validateSchoolAndMajorComboDetailed({
+    validMajorCombos: ruleCenterOptions.validMajorCombos,
+    majorName: item['招生专业'],
+    level: item['一级层次'],
+  })
+)
+const majorResult =
+  (ruleCenterOptions.validMajorCombos || []).length === 0
+    ? '未启用专业规则'
+    : majorValidations.some((item) => item.majorResult !== '匹配')
+      ? '未匹配'
+      : '匹配'
+const ruleCenterIssues = Array.from(
+  new Set([
+    ...schoolValidation.issues,
+    ...majorValidations.flatMap((item) => item.issues),
+  ])
+)
 
 output.push({
   学校名称: schoolName,
@@ -302,6 +325,8 @@ output.push({
   院校招生代码: t(representative['招生代码']),
   数据是否有问题: ruleCenterIssues.length ? '有问题' : '无问题',
   问题列表: ruleCenterIssues.length ? ruleCenterIssues.join('；') : '无问题',
+  学校名称校验结果: schoolValidation.schoolResult,
+  专业名称校验结果: majorResult,
   __sortNo: representative.__rowNo,
 })
   }
@@ -314,7 +339,7 @@ output.push({
 export function processNormalCollegeScoreWorkbook(
   workbook: XLSX.WorkBook,
   sheetName: string,
-  ruleCenterOptions: { validSchoolNames?: string[] } = {}
+  ruleCenterOptions: { validSchoolNames?: string[]; validMajorCombos?: string[] } = {}
 ): NormalCollegeScoreProcessResult {
   const sheet = workbook.Sheets[sheetName]
   if (!sheet) {
@@ -427,6 +452,10 @@ export async function exportNormalCollegeScoreWorkbook(
     S: 14,
     T: 10,
     U: 14,
+    V: 16,
+    W: 26,
+    X: 18,
+    Y: 18,
   }
 
   Object.entries(widths).forEach(([col, width]) => {

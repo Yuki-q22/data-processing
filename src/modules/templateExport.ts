@@ -22,6 +22,7 @@
 
 import ExcelJS from 'exceljs'
 import type { ProcessedRecord } from '../types/record'
+import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
 
 const NOTE_TEXT = `备注：请删除示例后再填写；
 1.省份：必须填写各省份简称，例如：北京、内蒙古，不能带有市、省、自治区、空格、特殊字符等2.科类：浙江、上海限定“综合、艺术类、体育类”，内蒙古限定“文科、理科、蒙授文科、蒙授理科、艺术类、艺术文、艺术理、体育类、体育文、
@@ -71,6 +72,8 @@ const HEADERS = [
   '最低分数区间位次低',
   '最低分数区间位次高',
   '录取人数（选填）',
+  '学校名称校验结果',
+  '专业名称校验结果',
 ]
 
 function downloadBuffer(buffer: ArrayBuffer, filename: string) {
@@ -91,7 +94,11 @@ export function getExportableRecords(records: ProcessedRecord[]) {
 
 export async function exportProfessionalScoreTemplate(
   year: string,
-  records: ProcessedRecord[]
+  records: ProcessedRecord[],
+  ruleCenterOptions: {
+    validSchoolNames?: string[]
+    validMajorCombos?: string[]
+  } = {}
 ) {
   const exportable = getExportableRecords(records)
 
@@ -123,7 +130,7 @@ export async function exportProfessionalScoreTemplate(
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false }
   })
 
-  const widths = [20, 12, 22, 18, 18, 14, 14, 16, 16, 10, 10, 10, 14, 12, 14, 14, 10, 18, 10, 12, 12, 14, 14, 16, 16, 12]
+  const widths = [20, 12, 22, 18, 18, 14, 14, 16, 16, 10, 10, 10, 14, 12, 14, 14, 10, 18, 10, 12, 12, 14, 14, 16, 16, 12, 18, 18]
   widths.forEach((width, index) => {
     worksheet.getColumn(index + 1).width = width
   })
@@ -162,6 +169,15 @@ export async function exportProfessionalScoreTemplate(
       r.scoreRangeRankLow ?? '',
       r.scoreRangeRankHigh ?? '',
       r.admittedCount ?? '',
+      validateSchoolAndMajorComboDetailed({
+        validSchoolNames: ruleCenterOptions.validSchoolNames,
+        schoolName: r.schoolName,
+      }).schoolResult,
+      validateSchoolAndMajorComboDetailed({
+        validMajorCombos: ruleCenterOptions.validMajorCombos,
+        majorName: r.majorName,
+        level: r.level1,
+      }).majorResult,
     ]
 
     rowValues.forEach((value, colIdx) => {

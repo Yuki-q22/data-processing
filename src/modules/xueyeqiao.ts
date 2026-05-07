@@ -20,8 +20,7 @@
 
 import ExcelJS from 'exceljs'
 import {
-  normalizeSchoolNameForRuleCenter,
-  validateSchoolAndMajorCombo,
+  validateSchoolAndMajorComboDetailed,
 } from './ruleCenterValidation'
 
 export type XueyeqiaoExportRow = {
@@ -54,6 +53,8 @@ export type XueyeqiaoExportRow = {
   数据是否有问题: string
   问题列表: string
   修改后的备注: string
+  学校名称校验结果: string
+  专业名称校验结果: string
 }
 
 export type XueyeqiaoPreviewRow = XueyeqiaoExportRow & {
@@ -214,6 +215,8 @@ const OUTPUT_HEADERS = [
   '数据是否有问题',
   '问题列表',
   '修改后的备注',
+  '学校名称校验结果',
+  '专业名称校验结果',
 ] as const
 
 function t(value: unknown): string {
@@ -517,8 +520,6 @@ export function processXueyeqiaoData(params: {
     } satisfies XueyeqiaoProcessResult
   }
 
-  const schoolSet = new Set(validSchoolNames.map((name) => normalizeSchoolNameForRuleCenter(name)))
-
   const previewRows: XueyeqiaoPreviewRow[] = rows.map((row, rowNo) => {
     const schoolName = t(row['院校名称'])
     const province = t(row['省份'])
@@ -538,32 +539,23 @@ export function processXueyeqiaoData(params: {
     const groupCode = buildGroupCode(province, enrollmentCode, groupNo)
     const fixedRemark = fixRemark(majorRemarkRaw)
 
-    const schoolMatch =
-      schoolSet.size === 0
-        ? '未启用学校规则'
-        : schoolSet.has(normalizeSchoolNameForRuleCenter(schoolName))
-          ? '匹配'
-          : '未匹配'
-
-    const issueList =
-      fixedRemark.issues[0] === '无问题' ? [] : [...fixedRemark.issues]
-
-    const ruleCenterIssues = validateSchoolAndMajorCombo({
+    const ruleCenterValidation = validateSchoolAndMajorComboDetailed({
       validSchoolNames,
       validMajorCombos,
       schoolName,
       majorName,
       level: level1,
+      // 学业桥专业校验只按“专业名称”匹配；规则中心里的 本科(普通)/本科(职业)/专科(高职) 后缀会自动去掉。
+      majorMatchMode: 'majorOnly',
     })
 
-    issueList.push(...ruleCenterIssues)
+    const schoolMatch = ruleCenterValidation.schoolResult
+    const majorComboMatch = ruleCenterValidation.majorResult
 
-    const majorComboMatch =
-      validMajorCombos.length === 0
-        ? '未启用专业组合规则'
-        : ruleCenterIssues.some((msg) => msg.includes('招生专业组合'))
-          ? '未匹配'
-          : '匹配'
+    const issueList =
+      fixedRemark.issues[0] === '无问题' ? [] : [...fixedRemark.issues]
+
+    issueList.push(...ruleCenterValidation.issues)
 
     const hasIssue = issueList.length > 0
 
@@ -597,6 +589,8 @@ export function processXueyeqiaoData(params: {
       数据是否有问题: hasIssue ? '有问题' : '无问题',
       问题列表: hasIssue ? Array.from(new Set(issueList)).join('；') : '无问题',
       修改后的备注: fixedRemark.fixedText,
+      学校名称校验结果: schoolMatch,
+      专业名称校验结果: majorComboMatch,
     }
 
     return {
@@ -648,6 +642,8 @@ export function processXueyeqiaoData(params: {
       数据是否有问题: row.数据是否有问题,
       问题列表: row.问题列表,
       修改后的备注: row.修改后的备注,
+      学校名称校验结果: row.学校名称校验结果,
+      专业名称校验结果: row.专业名称校验结果,
     })),
   } satisfies XueyeqiaoProcessResult
 }

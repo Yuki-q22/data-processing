@@ -1,6 +1,7 @@
 import { Button, Card, Space, Typography, message } from 'antd'
 import { usePreviewStore } from '../stores/previewStore'
 import { useTaskStore } from '../stores/taskStore'
+import { useRuleCenterStore } from '../stores/ruleCenterStore'
 import {
   exportProfessionalScoreTemplate,
   getExportableRecords,
@@ -11,6 +12,7 @@ const { Paragraph, Text } = Typography
 export default function ExportStep() {
   const { processedRecords } = usePreviewStore()
   const { year } = useTaskStore()
+  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
 
   const exportable = getExportableRecords(processedRecords)
   const blocked = processedRecords.length - exportable.length
@@ -27,7 +29,10 @@ export default function ExportStep() {
     }
 
     try {
-      await exportProfessionalScoreTemplate(year, processedRecords)
+      await exportProfessionalScoreTemplate(year, processedRecords, {
+        validSchoolNames,
+        validMajorCombos,
+      })
       message.success('模板导出成功')
     } catch (error) {
       console.error(error)
