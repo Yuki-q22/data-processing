@@ -107,9 +107,11 @@ export default function ExceptionStep() {
 
       const matchStatusOk =
         !matchStatusFilter || item.matchStatus === matchStatusFilter
+
       const issueCodeOk =
         !issueCodeFilter ||
         item.issues.some((issue) => issue.code === issueCodeFilter)
+
       const issueLevelOk =
         !issueLevelFilter ||
         item.issues.some((issue) => issue.level === issueLevelFilter)
@@ -153,38 +155,28 @@ export default function ExceptionStep() {
       source.rawRemark ??
       ''
 
-    const currentDirection =
-      result.direction ?? source.direction ?? source.rawDirection ?? ''
-
-    const currentEnrollmentType =
-      result.enrollmentType ??
-      source.enrollmentType ??
-      source.recruitType ??
-      source.rawEnrollmentType ??
-      ''
-
     return getBestRemarkMatchedCandidate(
-  {
-    rowId: activeRecord.rowId,
-    remark: currentRemark,
-    majorRemark: currentRemark,
-  },
-  activeRecord.matchCandidates.map((candidate: any) => {
-    const candidateRemark =
-      candidate.majorRemark ??
-      candidate.remark ??
-      candidate.planRemark ??
-      candidate.备注 ??
-      ''
+      {
+        rowId: activeRecord.rowId,
+        remark: currentRemark,
+        majorRemark: currentRemark,
+      },
+      activeRecord.matchCandidates.map((candidate: any) => {
+        const candidateRemark =
+          candidate.majorRemark ??
+          candidate.remark ??
+          candidate.planRemark ??
+          candidate.备注 ??
+          ''
 
-    return {
-      rowId: candidate.rowId,
-      id: candidate.rowId,
-      remark: candidateRemark,
-      majorRemark: candidateRemark,
-    }
-  })
-)
+        return {
+          rowId: candidate.rowId,
+          id: candidate.rowId,
+          remark: candidateRemark,
+          majorRemark: candidateRemark,
+        }
+      })
+    )
   }, [activeRecord])
 
   const nextActionableRecord = useMemo(() => {
