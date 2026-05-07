@@ -3,15 +3,13 @@ import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
 
 function isValidDataSource(value?: string) {
   const allowed = [
-    '官方考试院',
-    '大红本数据',
-    '学校官网',
-    '销售',
-    '抓取',
-    '圣达信',
-    '优志愿',
-    '学业桥',
-  ]
+  '官方考试院',
+  '大红本数据',
+  '学校官网',
+  '销售',
+  '学业桥',
+  '学业桥非普通',
+]
   return !value || allowed.includes(value)
 }
 

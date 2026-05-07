@@ -55,3 +55,13 @@ export function confirmToolReset(options: ConfirmToolResetOptions) {
     },
   })
 }
+
+export function confirmAndResetTool(
+  resetAction: () => void,
+  title = '确认重置当前工具？',
+) {
+  confirmToolReset({
+    title,
+    onReset: resetAction,
+  })
+}

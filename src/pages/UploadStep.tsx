@@ -15,10 +15,8 @@ const DATA_SOURCE_OPTIONS = [
   '大红本数据',
   '学校官网',
   '销售',
-  '抓取',
-  '圣达信',
-  '优志愿',
   '学业桥',
+  '学业桥非普通',
 ]
 
 const YEAR_OPTIONS = ['2025', '2026', '2027']
@@ -192,7 +190,7 @@ export default function UploadStep() {
         style={{ borderRadius: 12 }}
       >
         <Row gutter={16}>
-          <Col span={8}>
+          <Col span={7}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>任务名称</Text>
               <Input
@@ -203,7 +201,7 @@ export default function UploadStep() {
             </Space>
           </Col>
 
-          <Col span={4}>
+          <Col span={3}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>招生年份</Text>
               <Select
@@ -217,21 +215,23 @@ export default function UploadStep() {
             </Space>
           </Col>
 
-          <Col span={5}>
-            <Space direction="vertical" style={{ width: '100%' }} size={6}>
-              <Text>默认数据来源</Text>
-              <Select
-                value={defaultDataSource}
-                onChange={(value) => setTaskMeta({ defaultDataSource: value })}
-                options={DATA_SOURCE_OPTIONS.map((item) => ({
-                  label: item,
-                  value: item,
-                }))}
-              />
-            </Space>
-          </Col>
+          <Col span={6}>
+  <Space direction="vertical" style={{ width: '100%' }} size={6}>
+    <Text>默认数据来源</Text>
+    <Select
+      value={defaultDataSource}
+      onChange={(value) => setTaskMeta({ defaultDataSource: value })}
+      style={{ width: '100%' }}
+      popupMatchSelectWidth={false}
+      options={DATA_SOURCE_OPTIONS.map((item) => ({
+        label: item,
+        value: item,
+      }))}
+    />
+  </Space>
+</Col>
 
-          <Col span={4}>
+          <Col span={5}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>学校名称（选填）</Text>
               <Input
