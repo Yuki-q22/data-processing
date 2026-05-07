@@ -39,6 +39,8 @@ export const ISSUE_CODE_LABEL_MAP: Record<string, string> = {
   data_source_invalid: '数据来源异常',
   first_subject_required: '首选科目待确认',
   batch_not_in_current_rules: '批次规则待确认',
+  rule_center_school_unmatched: '规则中心学校校验',
+  rule_center_major_combo_unmatched: '规则中心专业组合校验',
 }
 
 export function getMatchStatusLabel(status?: string) {

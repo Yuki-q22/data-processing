@@ -8,6 +8,7 @@ import { matchFields } from '../utils/mapping'
 import { buildScoreRecords, buildPlanRecords } from '../modules/transform'
 import { buildProcessedRecords } from '../modules/match'
 import { attachValidationIssues } from '../modules/validate'
+import { useRuleCenterStore } from '../stores/ruleCenterStore'
 
 const { Paragraph } = Typography
 
@@ -33,6 +34,8 @@ export default function MappingStep() {
     planSheetName,
     manualSchoolName,
   } = useTaskStore()
+
+  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
 
   const {
     fieldAliases,
@@ -128,7 +131,8 @@ export default function MappingStep() {
 
     const validated = attachValidationIssues(
       processed,
-      provinceCurrentBatchDictByYear
+      provinceCurrentBatchDictByYear,
+      { validSchoolNames, validMajorCombos }
     )
 
     setProcessedRecords(validated)

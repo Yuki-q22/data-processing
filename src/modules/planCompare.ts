@@ -1,11 +1,13 @@
 import ExcelJS from 'exceljs'
 import { resolveControlLine } from './controlLine'
+import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
 
 export type PlanScoreCompareRow = {
   rowId: string
   matchKey: string
   exists: boolean
   reason: string
+  ruleCenterIssues: string[]
   school: string
   province: string
   category: string
@@ -23,6 +25,7 @@ export type PlanCollegeCompareRow = {
   matchKey: string
   exists: boolean
   reason: string
+  ruleCenterIssues: string[]
   school: string
   province: string
   category: string
@@ -609,8 +612,10 @@ export function processPlanCompare(params: {
   scoreRows: Record<string, unknown>[]
   collegeRows: Record<string, unknown>[]
   yearValue: string
+  validSchoolNames?: string[]
+  validMajorCombos?: string[]
 }): PlanCompareResult {
-  const { planRows, scoreRows, collegeRows, yearValue } = params
+  const { planRows, scoreRows, collegeRows, yearValue, validSchoolNames = [], validMajorCombos = [] } = params
 
   const missingPlanHeaders = detectMissingHeaders(planRows, PLAN_REQUIRED_HEADERS)
   const missingScoreHeaders = scoreRows.length ? detectMissingHeaders(scoreRows, SCORE_REQUIRED_HEADERS) : []
@@ -628,18 +633,29 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
   const exists = scoreKeySet.has(key)
   const enrollmentCode = stripCaret(row['招生代码'])
   const majorCode = stripCaret(row['专业代码'])
+  const school = t(row['学校'])
+  const major = t(row['专业'])
+  const level = normalizeLevelForKey(row['层次'])
+  const ruleCenterIssues = validateSchoolAndMajorCombo({
+    validSchoolNames,
+    validMajorCombos,
+    schoolName: school,
+    majorName: major,
+    level,
+  })
 
   return {
     rowId: `ps_${rowNo + 1}`,
     matchKey: key,
     exists,
-    reason: exists ? '已在专业分文件中存在' : '专业分文件中不存在该组合键',
-    school: t(row['学校']),
+    reason: [exists ? '已在专业分文件中存在' : '专业分文件中不存在该组合键', ...ruleCenterIssues].filter(Boolean).join('；'),
+    ruleCenterIssues,
+    school,
     province: t(row['省份']),
     category: t(row['科类']),
     batch: t(row['批次']),
-    major: t(row['专业']),
-    level: normalizeLevelForKey(row['层次']),
+    major,
+    level,
     groupCode: stripCaret(row['专业组代码']),
     enrollmentCode,
     majorCode,
@@ -652,10 +668,18 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
     const exists = collegeKeySet.has(key)
     const planEnrollmentCode = stripCaret(row['招生代码'])
     const missingEnrollmentCodeFlag = !planEnrollmentCode
+    const school = t(row['学校'])
+    const ruleCenterIssues = validateSchoolAndMajorCombo({
+      validSchoolNames,
+      schoolName: school,
+    })
 
     let reason = exists ? '已在院校分文件中存在' : '院校分文件中不存在该组合键'
     if (missingEnrollmentCodeFlag) {
       reason = `${reason}；招生计划缺少招生代码，需重点检查`
+    }
+    if (ruleCenterIssues.length) {
+      reason = [reason, ...ruleCenterIssues].filter(Boolean).join('；')
     }
 
     return {
@@ -663,7 +687,8 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
       matchKey: key,
       exists,
       reason,
-      school: t(row['学校']),
+      ruleCenterIssues,
+      school,
       province: t(row['省份']),
       category: t(row['科类']),
       batch: t(row['批次']),

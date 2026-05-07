@@ -38,6 +38,7 @@ import {
   DEFAULT_EXCLUSION_KEYWORDS,
   DEFAULT_REMARK_TYPE_RULES,
 } from '../constants/remarkTypeRules'
+import { buildMajorComboForRuleCenter } from '../modules/ruleCenterValidation'
 
 export type RemarkTypeRule = {
   id: string
@@ -537,21 +538,36 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     }
 
     const firstRow = rows[0]
+    const hasDirectCombo = '招生专业组合' in firstRow
+    const hasMajor = '招生专业' in firstRow || '专业名称' in firstRow || '专业' in firstRow
+    const hasLevel = '一级层次' in firstRow || '层次' in firstRow || '专业层次' in firstRow
 
-    if (!('招生专业' in firstRow)) {
-      throw new Error('专业规则文件缺少“招生专业”列')
+    if (!hasDirectCombo && !(hasMajor && hasLevel)) {
+      throw new Error('专业规则文件缺少“招生专业组合”列，或缺少可组合的“招生专业/专业名称/专业” + “一级层次/层次/专业层次”列')
     }
 
     const values = Array.from(
       new Set(
         rows
-          .map((row) => String(row['招生专业'] ?? '').trim())
+          .map((row) => {
+            const directCombo = String(row['招生专业组合'] ?? '').trim()
+            if (directCombo) return directCombo
+
+            const major = String(
+              row['招生专业'] ?? row['专业名称'] ?? row['专业'] ?? ''
+            ).trim()
+            const level = String(
+              row['一级层次'] ?? row['层次'] ?? row['专业层次'] ?? ''
+            ).trim()
+
+            return buildMajorComboForRuleCenter(major, level)
+          })
           .filter(Boolean)
       )
     )
 
     if (!values.length) {
-      throw new Error('专业规则文件中没有有效招生专业')
+      throw new Error('专业规则文件中没有有效招生专业组合')
     }
 
     await dbSet(

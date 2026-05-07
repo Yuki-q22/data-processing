@@ -19,6 +19,7 @@
  */
 
 import ExcelJS from 'exceljs'
+import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
 
 export type GroupCodeCandidate = {
   candidateId: string
@@ -66,6 +67,7 @@ export type GroupCodeMatchRow = {
   requiresElectiveConversion: boolean
   status: 'existing' | 'auto' | 'manual_required' | 'manual_done' | 'no_candidate'
   reason: string
+  ruleCenterIssues: string[]
 
   candidates: GroupCodeCandidate[]
   sourceRow: Record<string, unknown>
@@ -416,8 +418,10 @@ export function processGroupCodeMatch(params: {
   importRows: Record<string, unknown>[]
   planRows: Record<string, unknown>[]
   yearValue: string
+  validSchoolNames?: string[]
+  validMajorCombos?: string[]
 }) {
-  const { importRows, planRows, yearValue } = params
+  const { importRows, planRows, yearValue, validSchoolNames = [], validMajorCombos = [] } = params
   const parsedYear = parseYear(yearValue)
 
   const importKeyCount = countByKey(importRows, getImportMatchKey)
@@ -540,6 +544,18 @@ if (originalGroupCode) {
       resolvedSecondSubject = candidates[0].convertedSecondSubject
     }
 
+    const ruleCenterIssues = validateSchoolAndMajorCombo({
+      validSchoolNames,
+      validMajorCombos,
+      schoolName,
+      majorName,
+      level: level1,
+    })
+
+    if (ruleCenterIssues.length) {
+      reason = [reason, ...ruleCenterIssues].filter(Boolean).join('；')
+    }
+
     return {
       rowId: String(rowNo + 1),
       matchKey,
@@ -568,6 +584,7 @@ if (originalGroupCode) {
       requiresElectiveConversion,
       status,
       reason,
+      ruleCenterIssues,
       candidates,
       sourceRow: row,
     }

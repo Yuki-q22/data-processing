@@ -45,6 +45,7 @@ import {
   type PlanCompareResult,
   type PlanScoreCompareRow,
 } from '../../modules/planCompare'
+import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 
 const { Dragger } = Upload
 const { Paragraph, Text } = Typography
@@ -80,6 +81,8 @@ function getFirstSheetName(loaded: LoadedWorkbook | null) {
 }
 
 export default function PlanCompareTool() {
+  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+
   const [planWorkbook, setPlanWorkbook] = useState<LoadedWorkbook | null>(null)
   const [scoreWorkbook, setScoreWorkbook] = useState<LoadedWorkbook | null>(null)
   const [collegeWorkbook, setCollegeWorkbook] = useState<LoadedWorkbook | null>(null)
@@ -151,6 +154,8 @@ export default function PlanCompareTool() {
         scoreRows,
         collegeRows,
         yearValue,
+        validSchoolNames,
+        validMajorCombos,
       })
 
       setResult(compareResult)

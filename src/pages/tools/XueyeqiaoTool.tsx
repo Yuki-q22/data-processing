@@ -54,6 +54,7 @@ type PreviewRow = {
   rowId: string
   学校名称: string
   学校名称匹配: string
+  招生专业组合匹配: string
   数据是否有问题: string
   问题列表: string
   招生年份: string
@@ -116,6 +117,7 @@ function buildRowKey(row: PreviewRow) {
 const TABLE_COLUMNS = [
   { title: '学校名称', dataIndex: '学校名称', key: '学校名称', width: 180 },
   { title: '学校匹配', dataIndex: '学校名称匹配', key: '学校名称匹配', width: 120 },
+  { title: '专业组合匹配', dataIndex: '招生专业组合匹配', key: '招生专业组合匹配', width: 150 },
   { title: '数据是否有问题', dataIndex: '数据是否有问题', key: '数据是否有问题', width: 130 },
   { title: '问题列表', dataIndex: '问题列表', key: '问题列表', width: 280 },
   { title: '招生年份', dataIndex: '招生年份', key: '招生年份', width: 100 },
@@ -144,7 +146,7 @@ const TABLE_COLUMNS = [
 ]
 
 export default function XueyeqiaoTool() {
-  const { validSchoolNames } = useRuleCenterStore()
+  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
 
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
@@ -180,6 +182,7 @@ export default function XueyeqiaoTool() {
       const processed = processXueyeqiaoData({
         rows,
         validSchoolNames,
+        validMajorCombos,
       })
       setResult(processed)
 

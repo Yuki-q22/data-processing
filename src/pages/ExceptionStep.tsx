@@ -17,6 +17,7 @@ import { usePreviewStore } from '../stores/previewStore'
 import { useRuleStore } from '../stores/ruleStore'
 import { buildProcessedRecords } from '../modules/match'
 import { attachValidationIssues } from '../modules/validate'
+import { useRuleCenterStore } from '../stores/ruleCenterStore'
 import {
   getIssueCodeLabel,
   getIssueLevelLabel,
@@ -42,6 +43,7 @@ export default function ExceptionStep() {
   } = usePreviewStore()
 
   const { provinceCurrentBatchDictByYear } = useRuleStore()
+  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
 
   const [keyword, setKeyword] = useState('')
   const [matchStatusFilter, setMatchStatusFilter] = useState<string | undefined>()
@@ -157,7 +159,10 @@ export default function ExceptionStep() {
       provinceCurrentBatchDictByYear,
       nextManualSelections
     )
-    const validated = attachValidationIssues(processed, provinceCurrentBatchDictByYear)
+    const validated = attachValidationIssues(processed, provinceCurrentBatchDictByYear, {
+      validSchoolNames,
+      validMajorCombos,
+    })
     setProcessedRecords(validated)
   }
 

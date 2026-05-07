@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 import { resolveControlLine } from './controlLine'
+import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
 
 export type NormalCollegeScoreOutputRow = {
   学校名称: string
@@ -24,6 +25,8 @@ export type NormalCollegeScoreOutputRow = {
   专业组代码: string
   首选科目: string
   院校招生代码: string
+  数据是否有问题: string
+  问题列表: string
 }
 
 export type NormalCollegeScoreProcessResult = {
@@ -86,6 +89,8 @@ const OUTPUT_HEADERS = [
   '专业组代码',
   '首选科目',
   '院校招生代码',
+  '数据是否有问题',
+  '问题列表',
 ] as const
 
 const TEMPLATE_NOTE = `备注：请删除示例后再填写；
@@ -201,6 +206,7 @@ function sumNullable(values: Array<number | null>): number | null {
 function processRows(
   rows: Record<string, unknown>[],
   yearValue?: string | number,
+  ruleCenterOptions: { validSchoolNames?: string[] } = {},
 ): NormalCollegeScoreOutputRow[] {
   const normalizedRows: InputRow[] = rows
     .map((row, rowNo) => ({
@@ -266,9 +272,14 @@ function processRows(
 )
 
 const isTibet = isTibetProvince(province)
+const schoolName = t(representative['学校名称'])
+const ruleCenterIssues = validateSchoolAndMajorCombo({
+  validSchoolNames: ruleCenterOptions.validSchoolNames,
+  schoolName,
+})
 
 output.push({
-  学校名称: t(representative['学校名称']),
+  学校名称: schoolName,
   省份: province,
   招生类别: enrollmentCategory,
   招生批次: enrollmentBatch,
@@ -289,6 +300,8 @@ output.push({
   专业组代码: t(representative['专业组代码']),
   首选科目: representative.__normalizedFirstSubject,
   院校招生代码: t(representative['招生代码']),
+  数据是否有问题: ruleCenterIssues.length ? '有问题' : '无问题',
+  问题列表: ruleCenterIssues.length ? ruleCenterIssues.join('；') : '无问题',
   __sortNo: representative.__rowNo,
 })
   }
@@ -300,7 +313,8 @@ output.push({
 
 export function processNormalCollegeScoreWorkbook(
   workbook: XLSX.WorkBook,
-  sheetName: string
+  sheetName: string,
+  ruleCenterOptions: { validSchoolNames?: string[] } = {}
 ): NormalCollegeScoreProcessResult {
   const sheet = workbook.Sheets[sheetName]
   if (!sheet) {
@@ -328,7 +342,7 @@ export function processNormalCollegeScoreWorkbook(
     defval: '',
   })
 
-  const outputRows = processRows(rows, year)
+  const outputRows = processRows(rows, year, ruleCenterOptions)
 
   return {
     year,

@@ -1,0 +1,748 @@
+diff --git a/src/constants/display.ts b/src/constants/display.ts
+index 2e1c4aa..f77fe58 100644
+--- a/src/constants/display.ts
++++ b/src/constants/display.ts
+@@ -39,6 +39,8 @@ export const ISSUE_CODE_LABEL_MAP: Record<string, string> = {
+   data_source_invalid: '数据来源异常',
+   first_subject_required: '首选科目待确认',
+   batch_not_in_current_rules: '批次规则待确认',
++  rule_center_school_unmatched: '规则中心学校校验',
++  rule_center_major_combo_unmatched: '规则中心专业组合校验',
+ }
+ 
+ export function getMatchStatusLabel(status?: string) {
+diff --git a/src/modules/collegeScoreNormal.ts b/src/modules/collegeScoreNormal.ts
+index 87e6366..bfb14a1 100644
+--- a/src/modules/collegeScoreNormal.ts
++++ b/src/modules/collegeScoreNormal.ts
+@@ -1,6 +1,7 @@
+ import * as XLSX from 'xlsx'
+ import ExcelJS from 'exceljs'
+ import { resolveControlLine } from './controlLine'
++import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
+ 
+ export type NormalCollegeScoreOutputRow = {
+   学校名称: string
+@@ -24,6 +25,8 @@ export type NormalCollegeScoreOutputRow = {
+   专业组代码: string
+   首选科目: string
+   院校招生代码: string
++  数据是否有问题: string
++  问题列表: string
+ }
+ 
+ export type NormalCollegeScoreProcessResult = {
+@@ -86,6 +89,8 @@ const OUTPUT_HEADERS = [
+   '专业组代码',
+   '首选科目',
+   '院校招生代码',
++  '数据是否有问题',
++  '问题列表',
+ ] as const
+ 
+ const TEMPLATE_NOTE = `备注：请删除示例后再填写；
+@@ -201,6 +206,7 @@ function sumNullable(values: Array<number | null>): number | null {
+ function processRows(
+   rows: Record<string, unknown>[],
+   yearValue?: string | number,
++  ruleCenterOptions: { validSchoolNames?: string[] } = {},
+ ): NormalCollegeScoreOutputRow[] {
+   const normalizedRows: InputRow[] = rows
+     .map((row, rowNo) => ({
+@@ -266,9 +272,14 @@ function processRows(
+ )
+ 
+ const isTibet = isTibetProvince(province)
++const schoolName = t(representative['学校名称'])
++const ruleCenterIssues = validateSchoolAndMajorCombo({
++  validSchoolNames: ruleCenterOptions.validSchoolNames,
++  schoolName,
++})
+ 
+ output.push({
+-  学校名称: t(representative['学校名称']),
++  学校名称: schoolName,
+   省份: province,
+   招生类别: enrollmentCategory,
+   招生批次: enrollmentBatch,
+@@ -289,6 +300,8 @@ output.push({
+   专业组代码: t(representative['专业组代码']),
+   首选科目: representative.__normalizedFirstSubject,
+   院校招生代码: t(representative['招生代码']),
++  数据是否有问题: ruleCenterIssues.length ? '有问题' : '无问题',
++  问题列表: ruleCenterIssues.length ? ruleCenterIssues.join('；') : '无问题',
+   __sortNo: representative.__rowNo,
+ })
+   }
+@@ -300,7 +313,8 @@ output.push({
+ 
+ export function processNormalCollegeScoreWorkbook(
+   workbook: XLSX.WorkBook,
+-  sheetName: string
++  sheetName: string,
++  ruleCenterOptions: { validSchoolNames?: string[] } = {}
+ ): NormalCollegeScoreProcessResult {
+   const sheet = workbook.Sheets[sheetName]
+   if (!sheet) {
+@@ -328,7 +342,7 @@ export function processNormalCollegeScoreWorkbook(
+     defval: '',
+   })
+ 
+-  const outputRows = processRows(rows, year)
++  const outputRows = processRows(rows, year, ruleCenterOptions)
+ 
+   return {
+     year,
+diff --git a/src/modules/groupCodeMatch.ts b/src/modules/groupCodeMatch.ts
+index 24445e2..6096606 100644
+--- a/src/modules/groupCodeMatch.ts
++++ b/src/modules/groupCodeMatch.ts
+@@ -19,6 +19,7 @@
+  */
+ 
+ import ExcelJS from 'exceljs'
++import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
+ 
+ export type GroupCodeCandidate = {
+   candidateId: string
+@@ -66,6 +67,7 @@ export type GroupCodeMatchRow = {
+   requiresElectiveConversion: boolean
+   status: 'existing' | 'auto' | 'manual_required' | 'manual_done' | 'no_candidate'
+   reason: string
++  ruleCenterIssues: string[]
+ 
+   candidates: GroupCodeCandidate[]
+   sourceRow: Record<string, unknown>
+@@ -416,8 +418,10 @@ export function processGroupCodeMatch(params: {
+   importRows: Record<string, unknown>[]
+   planRows: Record<string, unknown>[]
+   yearValue: string
++  validSchoolNames?: string[]
++  validMajorCombos?: string[]
+ }) {
+-  const { importRows, planRows, yearValue } = params
++  const { importRows, planRows, yearValue, validSchoolNames = [], validMajorCombos = [] } = params
+   const parsedYear = parseYear(yearValue)
+ 
+   const importKeyCount = countByKey(importRows, getImportMatchKey)
+@@ -540,6 +544,18 @@ if (originalGroupCode) {
+       resolvedSecondSubject = candidates[0].convertedSecondSubject
+     }
+ 
++    const ruleCenterIssues = validateSchoolAndMajorCombo({
++      validSchoolNames,
++      validMajorCombos,
++      schoolName,
++      majorName,
++      level: level1,
++    })
++
++    if (ruleCenterIssues.length) {
++      reason = [reason, ...ruleCenterIssues].filter(Boolean).join('；')
++    }
++
+     return {
+       rowId: String(rowNo + 1),
+       matchKey,
+@@ -568,6 +584,7 @@ if (originalGroupCode) {
+       requiresElectiveConversion,
+       status,
+       reason,
++      ruleCenterIssues,
+       candidates,
+       sourceRow: row,
+     }
+diff --git a/src/modules/planCompare.ts b/src/modules/planCompare.ts
+index 1926d7c..9c80d2e 100644
+--- a/src/modules/planCompare.ts
++++ b/src/modules/planCompare.ts
+@@ -1,11 +1,13 @@
+ import ExcelJS from 'exceljs'
+ import { resolveControlLine } from './controlLine'
++import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
+ 
+ export type PlanScoreCompareRow = {
+   rowId: string
+   matchKey: string
+   exists: boolean
+   reason: string
++  ruleCenterIssues: string[]
+   school: string
+   province: string
+   category: string
+@@ -23,6 +25,7 @@ export type PlanCollegeCompareRow = {
+   matchKey: string
+   exists: boolean
+   reason: string
++  ruleCenterIssues: string[]
+   school: string
+   province: string
+   category: string
+@@ -609,8 +612,10 @@ export function processPlanCompare(params: {
+   scoreRows: Record<string, unknown>[]
+   collegeRows: Record<string, unknown>[]
+   yearValue: string
++  validSchoolNames?: string[]
++  validMajorCombos?: string[]
+ }): PlanCompareResult {
+-  const { planRows, scoreRows, collegeRows, yearValue } = params
++  const { planRows, scoreRows, collegeRows, yearValue, validSchoolNames = [], validMajorCombos = [] } = params
+ 
+   const missingPlanHeaders = detectMissingHeaders(planRows, PLAN_REQUIRED_HEADERS)
+   const missingScoreHeaders = scoreRows.length ? detectMissingHeaders(scoreRows, SCORE_REQUIRED_HEADERS) : []
+@@ -628,18 +633,29 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
+   const exists = scoreKeySet.has(key)
+   const enrollmentCode = stripCaret(row['招生代码'])
+   const majorCode = stripCaret(row['专业代码'])
++  const school = t(row['学校'])
++  const major = t(row['专业'])
++  const level = normalizeLevelForKey(row['层次'])
++  const ruleCenterIssues = validateSchoolAndMajorCombo({
++    validSchoolNames,
++    validMajorCombos,
++    schoolName: school,
++    majorName: major,
++    level,
++  })
+ 
+   return {
+     rowId: `ps_${rowNo + 1}`,
+     matchKey: key,
+     exists,
+-    reason: exists ? '已在专业分文件中存在' : '专业分文件中不存在该组合键',
+-    school: t(row['学校']),
++    reason: [exists ? '已在专业分文件中存在' : '专业分文件中不存在该组合键', ...ruleCenterIssues].filter(Boolean).join('；'),
++    ruleCenterIssues,
++    school,
+     province: t(row['省份']),
+     category: t(row['科类']),
+     batch: t(row['批次']),
+-    major: t(row['专业']),
+-    level: normalizeLevelForKey(row['层次']),
++    major,
++    level,
+     groupCode: stripCaret(row['专业组代码']),
+     enrollmentCode,
+     majorCode,
+@@ -652,18 +668,27 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
+     const exists = collegeKeySet.has(key)
+     const planEnrollmentCode = stripCaret(row['招生代码'])
+     const missingEnrollmentCodeFlag = !planEnrollmentCode
++    const school = t(row['学校'])
++    const ruleCenterIssues = validateSchoolAndMajorCombo({
++      validSchoolNames,
++      schoolName: school,
++    })
+ 
+     let reason = exists ? '已在院校分文件中存在' : '院校分文件中不存在该组合键'
+     if (missingEnrollmentCodeFlag) {
+       reason = `${reason}；招生计划缺少招生代码，需重点检查`
+     }
++    if (ruleCenterIssues.length) {
++      reason = [reason, ...ruleCenterIssues].filter(Boolean).join('；')
++    }
+ 
+     return {
+       rowId: `pc_${rowNo + 1}`,
+       matchKey: key,
+       exists,
+       reason,
+-      school: t(row['学校']),
++      ruleCenterIssues,
++      school,
+       province: t(row['省份']),
+       category: t(row['科类']),
+       batch: t(row['批次']),
+diff --git a/src/modules/validate.ts b/src/modules/validate.ts
+index f73b897..7fd223b 100644
+--- a/src/modules/validate.ts
++++ b/src/modules/validate.ts
+@@ -1,4 +1,5 @@
+ import type { ProcessedRecord, ValidationIssue } from '../types/record'
++import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
+ 
+ function isValidDataSource(value?: string) {
+   const allowed = [
+@@ -20,7 +21,11 @@ function needsFirstSubject(subjectCategory?: string) {
+ 
+ export function attachValidationIssues(
+   processedRecords: ProcessedRecord[],
+-  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
++  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>,
++  ruleCenterOptions: {
++    validSchoolNames?: string[]
++    validMajorCombos?: string[]
++  } = {}
+ ): ProcessedRecord[] {
+   return processedRecords.map((item) => {
+     const issues: ValidationIssue[] = [...(item.issues || [])]
+@@ -118,6 +123,21 @@ export function attachValidationIssues(
+       })
+     }
+ 
++
++    validateSchoolAndMajorCombo({
++      validSchoolNames: ruleCenterOptions.validSchoolNames,
++      validMajorCombos: ruleCenterOptions.validMajorCombos,
++      schoolName: result.schoolName,
++      majorName: result.majorName,
++      level: result.level1,
++    }).forEach((message) => {
++      issues.push({
++        code: message.startsWith('学校名称') ? 'rule_center_school_unmatched' : 'rule_center_major_combo_unmatched',
++        level: 'warning',
++        message,
++      })
++    })
++
+     if (result.year && result.province && result.batch) {
+       const validBatches =
+         provinceCurrentBatchDictByYear[result.year]?.[result.province] || []
+diff --git a/src/modules/xueyeqiao.ts b/src/modules/xueyeqiao.ts
+index bc5ec8e..c5f2046 100644
+--- a/src/modules/xueyeqiao.ts
++++ b/src/modules/xueyeqiao.ts
+@@ -19,6 +19,10 @@
+  */
+ 
+ import ExcelJS from 'exceljs'
++import {
++  normalizeSchoolNameForRuleCenter,
++  validateSchoolAndMajorCombo,
++} from './ruleCenterValidation'
+ 
+ export type XueyeqiaoExportRow = {
+   学校名称: string
+@@ -59,6 +63,7 @@ export type XueyeqiaoPreviewRow = XueyeqiaoExportRow & {
+   原始报考要求: string
+   原始备注: string
+   学校名称匹配: string
++  招生专业组合匹配: string
+ }
+ 
+ export type XueyeqiaoProcessResult = {
+@@ -223,10 +228,6 @@ function toNumber(value: unknown): number | null {
+   return Number.isNaN(num) ? null : num
+ }
+ 
+-function normalizeSchoolName(value: string) {
+-  return value.replace(/\s/g, '')
+-}
+-
+ function normalizeCategory(raw: string) {
+   const text = t(raw)
+   if (text === '物理' || text === '物理类') {
+@@ -496,8 +497,9 @@ function fixRemark(rawValue: string) {
+ export function processXueyeqiaoData(params: {
+   rows: Record<string, unknown>[]
+   validSchoolNames: string[]
++  validMajorCombos?: string[]
+ }) {
+-  const { rows, validSchoolNames } = params
++  const { rows, validSchoolNames, validMajorCombos = [] } = params
+ 
+   const detectedHeaders = rows.length ? Object.keys(rows[0]) : []
+   const missingColumns = REQUIRED_COLUMNS.filter((col) => !detectedHeaders.includes(col))
+@@ -515,7 +517,7 @@ export function processXueyeqiaoData(params: {
+     } satisfies XueyeqiaoProcessResult
+   }
+ 
+-  const schoolSet = new Set(validSchoolNames.map((name) => normalizeSchoolName(name)))
++  const schoolSet = new Set(validSchoolNames.map((name) => normalizeSchoolNameForRuleCenter(name)))
+ 
+   const previewRows: XueyeqiaoPreviewRow[] = rows.map((row, rowNo) => {
+     const schoolName = t(row['院校名称'])
+@@ -539,16 +541,29 @@ export function processXueyeqiaoData(params: {
+     const schoolMatch =
+       schoolSet.size === 0
+         ? '未启用学校规则'
+-        : schoolSet.has(normalizeSchoolName(schoolName))
++        : schoolSet.has(normalizeSchoolNameForRuleCenter(schoolName))
+           ? '匹配'
+           : '未匹配'
+ 
+     const issueList =
+       fixedRemark.issues[0] === '无问题' ? [] : [...fixedRemark.issues]
+ 
+-    if (schoolMatch === '未匹配') {
+-      issueList.push('学校名称未匹配规则中心')
+-    }
++    const ruleCenterIssues = validateSchoolAndMajorCombo({
++      validSchoolNames,
++      validMajorCombos,
++      schoolName,
++      majorName,
++      level: level1,
++    })
++
++    issueList.push(...ruleCenterIssues)
++
++    const majorComboMatch =
++      validMajorCombos.length === 0
++        ? '未启用专业组合规则'
++        : ruleCenterIssues.some((msg) => msg.includes('招生专业组合'))
++          ? '未匹配'
++          : '匹配'
+ 
+     const hasIssue = issueList.length > 0
+ 
+@@ -591,6 +606,7 @@ export function processXueyeqiaoData(params: {
+   原始报考要求: applyRequirementRaw,
+   原始备注: majorRemarkRaw,
+   学校名称匹配: schoolMatch,
++  招生专业组合匹配: majorComboMatch,
+   ...exportRow,
+ }
+   })
+diff --git a/src/pages/ExceptionStep.tsx b/src/pages/ExceptionStep.tsx
+index 6a37384..634999f 100644
+--- a/src/pages/ExceptionStep.tsx
++++ b/src/pages/ExceptionStep.tsx
+@@ -17,6 +17,7 @@ import { usePreviewStore } from '../stores/previewStore'
+ import { useRuleStore } from '../stores/ruleStore'
+ import { buildProcessedRecords } from '../modules/match'
+ import { attachValidationIssues } from '../modules/validate'
++import { useRuleCenterStore } from '../stores/ruleCenterStore'
+ import {
+   getIssueCodeLabel,
+   getIssueLevelLabel,
+@@ -42,6 +43,7 @@ export default function ExceptionStep() {
+   } = usePreviewStore()
+ 
+   const { provinceCurrentBatchDictByYear } = useRuleStore()
++  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+ 
+   const [keyword, setKeyword] = useState('')
+   const [matchStatusFilter, setMatchStatusFilter] = useState<string | undefined>()
+@@ -157,7 +159,10 @@ export default function ExceptionStep() {
+       provinceCurrentBatchDictByYear,
+       nextManualSelections
+     )
+-    const validated = attachValidationIssues(processed, provinceCurrentBatchDictByYear)
++    const validated = attachValidationIssues(processed, provinceCurrentBatchDictByYear, {
++      validSchoolNames,
++      validMajorCombos,
++    })
+     setProcessedRecords(validated)
+   }
+ 
+diff --git a/src/pages/MappingStep.tsx b/src/pages/MappingStep.tsx
+index 01809e7..5d5000f 100644
+--- a/src/pages/MappingStep.tsx
++++ b/src/pages/MappingStep.tsx
+@@ -8,6 +8,7 @@ import { matchFields } from '../utils/mapping'
+ import { buildScoreRecords, buildPlanRecords } from '../modules/transform'
+ import { buildProcessedRecords } from '../modules/match'
+ import { attachValidationIssues } from '../modules/validate'
++import { useRuleCenterStore } from '../stores/ruleCenterStore'
+ 
+ const { Paragraph } = Typography
+ 
+@@ -34,6 +35,8 @@ export default function MappingStep() {
+     manualSchoolName,
+   } = useTaskStore()
+ 
++  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
++
+   const {
+     fieldAliases,
+     provinceRules,
+@@ -128,7 +131,8 @@ export default function MappingStep() {
+ 
+     const validated = attachValidationIssues(
+       processed,
+-      provinceCurrentBatchDictByYear
++      provinceCurrentBatchDictByYear,
++      { validSchoolNames, validMajorCombos }
+     )
+ 
+     setProcessedRecords(validated)
+diff --git a/src/pages/tools/CollegeScoreNormalTool.tsx b/src/pages/tools/CollegeScoreNormalTool.tsx
+index cd00208..b59e8b7 100644
+--- a/src/pages/tools/CollegeScoreNormalTool.tsx
++++ b/src/pages/tools/CollegeScoreNormalTool.tsx
+@@ -20,6 +20,7 @@ import {
+   processNormalCollegeScoreWorkbook,
+   type NormalCollegeScoreProcessResult,
+ } from '../../modules/collegeScoreNormal'
++import { useRuleCenterStore } from '../../stores/ruleCenterStore'
+ 
+ const { Dragger } = Upload
+ const { Paragraph } = Typography
+@@ -52,6 +53,8 @@ type PreviewRow = {
+   专业组代码: string
+   首选科目: string
+   院校招生代码: string
++  数据是否有问题: string
++  问题列表: string
+ }
+ 
+ const TABLE_COLUMNS = [
+@@ -70,6 +73,8 @@ const TABLE_COLUMNS = [
+   { title: '专业组代码', dataIndex: '专业组代码', key: '专业组代码', width: 140 },
+   { title: '首选科目', dataIndex: '首选科目', key: '首选科目', width: 100 },
+   { title: '院校招生代码', dataIndex: '院校招生代码', key: '院校招生代码', width: 140 },
++  { title: '数据是否有问题', dataIndex: '数据是否有问题', key: '数据是否有问题', width: 130 },
++  { title: '问题列表', dataIndex: '问题列表', key: '问题列表', width: 260 },
+ ]
+ 
+ async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
+@@ -95,6 +100,8 @@ function buildRowKey(row: PreviewRow) {
+ }
+ 
+ export default function CollegeScoreNormalTool() {
++  const { validSchoolNames } = useRuleCenterStore()
++
+   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
+   const [sheetName, setSheetName] = useState<string>()
+   const [processing, setProcessing] = useState(false)
+@@ -123,7 +130,9 @@ export default function CollegeScoreNormalTool() {
+ 
+     setProcessing(true)
+     try {
+-      const processed = processNormalCollegeScoreWorkbook(loadedWorkbook.workbook, sheetName)
++      const processed = processNormalCollegeScoreWorkbook(loadedWorkbook.workbook, sheetName, {
++        validSchoolNames,
++      })
+       setResult(processed)
+ 
+       if (processed.missingColumns.length > 0) {
+diff --git a/src/pages/tools/GroupCodeMatchTool.tsx b/src/pages/tools/GroupCodeMatchTool.tsx
+index f0eb3dd..3a136c5 100644
+--- a/src/pages/tools/GroupCodeMatchTool.tsx
++++ b/src/pages/tools/GroupCodeMatchTool.tsx
+@@ -45,6 +45,7 @@ import {
+   processGroupCodeMatch,
+   type GroupCodeMatchRow,
+ } from '../../modules/groupCodeMatch'
++import { useRuleCenterStore } from '../../stores/ruleCenterStore'
+ 
+ const { Dragger } = Upload
+ const { Paragraph, Text } = Typography
+@@ -124,6 +125,8 @@ function downloadBlob(blob: Blob, filename: string) {
+ }
+ 
+ export default function GroupCodeMatchTool() {
++  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
++
+   const [importWorkbook, setImportWorkbook] = useState<LoadedWorkbook | null>(null)
+   const [planWorkbook, setPlanWorkbook] = useState<LoadedWorkbook | null>(null)
+   const [importSheetName, setImportSheetName] = useState<string>()
+@@ -248,6 +251,8 @@ export default function GroupCodeMatchTool() {
+         importRows,
+         planRows,
+         yearValue: currentYear,
++        validSchoolNames,
++        validMajorCombos,
+       })
+       setRows(result.rows)
+       setManualSelections({})
+diff --git a/src/pages/tools/PlanCompareTool.tsx b/src/pages/tools/PlanCompareTool.tsx
+index 33c7776..8f7e387 100644
+--- a/src/pages/tools/PlanCompareTool.tsx
++++ b/src/pages/tools/PlanCompareTool.tsx
+@@ -45,6 +45,7 @@ import {
+   type PlanCompareResult,
+   type PlanScoreCompareRow,
+ } from '../../modules/planCompare'
++import { useRuleCenterStore } from '../../stores/ruleCenterStore'
+ 
+ const { Dragger } = Upload
+ const { Paragraph, Text } = Typography
+@@ -80,6 +81,8 @@ function getFirstSheetName(loaded: LoadedWorkbook | null) {
+ }
+ 
+ export default function PlanCompareTool() {
++  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
++
+   const [planWorkbook, setPlanWorkbook] = useState<LoadedWorkbook | null>(null)
+   const [scoreWorkbook, setScoreWorkbook] = useState<LoadedWorkbook | null>(null)
+   const [collegeWorkbook, setCollegeWorkbook] = useState<LoadedWorkbook | null>(null)
+@@ -151,6 +154,8 @@ export default function PlanCompareTool() {
+         scoreRows,
+         collegeRows,
+         yearValue,
++        validSchoolNames,
++        validMajorCombos,
+       })
+ 
+       setResult(compareResult)
+diff --git a/src/pages/tools/XueyeqiaoTool.tsx b/src/pages/tools/XueyeqiaoTool.tsx
+index 0178afc..2dde847 100644
+--- a/src/pages/tools/XueyeqiaoTool.tsx
++++ b/src/pages/tools/XueyeqiaoTool.tsx
+@@ -54,6 +54,7 @@ type PreviewRow = {
+   rowId: string
+   学校名称: string
+   学校名称匹配: string
++  招生专业组合匹配: string
+   数据是否有问题: string
+   问题列表: string
+   招生年份: string
+@@ -116,6 +117,7 @@ function buildRowKey(row: PreviewRow) {
+ const TABLE_COLUMNS = [
+   { title: '学校名称', dataIndex: '学校名称', key: '学校名称', width: 180 },
+   { title: '学校匹配', dataIndex: '学校名称匹配', key: '学校名称匹配', width: 120 },
++  { title: '专业组合匹配', dataIndex: '招生专业组合匹配', key: '招生专业组合匹配', width: 150 },
+   { title: '数据是否有问题', dataIndex: '数据是否有问题', key: '数据是否有问题', width: 130 },
+   { title: '问题列表', dataIndex: '问题列表', key: '问题列表', width: 280 },
+   { title: '招生年份', dataIndex: '招生年份', key: '招生年份', width: 100 },
+@@ -144,7 +146,7 @@ const TABLE_COLUMNS = [
+ ]
+ 
+ export default function XueyeqiaoTool() {
+-  const { validSchoolNames } = useRuleCenterStore()
++  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+ 
+   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
+   const [sheetName, setSheetName] = useState<string>()
+@@ -180,6 +182,7 @@ export default function XueyeqiaoTool() {
+       const processed = processXueyeqiaoData({
+         rows,
+         validSchoolNames,
++        validMajorCombos,
+       })
+       setResult(processed)
+ 
+diff --git a/src/stores/ruleCenterStore.ts b/src/stores/ruleCenterStore.ts
+index 8b8a4c7..d942ec8 100644
+--- a/src/stores/ruleCenterStore.ts
++++ b/src/stores/ruleCenterStore.ts
+@@ -38,6 +38,7 @@ import {
+   DEFAULT_EXCLUSION_KEYWORDS,
+   DEFAULT_REMARK_TYPE_RULES,
+ } from '../constants/remarkTypeRules'
++import { buildMajorComboForRuleCenter } from '../modules/ruleCenterValidation'
+ 
+ export type RemarkTypeRule = {
+   id: string
+@@ -537,21 +538,36 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
+     }
+ 
+     const firstRow = rows[0]
++    const hasDirectCombo = '招生专业组合' in firstRow
++    const hasMajor = '招生专业' in firstRow || '专业名称' in firstRow || '专业' in firstRow
++    const hasLevel = '一级层次' in firstRow || '层次' in firstRow || '专业层次' in firstRow
+ 
+-    if (!('招生专业' in firstRow)) {
+-      throw new Error('专业规则文件缺少“招生专业”列')
++    if (!hasDirectCombo && !(hasMajor && hasLevel)) {
++      throw new Error('专业规则文件缺少“招生专业组合”列，或缺少可组合的“招生专业/专业名称/专业” + “一级层次/层次/专业层次”列')
+     }
+ 
+     const values = Array.from(
+       new Set(
+         rows
+-          .map((row) => String(row['招生专业'] ?? '').trim())
++          .map((row) => {
++            const directCombo = String(row['招生专业组合'] ?? '').trim()
++            if (directCombo) return directCombo
++
++            const major = String(
++              row['招生专业'] ?? row['专业名称'] ?? row['专业'] ?? ''
++            ).trim()
++            const level = String(
++              row['一级层次'] ?? row['层次'] ?? row['专业层次'] ?? ''
++            ).trim()
++
++            return buildMajorComboForRuleCenter(major, level)
++          })
+           .filter(Boolean)
+       )
+     )
+ 
+     if (!values.length) {
+-      throw new Error('专业规则文件中没有有效招生专业')
++      throw new Error('专业规则文件中没有有效招生专业组合')
+     }
+ 
+     await dbSet(
+diff --git a/src/modules/ruleCenterValidation.ts b/src/modules/ruleCenterValidation.ts
+new file mode 100644
+index 0000000..ed946a1
+--- /dev/null
++++ b/src/modules/ruleCenterValidation.ts
+@@ -0,0 +1,83 @@
++export type RuleCenterValidationParams = {
++  validSchoolNames?: string[]
++  validMajorCombos?: string[]
++  schoolName?: unknown
++  majorName?: unknown
++  level?: unknown
++}
++
++export function toRuleText(value: unknown): string {
++  if (value === null || value === undefined) return ''
++  return String(value).trim()
++}
++
++export function normalizeRuleText(value: unknown): string {
++  return toRuleText(value)
++    .replace(/\s+/g, '')
++    .replace(/（/g, '(')
++    .replace(/）/g, ')')
++    .replace(/[［\[【]/g, '(')
++    .replace(/[］\]】]/g, ')')
++}
++
++export function normalizeSchoolNameForRuleCenter(value: unknown): string {
++  return normalizeRuleText(value)
++}
++
++export function normalizeMajorComboForRuleCenter(value: unknown): string {
++  return normalizeRuleText(value)
++}
++
++export function buildMajorComboForRuleCenter(majorName: unknown, level: unknown): string {
++  const major = toRuleText(majorName)
++  const levelText = toRuleText(level).replace(/（/g, '(').replace(/）/g, ')')
++
++  if (!major && !levelText) return ''
++  return `${major}${levelText}`
++}
++
++export function validateSchoolAndMajorCombo(params: RuleCenterValidationParams): string[] {
++  const {
++    validSchoolNames = [],
++    validMajorCombos = [],
++    schoolName,
++    majorName,
++    level,
++  } = params
++
++  const issues: string[] = []
++
++  const schoolRules = validSchoolNames
++    .map(normalizeSchoolNameForRuleCenter)
++    .filter(Boolean)
++  const schoolSet = new Set(schoolRules)
++  const school = normalizeSchoolNameForRuleCenter(schoolName)
++
++  if (schoolSet.size > 0) {
++    if (!school) {
++      issues.push('学校名称为空，无法匹配规则中心')
++    } else if (!schoolSet.has(school)) {
++      issues.push(`学校名称未匹配规则中心：${toRuleText(schoolName)}`)
++    }
++  }
++
++  const majorRules = validMajorCombos
++    .map(normalizeMajorComboForRuleCenter)
++    .filter(Boolean)
++  const majorSet = new Set(majorRules)
++
++  if (majorSet.size > 0) {
++    const comboRaw = buildMajorComboForRuleCenter(majorName, level)
++    const combo = normalizeMajorComboForRuleCenter(comboRaw)
++
++    if (!toRuleText(majorName) || !toRuleText(level)) {
++      issues.push(
++        `招生专业组合信息不完整，需按“专业名称+层次”校验：专业=${toRuleText(majorName) || '空'}，层次=${toRuleText(level) || '空'}`
++      )
++    } else if (!majorSet.has(combo)) {
++      issues.push(`招生专业组合未匹配规则中心：${comboRaw}`)
++    }
++  }
++
++  return Array.from(new Set(issues))
++}

@@ -20,6 +20,7 @@ import {
   processNormalCollegeScoreWorkbook,
   type NormalCollegeScoreProcessResult,
 } from '../../modules/collegeScoreNormal'
+import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 
 const { Dragger } = Upload
 const { Paragraph } = Typography
@@ -52,6 +53,8 @@ type PreviewRow = {
   专业组代码: string
   首选科目: string
   院校招生代码: string
+  数据是否有问题: string
+  问题列表: string
 }
 
 const TABLE_COLUMNS = [
@@ -70,6 +73,8 @@ const TABLE_COLUMNS = [
   { title: '专业组代码', dataIndex: '专业组代码', key: '专业组代码', width: 140 },
   { title: '首选科目', dataIndex: '首选科目', key: '首选科目', width: 100 },
   { title: '院校招生代码', dataIndex: '院校招生代码', key: '院校招生代码', width: 140 },
+  { title: '数据是否有问题', dataIndex: '数据是否有问题', key: '数据是否有问题', width: 130 },
+  { title: '问题列表', dataIndex: '问题列表', key: '问题列表', width: 260 },
 ]
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
@@ -95,6 +100,8 @@ function buildRowKey(row: PreviewRow) {
 }
 
 export default function CollegeScoreNormalTool() {
+  const { validSchoolNames } = useRuleCenterStore()
+
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
   const [processing, setProcessing] = useState(false)
@@ -123,7 +130,9 @@ export default function CollegeScoreNormalTool() {
 
     setProcessing(true)
     try {
-      const processed = processNormalCollegeScoreWorkbook(loadedWorkbook.workbook, sheetName)
+      const processed = processNormalCollegeScoreWorkbook(loadedWorkbook.workbook, sheetName, {
+        validSchoolNames,
+      })
       setResult(processed)
 
       if (processed.missingColumns.length > 0) {

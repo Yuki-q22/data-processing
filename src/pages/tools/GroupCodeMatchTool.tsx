@@ -45,6 +45,7 @@ import {
   processGroupCodeMatch,
   type GroupCodeMatchRow,
 } from '../../modules/groupCodeMatch'
+import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 
 const { Dragger } = Upload
 const { Paragraph, Text } = Typography
@@ -124,6 +125,8 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export default function GroupCodeMatchTool() {
+  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+
   const [importWorkbook, setImportWorkbook] = useState<LoadedWorkbook | null>(null)
   const [planWorkbook, setPlanWorkbook] = useState<LoadedWorkbook | null>(null)
   const [importSheetName, setImportSheetName] = useState<string>()
@@ -248,6 +251,8 @@ export default function GroupCodeMatchTool() {
         importRows,
         planRows,
         yearValue: currentYear,
+        validSchoolNames,
+        validMajorCombos,
       })
       setRows(result.rows)
       setManualSelections({})

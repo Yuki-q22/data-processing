@@ -19,6 +19,10 @@
  */
 
 import ExcelJS from 'exceljs'
+import {
+  normalizeSchoolNameForRuleCenter,
+  validateSchoolAndMajorCombo,
+} from './ruleCenterValidation'
 
 export type XueyeqiaoExportRow = {
   学校名称: string
@@ -59,6 +63,7 @@ export type XueyeqiaoPreviewRow = XueyeqiaoExportRow & {
   原始报考要求: string
   原始备注: string
   学校名称匹配: string
+  招生专业组合匹配: string
 }
 
 export type XueyeqiaoProcessResult = {
@@ -221,10 +226,6 @@ function toNumber(value: unknown): number | null {
   if (!text) return null
   const num = Number(text)
   return Number.isNaN(num) ? null : num
-}
-
-function normalizeSchoolName(value: string) {
-  return value.replace(/\s/g, '')
 }
 
 function normalizeCategory(raw: string) {
@@ -496,8 +497,9 @@ function fixRemark(rawValue: string) {
 export function processXueyeqiaoData(params: {
   rows: Record<string, unknown>[]
   validSchoolNames: string[]
+  validMajorCombos?: string[]
 }) {
-  const { rows, validSchoolNames } = params
+  const { rows, validSchoolNames, validMajorCombos = [] } = params
 
   const detectedHeaders = rows.length ? Object.keys(rows[0]) : []
   const missingColumns = REQUIRED_COLUMNS.filter((col) => !detectedHeaders.includes(col))
@@ -515,7 +517,7 @@ export function processXueyeqiaoData(params: {
     } satisfies XueyeqiaoProcessResult
   }
 
-  const schoolSet = new Set(validSchoolNames.map((name) => normalizeSchoolName(name)))
+  const schoolSet = new Set(validSchoolNames.map((name) => normalizeSchoolNameForRuleCenter(name)))
 
   const previewRows: XueyeqiaoPreviewRow[] = rows.map((row, rowNo) => {
     const schoolName = t(row['院校名称'])
@@ -539,16 +541,29 @@ export function processXueyeqiaoData(params: {
     const schoolMatch =
       schoolSet.size === 0
         ? '未启用学校规则'
-        : schoolSet.has(normalizeSchoolName(schoolName))
+        : schoolSet.has(normalizeSchoolNameForRuleCenter(schoolName))
           ? '匹配'
           : '未匹配'
 
     const issueList =
       fixedRemark.issues[0] === '无问题' ? [] : [...fixedRemark.issues]
 
-    if (schoolMatch === '未匹配') {
-      issueList.push('学校名称未匹配规则中心')
-    }
+    const ruleCenterIssues = validateSchoolAndMajorCombo({
+      validSchoolNames,
+      validMajorCombos,
+      schoolName,
+      majorName,
+      level: level1,
+    })
+
+    issueList.push(...ruleCenterIssues)
+
+    const majorComboMatch =
+      validMajorCombos.length === 0
+        ? '未启用专业组合规则'
+        : ruleCenterIssues.some((msg) => msg.includes('招生专业组合'))
+          ? '未匹配'
+          : '匹配'
 
     const hasIssue = issueList.length > 0
 
@@ -591,6 +606,7 @@ export function processXueyeqiaoData(params: {
   原始报考要求: applyRequirementRaw,
   原始备注: majorRemarkRaw,
   学校名称匹配: schoolMatch,
+  招生专业组合匹配: majorComboMatch,
   ...exportRow,
 }
   })

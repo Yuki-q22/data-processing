@@ -1,4 +1,5 @@
 import type { ProcessedRecord, ValidationIssue } from '../types/record'
+import { validateSchoolAndMajorCombo } from './ruleCenterValidation'
 
 function isValidDataSource(value?: string) {
   const allowed = [
@@ -20,7 +21,11 @@ function needsFirstSubject(subjectCategory?: string) {
 
 export function attachValidationIssues(
   processedRecords: ProcessedRecord[],
-  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
+  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>,
+  ruleCenterOptions: {
+    validSchoolNames?: string[]
+    validMajorCombos?: string[]
+  } = {}
 ): ProcessedRecord[] {
   return processedRecords.map((item) => {
     const issues: ValidationIssue[] = [...(item.issues || [])]
@@ -117,6 +122,21 @@ export function attachValidationIssues(
         message: `招生科类为“${result.subjectCategory}”时，首选科目建议人工确认`,
       })
     }
+
+
+    validateSchoolAndMajorCombo({
+      validSchoolNames: ruleCenterOptions.validSchoolNames,
+      validMajorCombos: ruleCenterOptions.validMajorCombos,
+      schoolName: result.schoolName,
+      majorName: result.majorName,
+      level: result.level1,
+    }).forEach((message) => {
+      issues.push({
+        code: message.startsWith('学校名称') ? 'rule_center_school_unmatched' : 'rule_center_major_combo_unmatched',
+        level: 'warning',
+        message,
+      })
+    })
 
     if (result.year && result.province && result.batch) {
       const validBatches =
