@@ -640,7 +640,7 @@ export default function ExceptionStep() {
               } 条）`}
               extra={
                 <Space>
-                  {remarkBestMatch.bestScore >= 30 ? (
+                  {remarkBestMatch.bestScore >= 45 ? (
                     <Tag color="gold">已按备注高亮最相近候选</Tag>
                   ) : null}
 
@@ -679,7 +679,7 @@ export default function ExceptionStep() {
                       const selected = activeSelectedId === candidate.rowId
 
                       const isBestRemarkMatch =
-                        remarkBestMatch.bestScore >= 30 &&
+                        remarkBestMatch.bestScore >= 45 &&
                         remarkBestMatch.bestKey === String(candidate.rowId)
 
                       return (

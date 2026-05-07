@@ -17,45 +17,85 @@ function normalizeText(value: unknown) {
     .replace(/[（）]/g, (char) => (char === '（' ? '(' : ')'))
     .replace(/\s+/g, '')
     .replace(/[，。；：、,.;:]/g, '')
+    .replace(/[【】\[\]{}《》<>]/g, '')
     .toLowerCase()
 }
 
 /**
  * 只收集备注字段。
- * 注意：
- * - 不收集专业名称
- * - 不收集层次
- * - 不收集招生类型
- * - 不收集方向
- * - 不收集批次
- *
- * 避免“专业相同”或“类型相同”干扰备注智能高亮。
+ * 不使用专业名称、层次、招生类型、方向、批次，避免干扰备注相似度。
  */
 function collectRemarkText(record: RemarkLikeInput) {
-  return [
-    record.remark,
-    record.备注,
-    record.majorRemark,
-    record.planRemark,
-  ]
+  return [record.remark, record.备注, record.majorRemark, record.planRemark]
     .map(toText)
     .filter(Boolean)
     .join(' ')
 }
 
+function splitRemarkParts(value: unknown) {
+  const rawText = toText(value)
+
+  if (!rawText) return []
+
+  return rawText
+    .replace(/[（）]/g, (char) => (char === '（' ? '(' : ')'))
+    .split(/[\s，。；：、,.;:/|｜]+/)
+    .map((item) => normalizeText(item))
+    .filter((item) => item.length >= 2)
+}
+
 function extractBracketTokens(value: string) {
   const tokens: string[] = []
-  const matches: string[] = value.match(/\(([^)]{1,80})\)/g) ?? []
+  const matches: string[] = value.match(/\(([^)]{1,120})\)/g) ?? []
 
   matches.forEach((item: string) => {
     const clean = item.replace(/[()]/g, '').trim()
 
     if (clean) {
       tokens.push(normalizeText(clean))
+      splitRemarkParts(clean).forEach((part) => tokens.push(part))
     }
   })
 
   return tokens
+}
+
+function makeNgrams(text: string, size: number) {
+  const grams = new Set<string>()
+
+  if (text.length < size) {
+    if (text) grams.add(text)
+    return grams
+  }
+
+  for (let i = 0; i <= text.length - size; i += 1) {
+    grams.add(text.slice(i, i + size))
+  }
+
+  return grams
+}
+
+function diceSimilarity(a: string, b: string, size: number) {
+  const gramsA = makeNgrams(a, size)
+  const gramsB = makeNgrams(b, size)
+
+  if (!gramsA.size || !gramsB.size) return 0
+
+  let intersection = 0
+
+  gramsA.forEach((gram) => {
+    if (gramsB.has(gram)) intersection += 1
+  })
+
+  return (2 * intersection) / (gramsA.size + gramsB.size)
+}
+
+function getTextSimilarityScore(recordText: string, candidateText: string) {
+  const sim2 = diceSimilarity(recordText, candidateText, 2)
+  const sim3 = diceSimilarity(recordText, candidateText, 3)
+
+  // 2-gram 对短中文片段更敏感，3-gram 对长备注更稳定。
+  return Math.round(sim2 * 35 + sim3 * 45)
 }
 
 function splitUsefulTokens(value: unknown) {
@@ -66,13 +106,11 @@ function splitUsefulTokens(value: unknown) {
 
   const tokens = new Set<string>()
 
-  /**
-   * 只放和备注强相关的关键词。
-   * 不放“本科”“本科普通”“本科C段”等层次/批次词，避免错误高亮。
-   */
   const keywordList = [
     '少数民族',
     '少数民族预科',
+    '少数民族人才培养',
+    '少数民族人才培养专项',
     '预科',
     '民族班',
     '藏区专项',
@@ -115,6 +153,9 @@ function splitUsefulTokens(value: unknown) {
     '英语',
     '日语',
     '俄语',
+    '学费待定',
+    '学费',
+    '待定',
   ]
 
   keywordList.forEach((keyword) => {
@@ -131,13 +172,16 @@ function splitUsefulTokens(value: unknown) {
     }
   })
 
+  splitRemarkParts(rawText).forEach((part) => {
+    if (part.length >= 2) {
+      tokens.add(part)
+    }
+  })
+
   return Array.from(tokens)
 }
 
 function hasNegativeConflict(recordText: string, candidateText: string) {
-  /**
-   * “非师范”不能被普通“师范”误判为相近。
-   */
   if (recordText.includes('非师范')) {
     return candidateText.includes('师范') && !candidateText.includes('非师范')
   }
@@ -146,9 +190,6 @@ function hasNegativeConflict(recordText: string, candidateText: string) {
     return recordText.includes('师范') && !recordText.includes('非师范')
   }
 
-  /**
-   * “不招/只招”这类限制条件不同，不要轻易高亮。
-   */
   if (recordText.includes('不招') && !candidateText.includes('不招')) {
     return true
   }
@@ -172,33 +213,59 @@ function getStrongKeywordScore(recordText: string, candidateText: string) {
   let score = 0
 
   const strongKeywords = [
+    '少数民族人才培养专项',
+    '少数民族人才培养',
     '藏区专项',
     '革命老区专项',
     '其他民族地区专项',
     '民族地区专项',
-    '少数民族',
     '少数民族预科',
+    '少数民族',
     '民族班',
-    '中外合作',
     '中外合作办学',
+    '中外合作',
     '地方专项',
     '国家专项',
     '高校专项',
     '建档立卡',
-    '预科',
-    '定向',
+    '南疆单列',
+    '边防军人子女预科',
     '公费师范',
     '免费师范',
     '优师',
-    '南疆单列',
-    '边防军人子女预科',
+    '预科',
+    '定向',
   ]
 
   strongKeywords.forEach((keyword) => {
     const clean = normalizeText(keyword)
 
     if (recordText.includes(clean) && candidateText.includes(clean)) {
-      score += clean.length >= 5 ? 70 : 50
+      score += clean.length >= 6 ? 90 : 65
+    }
+  })
+
+  return score
+}
+
+function getTokenCoverageScore(recordTokens: string[], candidateTokens: string[], candidateText: string) {
+  let score = 0
+
+  recordTokens.forEach((token) => {
+    if (!token) return
+
+    if (candidateText.includes(token)) {
+      if (token.length >= 8) score += 60
+      else if (token.length >= 5) score += 40
+      else if (token.length >= 3) score += 22
+      else score += 8
+    }
+
+    if (candidateTokens.includes(token)) {
+      if (token.length >= 8) score += 50
+      else if (token.length >= 5) score += 35
+      else if (token.length >= 3) score += 18
+      else score += 6
     }
   })
 
@@ -215,14 +282,7 @@ export function getManualMatchRemarkScore(
   const recordText = normalizeText(recordRawText)
   const candidateText = normalizeText(candidateRawText)
 
-  /**
-   * 当前记录没有备注时，不做备注智能高亮。
-   */
   if (!recordText) return 0
-
-  /**
-   * 候选没有备注时，不参与高亮。
-   */
   if (!candidateText) return 0
 
   if (hasNegativeConflict(recordText, candidateText)) {
@@ -231,83 +291,66 @@ export function getManualMatchRemarkScore(
 
   let score = 0
 
-  /**
-   * 完全相同，最高优先级。
-   */
   if (recordText === candidateText) {
+    score += 160
+  }
+
+  if (candidateText.includes(recordText)) {
     score += 120
   }
 
-  /**
-   * 双向包含。
-   */
-  if (candidateText.includes(recordText)) {
-    score += 80
-  }
-
   if (recordText.includes(candidateText)) {
-    score += 50
+    score += 80
   }
 
   const recordTokens = splitUsefulTokens(recordRawText)
   const candidateTokens = splitUsefulTokens(candidateRawText)
 
-  recordTokens.forEach((token) => {
-    if (!token) return
-
-    if (candidateText.includes(token)) {
-      score += token.length >= 4 ? 25 : 12
-    }
-
-    if (candidateTokens.includes(token)) {
-      score += token.length >= 4 ? 25 : 12
-    }
-  })
-
+  score += getTokenCoverageScore(recordTokens, candidateTokens, candidateText)
   score += getStrongKeywordScore(recordText, candidateText)
 
   /**
-   * 特殊处理：
-   * 当前备注是“革命老区专项”，候选备注包含“革命老区专项”，必须明显高于普通备注。
+   * 长备注兜底：即使没有完整关键词命中，也按中文连续片段相似度给分。
+   * 解决“备注很长但核心内容相近时无法高亮”的问题。
    */
-  if (
-    recordText.includes('革命老区专项') &&
-    candidateText.includes('革命老区专项')
-  ) {
-    score += 100
-  }
-
-  if (recordText.includes('藏区专项') && candidateText.includes('藏区专项')) {
-    score += 100
-  }
-
-  if (
-    recordText.includes('其他民族地区专项') &&
-    candidateText.includes('其他民族地区专项')
-  ) {
-    score += 100
-  }
-
-  if (recordText.includes('中外合作') && candidateText.includes('中外合作')) {
-    score += 90
-  }
+  score += getTextSimilarityScore(recordText, candidateText)
 
   /**
-   * 如果当前备注有明显特殊词，而候选没有任何特殊词，则降低分数。
+   * 明确业务词额外加权。
    */
+  const exactStrongPairs = [
+    '革命老区专项',
+    '藏区专项',
+    '其他民族地区专项',
+    '少数民族人才培养专项',
+    '少数民族人才培养',
+    '少数民族预科',
+    '中外合作',
+    '地方专项',
+    '国家专项',
+    '高校专项',
+    '建档立卡',
+  ]
+
+  exactStrongPairs.forEach((keyword) => {
+    const clean = normalizeText(keyword)
+
+    if (recordText.includes(clean) && candidateText.includes(clean)) {
+      score += 120
+    }
+  })
+
   const currentHasSpecialToken = recordTokens.some((token) => token.length >= 2)
   const candidateHasSpecialToken = candidateTokens.some((token) => token.length >= 2)
 
   if (currentHasSpecialToken && !candidateHasSpecialToken) {
-    score -= 30
+    score -= 50
   }
 
-  /**
-   * 如果当前备注和候选备注都没有可识别关键词，但文本完全不同，不给弱匹配分。
-   * 这样避免“普通类”误高亮到无关候选。
-   */
   if (!currentHasSpecialToken && !candidateHasSpecialToken && recordText !== candidateText) {
-    return 0
+    const similarityScore = getTextSimilarityScore(recordText, candidateText)
+
+    return similarityScore >= 35 ? similarityScore : 0
   }
 
   return score
