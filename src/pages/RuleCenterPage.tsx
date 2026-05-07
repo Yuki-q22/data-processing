@@ -5,6 +5,7 @@
  * - 控制规则中心页面
  * - 管理学校名称规则、招生专业组合规则、备注招生类型规则
  * - 控制新增、编辑、删除规则的弹框和表格
+ * - 支持备注招生类型规则上下拖动排序
  *
  * 常改位置：
  * - 新增规则弹框
@@ -12,13 +13,20 @@
  * - 保存按钮
  * - 规则表格
  * - 规则分类
+ * - SortableRemarkRuleRow：备注规则拖拽行
  *
  * 注意：
  * - 如果输入框输入一个字就失焦，优先检查本文件中的弹框和表单状态
  * - 如果规则保存后刷新丢失，检查 src/stores/ruleCenterStore.ts 或 Firebase 服务
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import {
   Alert,
   Button,
@@ -38,7 +46,26 @@ import {
   Upload,
   message,
 } from 'antd'
-import { GoogleOutlined, InboxOutlined } from '@ant-design/icons'
+import {
+  GoogleOutlined,
+  HolderOutlined,
+  InboxOutlined,
+} from '@ant-design/icons'
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   useRuleCenterStore,
   type RemarkTypeRule,
@@ -87,6 +114,7 @@ export default function RuleCenterPage() {
     updateRemarkTypeRule,
     removeRemarkTypeRule,
     resetRemarkTypeRules,
+    reorderRemarkTypeRules,
 
     setExclusionKeywords,
   } = useRuleCenterStore()
@@ -113,6 +141,11 @@ export default function RuleCenterPage() {
   >({})
 
   /**
+   * 正在拖拽保存排序。
+   */
+  const [reorderingRemarkRules, setReorderingRemarkRules] = useState(false)
+
+  /**
    * 已在页面上修改、但还没有保存到 Firebase 的规则 ID。
    * 用 ref 防止 Firebase 实时回流覆盖用户正在输入的内容。
    */
@@ -132,6 +165,14 @@ export default function RuleCenterPage() {
     outputType: '',
     priority: 1,
   })
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 6,
+      },
+    })
+  )
 
   useEffect(() => {
     setExclusionDraft(exclusionKeywords.join('\n'))
@@ -446,6 +487,47 @@ export default function RuleCenterPage() {
     }
   }
 
+  const handleRemarkRuleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!isAdminUser) return
+    if (!over || active.id === over.id) return
+
+    if (Object.keys(dirtyRemarkRuleIds).length > 0) {
+      message.warning('当前有未保存的规则，请先保存后再拖动排序')
+      return
+    }
+
+    const activeId = String(active.id)
+    const overId = String(over.id)
+
+    const oldIndex = remarkRuleDrafts.findIndex((rule) => rule.id === activeId)
+    const newIndex = remarkRuleDrafts.findIndex((rule) => rule.id === overId)
+
+    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return
+
+    const previousDrafts = remarkRuleDrafts
+    const nextDrafts = arrayMove(remarkRuleDrafts, oldIndex, newIndex).map(
+      (rule, index) => ({
+        ...rule,
+        priority: index + 1,
+      })
+    )
+
+    setRemarkRuleDrafts(nextDrafts)
+    setReorderingRemarkRules(true)
+
+    try {
+      await reorderRemarkTypeRules(activeId, overId)
+      message.success('规则顺序已更新')
+    } catch (error) {
+      setRemarkRuleDrafts(previousDrafts)
+      message.error(error instanceof Error ? error.message : '规则排序失败')
+    } finally {
+      setReorderingRemarkRules(false)
+    }
+  }
+
   const handleSaveExclusionKeywords = async () => {
     try {
       await setExclusionKeywords(
@@ -473,87 +555,6 @@ export default function RuleCenterPage() {
       title: '招生专业组合',
       dataIndex: 'value',
       key: 'value',
-    },
-  ]
-
-  const remarkColumns = [
-    {
-      title: '备注查找字段',
-      dataIndex: 'keyword',
-      key: 'keyword',
-      width: 260,
-      render: (_: string, record: RemarkTypeRule) => (
-        <Input
-          disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
-          value={record.keyword}
-          placeholder="如：国家专项"
-          onChange={(e) =>
-            updateRemarkRuleDraft(record.id, { keyword: e.target.value })
-          }
-        />
-      ),
-    },
-    {
-      title: '输出招生类型',
-      dataIndex: 'outputType',
-      key: 'outputType',
-      width: 260,
-      render: (_: string, record: RemarkTypeRule) => (
-        <Input
-          disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
-          value={record.outputType}
-          placeholder="如：国家专项计划"
-          onChange={(e) =>
-            updateRemarkRuleDraft(record.id, { outputType: e.target.value })
-          }
-        />
-      ),
-    },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      key: 'priority',
-      width: 120,
-      render: (_: number, record: RemarkTypeRule) => (
-        <InputNumber
-          disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
-          min={1}
-          style={{ width: '100%' }}
-          value={record.priority}
-          onChange={(value) =>
-            updateRemarkRuleDraft(record.id, {
-              priority: typeof value === 'number' ? value : 9999,
-            })
-          }
-        />
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 160,
-      render: (_: unknown, record: RemarkTypeRule) => (
-        <Space size={8}>
-          <Button
-            type="primary"
-            size="small"
-            loading={savingRemarkRuleIds[record.id]}
-            disabled={!isAdminUser || !dirtyRemarkRuleIds[record.id]}
-            onClick={() => saveRemarkRuleDraft(record.id)}
-          >
-            保存
-          </Button>
-
-          <Button
-            danger
-            size="small"
-            disabled={!isAdminUser || savingRemarkRuleIds[record.id]}
-            onClick={() => handleRemoveRemarkRule(record.id)}
-          >
-            删除
-          </Button>
-        </Space>
-      ),
     },
   ]
 
@@ -773,7 +774,10 @@ export default function RuleCenterPage() {
                       <InboxOutlined />
                     </p>
                     <p className="ant-upload-text">上传招生专业组合规则文件</p>
-                    <p className="ant-upload-hint">文件需包含“招生专业”列</p>
+                    <p className="ant-upload-hint">
+                      文件需包含“招生专业组合”列，或“招生专业/专业名称/专业” +
+                      “一级层次/层次/专业层次”列
+                    </p>
                   </Dragger>
 
                   <Descriptions size="small" column={1}>
@@ -861,17 +865,75 @@ export default function RuleCenterPage() {
               <Alert
                 type="info"
                 showIcon
-                message="新增规则请点击“新增规则”后在弹窗中填写；已有规则编辑只修改本地草稿，点击对应行的“保存”后才会写入云端。"
+                message="新增规则请点击“新增规则”后在弹窗中填写；已有规则编辑只修改本地草稿，点击对应行的“保存”后才会写入云端。可按住左侧拖拽图标上下调整规则优先级，拖动后会自动保存排序。"
               />
 
-              <Table
-                rowKey="id"
-                size="small"
-                pagination={false}
-                columns={remarkColumns}
-                dataSource={remarkRuleDrafts}
-                scroll={{ x: 860 }}
-              />
+              <div
+                style={{
+                  border: '1px solid #f0f0f0',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  opacity: reorderingRemarkRules ? 0.7 : 1,
+                }}
+              >
+                <Row
+                  gutter={12}
+                  align="middle"
+                  style={{
+                    padding: '10px 12px',
+                    background: '#fafafa',
+                    borderBottom: '1px solid #f0f0f0',
+                    fontWeight: 600,
+                  }}
+                >
+                  <Col flex="40px">拖动</Col>
+                  <Col span={7}>备注查找字段</Col>
+                  <Col span={7}>输出招生类型</Col>
+                  <Col span={3}>优先级</Col>
+                  <Col span={5}>操作</Col>
+                </Row>
+
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleRemarkRuleDragEnd}
+                >
+                  <SortableContext
+                    items={remarkRuleDrafts.map((rule) => rule.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {remarkRuleDrafts.map((rule) => (
+                      <SortableRemarkRuleRow
+                        key={rule.id}
+                        rule={rule}
+                        isAdminUser={isAdminUser}
+                        isSaving={Boolean(savingRemarkRuleIds[rule.id])}
+                        isDirty={Boolean(dirtyRemarkRuleIds[rule.id])}
+                        isReordering={reorderingRemarkRules}
+                        onKeywordChange={(value) =>
+                          updateRemarkRuleDraft(rule.id, { keyword: value })
+                        }
+                        onOutputTypeChange={(value) =>
+                          updateRemarkRuleDraft(rule.id, { outputType: value })
+                        }
+                        onPriorityChange={(value) =>
+                          updateRemarkRuleDraft(rule.id, {
+                            priority: typeof value === 'number' ? value : 9999,
+                          })
+                        }
+                        onSave={() => saveRemarkRuleDraft(rule.id)}
+                        onDelete={() => handleRemoveRemarkRule(rule.id)}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+
+                {remarkRuleDrafts.length === 0 ? (
+                  <div style={{ padding: 16, color: '#8c8c8c' }}>
+                    暂无备注招生类型规则
+                  </div>
+                ) : null}
+              </div>
 
               <Divider style={{ margin: '8px 0' }} />
 
@@ -980,5 +1042,121 @@ export default function RuleCenterPage() {
         </Space>
       </Modal>
     </div>
+  )
+}
+
+type SortableRemarkRuleRowProps = {
+  rule: RemarkTypeRule
+  isAdminUser: boolean
+  isSaving: boolean
+  isDirty: boolean
+  isReordering: boolean
+  onKeywordChange: (value: string) => void
+  onOutputTypeChange: (value: string) => void
+  onPriorityChange: (value: number | null) => void
+  onSave: () => void
+  onDelete: () => void
+}
+
+function SortableRemarkRuleRow({
+  rule,
+  isAdminUser,
+  isSaving,
+  isDirty,
+  isReordering,
+  onKeywordChange,
+  onOutputTypeChange,
+  onPriorityChange,
+  onSave,
+  onDelete,
+}: SortableRemarkRuleRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: rule.id,
+    disabled: !isAdminUser || isSaving || isReordering,
+  })
+
+  const rowStyle: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.55 : 1,
+    background: isDirty ? '#fffbe6' : '#fff',
+    zIndex: isDragging ? 10 : undefined,
+    position: 'relative',
+    padding: '8px 12px',
+    borderBottom: '1px solid #f5f5f5',
+  }
+
+  return (
+    <Row ref={setNodeRef} gutter={12} align="middle" style={rowStyle}>
+      <Col flex="40px">
+        <Button
+          type="text"
+          size="small"
+          icon={<HolderOutlined />}
+          disabled={!isAdminUser || isSaving || isReordering}
+          style={{ cursor: isAdminUser ? 'grab' : 'not-allowed' }}
+          {...attributes}
+          {...listeners}
+        />
+      </Col>
+
+      <Col span={7}>
+        <Input
+          disabled={!isAdminUser || isSaving || isReordering}
+          value={rule.keyword}
+          placeholder="如：国家专项"
+          onChange={(e) => onKeywordChange(e.target.value)}
+        />
+      </Col>
+
+      <Col span={7}>
+        <Input
+          disabled={!isAdminUser || isSaving || isReordering}
+          value={rule.outputType}
+          placeholder="如：国家专项计划"
+          onChange={(e) => onOutputTypeChange(e.target.value)}
+        />
+      </Col>
+
+      <Col span={3}>
+        <InputNumber
+          disabled={!isAdminUser || isSaving || isReordering}
+          min={1}
+          style={{ width: '100%' }}
+          value={rule.priority}
+          onChange={onPriorityChange}
+        />
+      </Col>
+
+      <Col span={5}>
+        <Space size={8}>
+          <Button
+            type="primary"
+            size="small"
+            loading={isSaving}
+            disabled={!isAdminUser || !isDirty || isReordering}
+            onClick={onSave}
+          >
+            保存
+          </Button>
+
+          <Button
+            danger
+            size="small"
+            disabled={!isAdminUser || isSaving || isReordering}
+            onClick={onDelete}
+          >
+            删除
+          </Button>
+        </Space>
+      </Col>
+    </Row>
   )
 }

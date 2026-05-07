@@ -12,6 +12,7 @@
  * - addMajorComboRule
  * - 删除规则方法
  * - localStorage 持久化
+ * - reorderRemarkTypeRules：备注招生类型规则拖拽排序
  *
  * 注意：
  * - 如果本地规则无法新增、刷新丢失，优先检查本文件
@@ -19,6 +20,7 @@
 
 import { create } from 'zustand'
 import * as XLSX from 'xlsx'
+import { arrayMove } from '@dnd-kit/sortable'
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
@@ -100,6 +102,7 @@ type RuleCenterStore = {
   ) => Promise<void>
   removeRemarkTypeRule: (id: string) => Promise<void>
   resetRemarkTypeRules: () => Promise<void>
+  reorderRemarkTypeRules: (activeId: string, overId: string) => Promise<void>
 
   setExclusionKeywords: (items: string[]) => Promise<void>
 }
@@ -128,6 +131,13 @@ function sortRules(rules: RemarkTypeRule[]) {
 
     return a.keyword.localeCompare(b.keyword, 'zh-CN')
   })
+}
+
+function normalizeRuleOrder(rules: RemarkTypeRule[]) {
+  return rules.map((rule, index) => ({
+    ...rule,
+    priority: index + 1,
+  }))
 }
 
 function getDefaultRemarkTypeRules(): RemarkTypeRule[] {
@@ -192,7 +202,7 @@ function toCloudPayloadFromRemarkRules(rules: RemarkTypeRule[], uid: string) {
   const now = Date.now()
   const payload: Record<string, CloudRuleItem> = {}
 
-  sortRules(rules).forEach((rule) => {
+  normalizeRuleOrder(sortRules(rules)).forEach((rule) => {
     const keyword = String(rule.keyword ?? '').trim()
     const outputType = String(rule.outputType ?? '').trim()
     const priority = Number(rule.priority ?? 9999)
@@ -596,7 +606,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     }
 
     const rules: RemarkTypeRule[] = rows
-      .map((row) => {
+      .map((row, index) => {
         const keyword = String(row['备注查找字段'] ?? '').trim()
         const outputType = String(row['输出招生类型'] ?? '').trim()
         const priorityRaw = String(row['优先级'] ?? '').trim()
@@ -608,7 +618,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
           id: createRuleId(),
           keyword,
           outputType,
-          priority: Number.isNaN(priority) ? 9999 : priority,
+          priority: Number.isNaN(priority) ? index + 1 : priority,
         }
       })
       .filter(Boolean) as RemarkTypeRule[]
@@ -795,6 +805,52 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     )
 
     await updateMetaVersion()
+  },
+
+  reorderRemarkTypeRules: async (activeId, overId) => {
+    const { currentUid, isAdminUser, remarkTypeRules } = getState()
+    await ensureAdmin(currentUid, isAdminUser)
+
+    const sortedRules = sortRules(remarkTypeRules)
+    const oldIndex = sortedRules.findIndex((rule) => rule.id === activeId)
+    const newIndex = sortedRules.findIndex((rule) => rule.id === overId)
+
+    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return
+
+    const previousRules = remarkTypeRules
+    const nextRules = normalizeRuleOrder(arrayMove(sortedRules, oldIndex, newIndex))
+    const now = Date.now()
+
+    setState({
+      remarkTypeRules: nextRules,
+      remarkRuleFileName: CLOUD_RULE_FILE_NAME,
+    })
+
+    try {
+      const updates: Record<string, unknown> = {}
+
+      nextRules.forEach((rule, index) => {
+        const nextPriority = index + 1
+
+        updates[`rule_center/remark_enrollment_type/${rule.id}/sort_order`] =
+          nextPriority
+        updates[`rule_center/remark_enrollment_type/${rule.id}/updated_at`] =
+          now
+        updates[`rule_center/remark_enrollment_type/${rule.id}/updated_by`] =
+          currentUid!
+      })
+
+      updates['rule_center/meta/version'] = now
+      updates['rule_center/meta/updatedAt'] = now
+
+      await dbUpdate(ref(db), updates)
+    } catch (error) {
+      setState({
+        remarkTypeRules: previousRules,
+      })
+
+      throw error
+    }
   },
 
   setExclusionKeywords: async (items) => {
