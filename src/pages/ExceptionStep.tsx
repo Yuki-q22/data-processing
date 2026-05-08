@@ -8,6 +8,7 @@ import {
   Radio,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   Typography,
@@ -50,6 +51,7 @@ export default function ExceptionStep() {
   >()
   const [issueCodeFilter, setIssueCodeFilter] = useState<string | undefined>()
   const [issueLevelFilter, setIssueLevelFilter] = useState<string | undefined>()
+  const [onlyNeedManualMatch, setOnlyNeedManualMatch] = useState(false)
 
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [activeRowId, setActiveRowId] = useState<string | null>(null)
@@ -116,7 +118,17 @@ export default function ExceptionStep() {
         !issueLevelFilter ||
         item.issues.some((issue) => issue.level === issueLevelFilter)
 
-      return keywordOk && matchStatusOk && issueCodeOk && issueLevelOk
+      const needManualMatchOk =
+        !onlyNeedManualMatch ||
+        (!!item.matchCandidates?.length && !manualMatchSelections[item.rowId])
+
+      return (
+        keywordOk &&
+        matchStatusOk &&
+        issueCodeOk &&
+        issueLevelOk &&
+        needManualMatchOk
+      )
     })
   }, [
     exceptionRecords,
@@ -124,6 +136,8 @@ export default function ExceptionStep() {
     matchStatusFilter,
     issueCodeFilter,
     issueLevelFilter,
+    onlyNeedManualMatch,
+    manualMatchSelections,
   ])
 
   const activeRecord = useMemo(() => {
@@ -551,6 +565,14 @@ export default function ExceptionStep() {
             onChange={setIssueCodeFilter}
             options={issueCodeOptions}
           />
+
+          <Space size={6}>
+            <Switch
+              checked={onlyNeedManualMatch}
+              onChange={setOnlyNeedManualMatch}
+            />
+            <Text style={{ fontSize: UI_FONT_SIZE }}>只看需人工指定</Text>
+          </Space>
         </Space>
       </Card>
 

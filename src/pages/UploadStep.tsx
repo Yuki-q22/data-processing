@@ -9,7 +9,6 @@ import {
   Row,
   Select,
   Space,
-  Switch,
   Typography,
   message,
 } from 'antd'
@@ -124,7 +123,6 @@ export default function UploadStep() {
     taskName,
     year,
     defaultDataSource,
-    enableFuzzyMatch,
     manualSchoolName,
     scoreWorkbook,
     scoreSheetName,
@@ -279,7 +277,7 @@ export default function UploadStep() {
             </Space>
           </Col>
 
-          <Col span={5}>
+          <Col span={8}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>学校名称（选填）</Text>
               <AutoComplete
@@ -294,15 +292,6 @@ export default function UploadStep() {
             </Space>
           </Col>
 
-          <Col span={3}>
-            <Space direction="vertical" style={{ width: '100%' }} size={6}>
-              <Text>启用模糊匹配</Text>
-              <Switch
-                checked={enableFuzzyMatch}
-                onChange={(checked) => setTaskMeta({ enableFuzzyMatch: checked })}
-              />
-            </Space>
-          </Col>
         </Row>
 
         <div style={{ marginTop: 12 }}>

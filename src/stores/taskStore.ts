@@ -5,7 +5,6 @@ type TaskStore = {
   taskName: string
   year: string
   defaultDataSource: string
-  enableFuzzyMatch: boolean
   manualSchoolName: string
 
   templateWorkbook?: UploadedWorkbook
@@ -20,7 +19,7 @@ type TaskStore = {
     patch: Partial<
       Pick<
         TaskStore,
-        'taskName' | 'year' | 'defaultDataSource' | 'enableFuzzyMatch' | 'manualSchoolName'
+        'taskName' | 'year' | 'defaultDataSource' | 'manualSchoolName'
       >
     >
   ) => void
@@ -42,7 +41,6 @@ export const useTaskStore = create<TaskStore>((set) => ({
   taskName: '专业分处理任务',
   year: '2025',
   defaultDataSource: '销售',
-  enableFuzzyMatch: true,
   manualSchoolName: '',
 
   templateWorkbook: undefined,
@@ -94,7 +92,6 @@ export const useTaskStore = create<TaskStore>((set) => ({
       taskName: '专业分处理任务',
       year: '2025',
       defaultDataSource: '销售',
-      enableFuzzyMatch: true,
       manualSchoolName: '',
       templateWorkbook: undefined,
       scoreWorkbook: undefined,

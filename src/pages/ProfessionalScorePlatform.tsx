@@ -1,4 +1,4 @@
-import { Button, Card, Steps } from 'antd'
+import { Button, Card, Space, Steps, message } from 'antd'
 import { useState } from 'react'
 
 import UploadStep from './UploadStep'
@@ -13,8 +13,19 @@ import { confirmToolReset } from '../utils/toolReset'
 
 export default function ProfessionalScorePlatform() {
   const [current, setCurrent] = useState(0)
-  const { resetTask } = useTaskStore()
-  const { resetPreview } = usePreviewStore()
+  const {
+    resetTask,
+    scoreWorkbook,
+    scoreSheetName,
+    planWorkbook,
+    planSheetName,
+  } = useTaskStore()
+  const {
+    resetPreview,
+    scoreMappings,
+    planMappings,
+    processedRecords,
+  } = usePreviewStore()
 
   const stepItems = [
     { title: '文件上传' },
@@ -24,6 +35,48 @@ export default function ProfessionalScorePlatform() {
     { title: '异常处理' },
     { title: '导出结果' },
   ]
+
+  const hasUploadedFiles =
+    !!scoreWorkbook && !!scoreSheetName && !!planWorkbook && !!planSheetName
+
+  const hasMappings =
+    scoreMappings.some((item) => !item.ignored && item.targetField) &&
+    planMappings.some((item) => !item.ignored && item.targetField)
+
+  const hasProcessedRecords = processedRecords.length > 0
+
+  const validateStepEnter = (targetStep: number) => {
+    if (targetStep >= 1 && !hasUploadedFiles) {
+      message.warning('请先上传原始专业分文件和招生计划文件，并选择 Sheet')
+      return false
+    }
+
+    if (targetStep >= 3 && !hasMappings) {
+      message.warning('请先在第二步确认字段映射，并点击“应用当前映射”')
+      return false
+    }
+
+    if (targetStep >= 3 && !hasProcessedRecords) {
+      message.warning('请先在第二步点击“应用当前映射”，生成处理预览')
+      return false
+    }
+
+    return true
+  }
+
+  const changeStep = (targetStep: number) => {
+    if (!validateStepEnter(targetStep)) return
+    setCurrent(targetStep)
+  }
+
+  const handlePrev = () => {
+    setCurrent((prev) => Math.max(prev - 1, 0))
+  }
+
+  const handleNext = () => {
+    const next = Math.min(current + 1, stepItems.length - 1)
+    changeStep(next)
+  }
 
   const handleResetPlatform = () => {
     confirmToolReset({
@@ -41,12 +94,27 @@ export default function ProfessionalScorePlatform() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card style={{ borderRadius: 12 }} extra={<Button danger onClick={handleResetPlatform}>重置</Button>}>
-        <Steps
-          current={current}
-          onChange={setCurrent}
-          items={stepItems}
-        />
+      <Card
+        style={{ borderRadius: 12 }}
+        extra={
+          <Space>
+            <Button disabled={current === 0} onClick={handlePrev}>
+              上一步
+            </Button>
+            <Button
+              type="primary"
+              disabled={current === stepItems.length - 1}
+              onClick={handleNext}
+            >
+              下一步
+            </Button>
+            <Button danger onClick={handleResetPlatform}>
+              重置
+            </Button>
+          </Space>
+        }
+      >
+        <Steps current={current} onChange={changeStep} items={stepItems} />
       </Card>
 
       {current === 0 && <UploadStep />}

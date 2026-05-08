@@ -9,17 +9,39 @@ import {
   Typography,
   message,
 } from 'antd'
+import { useEffect, useMemo } from 'react'
 import { usePreviewStore } from '../stores/previewStore'
 import { TARGET_FIELDS } from '../constants/targetFields'
 import { useTaskStore } from '../stores/taskStore'
 import { useRuleStore } from '../stores/ruleStore'
+import { useRuleCenterStore } from '../stores/ruleCenterStore'
 import { getSheetJson, getSheetRows } from '../utils/workbook'
 import { matchFields } from '../utils/mapping'
 import { buildScoreRecords, buildPlanRecords } from '../modules/transform'
 import { buildProcessedRecords } from '../modules/match'
 import { attachValidationIssues } from '../modules/validate'
+import type { EditableFieldMappingItem } from '../types/mapping'
 
 const { Paragraph } = Typography
+
+function getSheetHeaders(workbook: any, sheetName?: string): string[] {
+  if (!workbook || !sheetName) return []
+
+  const headerRows = getSheetRows(workbook.workbook, sheetName)
+
+  return (headerRows[0] || [])
+    .map((value: unknown) => String(value ?? '').trim())
+    .filter(Boolean)
+}
+
+function sameSourceFields(
+  mappings: EditableFieldMappingItem[],
+  headers: string[]
+): boolean {
+  if (mappings.length !== headers.length) return false
+
+  return headers.every((header, index) => mappings[index]?.sourceField === header)
+}
 
 export default function MappingStep() {
   const {
@@ -52,13 +74,55 @@ export default function MappingStep() {
     provinceYearCategoryType,
     ignoredPlanSourceFields,
     provinceCurrentBatchDictByYear,
-    remarkTypeRules,
   } = useRuleStore()
+
+  const { remarkTypeRules: cloudRemarkTypeRules } = useRuleCenterStore()
+
+  const remarkTypeRules = useMemo(
+    () =>
+      cloudRemarkTypeRules.map((rule) => ({
+        keyword: rule.keyword,
+        output: rule.outputType,
+        priority: rule.priority,
+      })),
+    [cloudRemarkTypeRules]
+  )
 
   const targetOptions = TARGET_FIELDS.map((field) => ({
     label: field,
     value: field,
   }))
+
+  const scoreHeaders = useMemo(
+    () => getSheetHeaders(scoreWorkbook, scoreSheetName),
+    [scoreWorkbook, scoreSheetName]
+  )
+
+  const planHeaders = useMemo(
+    () => getSheetHeaders(planWorkbook, planSheetName),
+    [planWorkbook, planSheetName]
+  )
+
+  const buildAutoScoreMappings = () => matchFields(scoreHeaders, fieldAliases)
+
+  const buildAutoPlanMappings = () =>
+    matchFields(planHeaders, fieldAliases).filter(
+      (item) => !ignoredPlanSourceFields.includes(item.sourceField)
+    )
+
+  useEffect(() => {
+    if (!scoreHeaders.length) return
+    if (sameSourceFields(scoreMappings, scoreHeaders)) return
+
+    resetScoreMappingsToAuto(buildAutoScoreMappings())
+  }, [scoreHeaders.join('\u0001'), fieldAliases])
+
+  useEffect(() => {
+    if (!planHeaders.length) return
+    if (sameSourceFields(planMappings, planHeaders)) return
+
+    resetPlanMappingsToAuto(buildAutoPlanMappings())
+  }, [planHeaders.join('\u0001'), fieldAliases, ignoredPlanSourceFields])
 
   const handleResetAutoMappings = () => {
     if (!scoreWorkbook || !scoreSheetName || !planWorkbook || !planSheetName) {
@@ -66,25 +130,8 @@ export default function MappingStep() {
       return
     }
 
-    const scoreHeaderRows = getSheetRows(scoreWorkbook.workbook, scoreSheetName)
-    const planHeaderRows = getSheetRows(planWorkbook.workbook, planSheetName)
-
-    const scoreHeaders = (scoreHeaderRows[0] || [])
-      .map((v: unknown) => String(v))
-      .filter(Boolean)
-
-    const planHeaders = (planHeaderRows[0] || [])
-      .map((v: unknown) => String(v))
-      .filter(Boolean)
-
-    const autoScoreMappings = matchFields(scoreHeaders, fieldAliases)
-
-    const autoPlanMappings = matchFields(planHeaders, fieldAliases).filter(
-      (item) => !ignoredPlanSourceFields.includes(item.sourceField)
-    )
-
-    resetScoreMappingsToAuto(autoScoreMappings)
-    resetPlanMappingsToAuto(autoPlanMappings)
+    resetScoreMappingsToAuto(buildAutoScoreMappings())
+    resetPlanMappingsToAuto(buildAutoPlanMappings())
 
     message.success('已恢复自动映射')
   }
@@ -105,6 +152,11 @@ export default function MappingStep() {
     const finalPlanMappings = planMappings.filter(
       (item) => !item.ignored && item.targetField
     )
+
+    if (!finalScoreMappings.length || !finalPlanMappings.length) {
+      message.warning('请先完成原始专业分和招生计划字段映射')
+      return
+    }
 
     const scoreRecords = buildScoreRecords(
       scoreRows,
@@ -234,7 +286,7 @@ export default function MappingStep() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card title="字段映射说明" style={{ borderRadius: 12 }}>
         <Paragraph style={{ marginBottom: 12 }}>
-          这里可以手工调整字段映射。修改后点击“应用当前映射”，第四步预览会重新生成。
+          上传文件或切换 Sheet 后会自动生成字段映射。这里可以手工调整字段映射，修改后点击“应用当前映射”，第四步预览会重新生成。
         </Paragraph>
 
         <Space>
