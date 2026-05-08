@@ -7,6 +7,7 @@ export type PlanScoreCompareRow = {
   matchKey: string
   exists: boolean
   reason: string
+  diffReasonTags: string[]
   ruleCenterIssues: string[]
   schoolValidationResult: string
   majorValidationResult: string
@@ -27,6 +28,7 @@ export type PlanCollegeCompareRow = {
   matchKey: string
   exists: boolean
   reason: string
+  diffReasonTags: string[]
   ruleCenterIssues: string[]
   schoolValidationResult: string
   majorValidationResult: string
@@ -51,6 +53,12 @@ export type GroupCodeWarning = {
   message: string
 }
 
+export type DifferenceReasonSummaryItem = {
+  target: '专业分' | '院校分'
+  reason: string
+  count: number
+}
+
 export type PlanCompareResult = {
   yearValue: string
   missingPlanHeaders: string[]
@@ -58,6 +66,7 @@ export type PlanCompareResult = {
   missingCollegeHeaders: string[]
   enrollmentCodeWarnings: EnrollmentCodeWarning[]
   groupCodeWarnings: GroupCodeWarning[]
+  differenceReasonSummary: DifferenceReasonSummaryItem[]
   planScoreRows: PlanScoreCompareRow[]
   planCollegeRows: PlanCollegeCompareRow[]
 }
@@ -619,6 +628,60 @@ function buildGroupCodeWarnings(
     .filter((item): item is GroupCodeWarning => item !== null)
 }
 
+
+function buildPlanScoreDiffReasonTags(params: {
+  exists: boolean
+  groupCode: string
+  enrollmentCode: string
+  majorCode: string
+  ruleCenterIssues: string[]
+}): string[] {
+  const { exists, groupCode, enrollmentCode, majorCode, ruleCenterIssues } = params
+  const tags: string[] = []
+  if (exists) tags.push('已匹配')
+  else tags.push('专业分缺失组合键')
+  if (!groupCode) tags.push('招生计划缺专业组代码')
+  if (!enrollmentCode) tags.push('招生计划缺招生代码')
+  if (!majorCode) tags.push('招生计划缺专业代码')
+  if (ruleCenterIssues.length) tags.push('学校/专业规则异常')
+  return Array.from(new Set(tags))
+}
+
+function buildPlanCollegeDiffReasonTags(params: {
+  exists: boolean
+  groupCode: string
+  enrollmentCode: string
+  ruleCenterIssues: string[]
+}): string[] {
+  const { exists, groupCode, enrollmentCode, ruleCenterIssues } = params
+  const tags: string[] = []
+  if (exists) tags.push('已匹配')
+  else tags.push('院校分缺失组合键')
+  if (!groupCode) tags.push('招生计划缺专业组代码')
+  if (!enrollmentCode) tags.push('招生计划缺招生代码')
+  if (ruleCenterIssues.length) tags.push('学校/专业规则异常')
+  return Array.from(new Set(tags))
+}
+
+function buildDifferenceReasonSummary(
+  planScoreRows: PlanScoreCompareRow[],
+  planCollegeRows: PlanCollegeCompareRow[]
+): DifferenceReasonSummaryItem[] {
+  const map = new Map<string, DifferenceReasonSummaryItem>()
+  const add = (target: '专业分' | '院校分', reason: string) => {
+    const key = `${target}||${reason}`
+    const current = map.get(key)
+    if (current) current.count += 1
+    else map.set(key, { target, reason, count: 1 })
+  }
+  planScoreRows.forEach((row) => row.diffReasonTags.forEach((reason) => add('专业分', reason)))
+  planCollegeRows.forEach((row) => row.diffReasonTags.forEach((reason) => add('院校分', reason)))
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.target !== b.target) return a.target.localeCompare(b.target, 'zh-CN')
+    return b.count - a.count
+  })
+}
+
 export function processPlanCompare(params: {
   planRows: Record<string, unknown>[]
   scoreRows: Record<string, unknown>[]
@@ -643,6 +706,7 @@ export function processPlanCompare(params: {
 const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
   const key = buildPlanScoreKey(row)
   const exists = scoreKeySet.has(key)
+  const groupCode = stripCaret(row['专业组代码'])
   const enrollmentCode = stripCaret(row['招生代码'])
   const majorCode = stripCaret(row['专业代码'])
   const school = t(row['学校'])
@@ -656,12 +720,20 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
     level,
   })
   const ruleCenterIssues = ruleCenterValidation.issues
+  const diffReasonTags = buildPlanScoreDiffReasonTags({
+    exists,
+    groupCode,
+    enrollmentCode,
+    majorCode,
+    ruleCenterIssues,
+  })
 
   return {
     rowId: `ps_${rowNo + 1}`,
     matchKey: key,
     exists,
     reason: [exists ? '已在专业分文件中存在' : '专业分文件中不存在该组合键', ...ruleCenterIssues].filter(Boolean).join('；'),
+    diffReasonTags,
     ruleCenterIssues,
     schoolValidationResult: ruleCenterValidation.schoolResult,
     majorValidationResult: ruleCenterValidation.majorResult,
@@ -671,7 +743,7 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
     batch: t(row['批次']),
     major,
     level,
-    groupCode: stripCaret(row['专业组代码']),
+    groupCode,
     enrollmentCode,
     majorCode,
     sourceRow: row,
@@ -681,6 +753,7 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
   const planCollegeRows: PlanCollegeCompareRow[] = planRows.map((row, rowNo) => {
     const key = buildPlanCollegeKey(row)
     const exists = collegeKeySet.has(key)
+    const groupCode = stripCaret(row['专业组代码'])
     const planEnrollmentCode = stripCaret(row['招生代码'])
     const missingEnrollmentCodeFlag = !planEnrollmentCode
     const school = t(row['学校'])
@@ -694,6 +767,12 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
       level,
     })
     const ruleCenterIssues = ruleCenterValidation.issues
+    const diffReasonTags = buildPlanCollegeDiffReasonTags({
+      exists,
+      groupCode,
+      enrollmentCode: planEnrollmentCode,
+      ruleCenterIssues,
+    })
 
     let reason = exists ? '已在院校分文件中存在' : '院校分文件中不存在该组合键'
     if (missingEnrollmentCodeFlag) {
@@ -708,6 +787,7 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
       matchKey: key,
       exists,
       reason,
+      diffReasonTags,
       ruleCenterIssues,
       schoolValidationResult: ruleCenterValidation.schoolResult,
       majorValidationResult: ruleCenterValidation.majorResult,
@@ -716,12 +796,14 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
       category: t(row['科类']),
       batch: t(row['批次']),
       level,
-      groupCode: stripCaret(row['专业组代码']),
+      groupCode,
       enrollmentCode: planEnrollmentCode,
       missingEnrollmentCodeFlag,
       sourceRow: row,
     }
   })
+
+  const differenceReasonSummary = buildDifferenceReasonSummary(planScoreRows, planCollegeRows)
 
   return {
   yearValue,
@@ -730,6 +812,7 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
   missingCollegeHeaders,
   enrollmentCodeWarnings,
   groupCodeWarnings,
+  differenceReasonSummary,
   planScoreRows,
   planCollegeRows,
 }

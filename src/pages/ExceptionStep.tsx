@@ -32,6 +32,60 @@ import {
 
 const { Text } = Typography
 
+const IMPORTANT_COMPARE_FIELDS: Array<{
+  label: string
+  current: string
+  candidate: string
+}> = [
+  { label: '省份', current: 'province', candidate: 'province' },
+  { label: '科类', current: 'subjectCategory', candidate: 'subjectCategory' },
+  { label: '批次', current: 'batch', candidate: 'batch' },
+  { label: '层次', current: 'level1', candidate: 'level1' },
+  { label: '类型', current: 'enrollmentType', candidate: 'enrollmentType' },
+  { label: '专业', current: 'majorName', candidate: 'majorName' },
+  { label: '专业组代码', current: 'groupCode', candidate: 'groupCode' },
+]
+
+function normalizeCompareText(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/（/g, '(')
+    .replace(/）/g, ')')
+}
+
+function buildCandidateRecommendReasons(
+  activeRecord: any,
+  candidate: any,
+  remarkBestMatch: { bestKey: string; bestScore: number },
+) {
+  const reasons: Array<{ label: string; color?: string }> = []
+  const result = activeRecord?.result || {}
+
+  IMPORTANT_COMPARE_FIELDS.forEach((field) => {
+    const currentValue = normalizeCompareText(result[field.current])
+    const candidateValue = normalizeCompareText(candidate[field.candidate])
+    if (!currentValue || !candidateValue) return
+    if (currentValue === candidateValue) {
+      reasons.push({ label: `${field.label}一致`, color: 'green' })
+    }
+  })
+
+  if (remarkBestMatch.bestScore >= 45 && remarkBestMatch.bestKey === String(candidate.rowId)) {
+    reasons.unshift({ label: `备注最相近 ${remarkBestMatch.bestScore}`, color: 'gold' })
+  }
+
+  if (activeRecord?.matchStatus === 'matched_multiple') {
+    reasons.push({ label: '系统匹配到多条候选', color: 'blue' })
+  }
+
+  if (!reasons.length) {
+    reasons.push({ label: '候选组合键相近，需人工确认' })
+  }
+
+  return reasons
+}
+
 export default function ExceptionStep() {
   const {
     processedRecords,
@@ -704,6 +758,12 @@ export default function ExceptionStep() {
                         remarkBestMatch.bestScore >= 45 &&
                         remarkBestMatch.bestKey === String(candidate.rowId)
 
+                      const recommendReasons = buildCandidateRecommendReasons(
+                        activeRecord,
+                        candidate,
+                        remarkBestMatch
+                      )
+
                       return (
                         <Card
                           key={candidate.rowId}
@@ -763,6 +823,20 @@ export default function ExceptionStep() {
                               fontSize: UI_FONT_SIZE,
                             }}
                           >
+                            <div style={{ marginBottom: 6 }}>
+                              推荐原因：
+                              <Space wrap size={[4, 4]}>
+                                {recommendReasons.map((reason) => (
+                                  <Tag
+                                    key={reason.label}
+                                    color={reason.color}
+                                    style={{ fontSize: UI_TAG_FONT_SIZE }}
+                                  >
+                                    {reason.label}
+                                  </Tag>
+                                ))}
+                              </Space>
+                            </div>
                             <div>省份：{candidate.province || '-'}</div>
                             <div>科类：{candidate.subjectCategory || '-'}</div>
                             <div>备注：{candidate.majorRemark || '-'}</div>

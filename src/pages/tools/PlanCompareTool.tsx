@@ -27,6 +27,7 @@ import {
   Space,
   Statistic,
   Table,
+  Tag,
   Tabs,
   Typography,
   Upload,
@@ -41,6 +42,7 @@ import {
   exportCollegeCompareTemplate,
   exportProfessionalCompareTemplate,
   processPlanCompare,
+  type DifferenceReasonSummaryItem,
   type PlanCollegeCompareRow,
   type PlanCompareResult,
   type PlanScoreCompareRow,
@@ -282,6 +284,19 @@ export default function PlanCompareTool() {
       width: 100,
       render: (value: boolean) => (value ? '是' : '否'),
     },
+    {
+      title: '差异原因',
+      dataIndex: 'diffReasonTags',
+      key: 'diffReasonTags',
+      width: 260,
+      render: (tags: string[]) => (
+        <Space wrap size={[4, 4]}>
+          {tags.map((tag) => (
+            <Tag key={tag} color={tag === '已匹配' ? 'green' : 'orange'}>{tag}</Tag>
+          ))}
+        </Space>
+      ),
+    },
     { title: '说明', dataIndex: 'reason', key: 'reason', width: 260 },
   ]
 
@@ -307,7 +322,32 @@ export default function PlanCompareTool() {
       width: 100,
       render: (value: boolean) => (value ? '是' : '否'),
     },
+    {
+      title: '差异原因',
+      dataIndex: 'diffReasonTags',
+      key: 'diffReasonTags',
+      width: 260,
+      render: (tags: string[]) => (
+        <Space wrap size={[4, 4]}>
+          {tags.map((tag) => (
+            <Tag key={tag} color={tag === '已匹配' ? 'green' : 'orange'}>{tag}</Tag>
+          ))}
+        </Space>
+      ),
+    },
     { title: '说明', dataIndex: 'reason', key: 'reason', width: 280 },
+  ]
+
+  const differenceReasonColumns = [
+    { title: '比对对象', dataIndex: 'target', key: 'target', width: 120 },
+    { title: '差异原因', dataIndex: 'reason', key: 'reason', width: 260 },
+    {
+      title: '数量',
+      dataIndex: 'count',
+      key: 'count',
+      width: 120,
+      sorter: (a: DifferenceReasonSummaryItem, b: DifferenceReasonSummaryItem) => a.count - b.count,
+    },
   ]
 
   const tableFontStyle = { fontSize: 15 }
@@ -443,6 +483,20 @@ export default function PlanCompareTool() {
               </Space>
             </Card>
           )}
+
+          <Card title={<span style={cardTitleStyle}>差异原因统计</span>} style={{ borderRadius: 12 }}>
+            {result.differenceReasonSummary.length ? (
+              <Table<DifferenceReasonSummaryItem>
+                rowKey={(row) => `${row.target}_${row.reason}`}
+                size="small"
+                columns={differenceReasonColumns}
+                dataSource={result.differenceReasonSummary}
+                pagination={false}
+              />
+            ) : (
+              <Empty description="暂无差异原因统计" />
+            )}
+          </Card>
 
           <Card title={<span style={cardTitleStyle}>筛选</span>} style={{ borderRadius: 12 }}>
             <Space wrap>
