@@ -34,10 +34,14 @@ export function attachValidationIssues(
     }
 
     if (item.matchStatus === 'matched_multiple' && !item.matchedPlan) {
+      const candidateCount = item.matchCandidates?.length || 0
       issues.push({
         code: 'matched_multiple',
         level: 'warning',
-        message: '匹配到多条招生计划，请人工指定',
+        message:
+          candidateCount > 1
+            ? '匹配到多条招生计划，请人工指定'
+            : '原始专业分或招生计划中“学校-省份-科类-专业”存在重复值，请人工指定匹配关系',
       })
     }
 

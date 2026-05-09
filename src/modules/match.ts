@@ -36,6 +36,49 @@ function isEqualOrIgnored(a?: string, b?: string) {
   return a === b
 }
 
+function makeCoreMatchKey(record: Pick<ScoreRecord | PlanRecord, 'schoolName' | 'province' | 'subjectCategory' | 'majorName'>) {
+  return [
+    normalizeText(record.schoolName),
+    normalizeText(record.province),
+    normalizeText(record.subjectCategory),
+    normalizeText(record.majorName),
+  ].join('||')
+}
+
+function countByCoreMatchKey(records: Array<ScoreRecord | PlanRecord>) {
+  const map = new Map<string, number>()
+
+  records.forEach((record) => {
+    const key = makeCoreMatchKey(record)
+    if (key.replace(/\|/g, '')) {
+      map.set(key, (map.get(key) || 0) + 1)
+    }
+  })
+
+  return map
+}
+
+function isBatchInProvinceRules(
+  score: ScoreRecord,
+  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
+) {
+  if (!score.batch) return true
+
+  const year = score.year || ''
+  const province = score.province || ''
+  const currentBatches = provinceCurrentBatchDictByYear[year]?.[province] || []
+
+  if (!currentBatches.length) return true
+  return currentBatches.includes(score.batch)
+}
+
+function getCorePlanCandidates(score: ScoreRecord, plans: PlanRecord[]) {
+  const scoreKey = makeCoreMatchKey(score)
+  if (!scoreKey.replace(/\|/g, '')) return []
+
+  return plans.filter((plan) => makeCoreMatchKey(plan) === scoreKey)
+}
+
 function filterCandidates(
   score: ScoreRecord,
   plans: PlanRecord[],
@@ -161,6 +204,10 @@ function pickMatch(
   score: ScoreRecord,
   plans: PlanRecord[],
   provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>,
+  duplicateInfo: {
+    scoreCoreKeyCounts: Map<string, number>
+    planCoreKeyCounts: Map<string, number>
+  },
   manualMatchSelections?: Record<string, string>
 ): { matchedPlan?: PlanRecord; matchStatus: MatchStatus; candidatesOut?: PlanRecord[] } {
   const manualPlanId = manualMatchSelections?.[score.rowId]
@@ -175,8 +222,31 @@ function pickMatch(
     }
   }
 
+  const scoreCoreKey = makeCoreMatchKey(score)
+  const scoreCoreDuplicated = (duplicateInfo.scoreCoreKeyCounts.get(scoreCoreKey) || 0) > 1
+  const planCoreDuplicated = (duplicateInfo.planCoreKeyCounts.get(scoreCoreKey) || 0) > 1
+
+  /**
+   * 核心规则：
+   * 原始专业分或招生计划中，只要“学校 + 省份 + 科类 + 专业”组合键重复，
+   * 就不能继续用批次、层次、招生类型等字段自动消歧。
+   * 否则同一专业下的不同批次/方向/代码可能被系统自动选中，导致误匹配。
+   */
+  if (scoreCoreDuplicated || planCoreDuplicated) {
+    const candidates = getCorePlanCandidates(score, plans)
+    return {
+      matchedPlan: undefined,
+      matchStatus: candidates.length > 0 ? 'matched_multiple' : 'unmatched',
+      candidatesOut: candidates,
+    }
+  }
+
+  const scoreBatchValid = isBatchInProvinceRules(score, provinceCurrentBatchDictByYear)
+
   const strategies = [
-    { useBatch: true, useLevel: true, useType: true, useCategory: true, cleaned: false, status: 'matched_exact' as MatchStatus },
+    ...(scoreBatchValid
+      ? [{ useBatch: true, useLevel: true, useType: true, useCategory: true, cleaned: false, status: 'matched_exact' as MatchStatus }]
+      : []),
     { useBatch: false, useLevel: true, useType: true, useCategory: true, cleaned: false, status: 'matched_without_batch' as MatchStatus },
     { useBatch: false, useLevel: false, useType: true, useCategory: true, cleaned: false, status: 'matched_without_batch' as MatchStatus },
     { useBatch: false, useLevel: false, useType: false, useCategory: true, cleaned: false, status: 'matched_without_batch' as MatchStatus },
@@ -226,10 +296,18 @@ function deriveFirstSubjectByPlanCategory(subjectCategory?: string): string | un
   return undefined
 }
 
-function buildFieldSources(score: ScoreRecord, matchedPlan?: PlanRecord): FieldSourceMap {
+function buildFieldSources(
+  score: ScoreRecord,
+  matchedPlan: PlanRecord | undefined,
+  scoreBatchValid: boolean
+): FieldSourceMap {
   return {
     batch: score.batch
-      ? '原始数据'
+      ? scoreBatchValid
+        ? '原始数据'
+        : matchedPlan?.batch
+          ? '原始批次不在规则中，改用招生计划批次'
+          : '原始数据（不在批次规则中）'
       : matchedPlan?.batch
         ? '招生计划匹配补全'
         : '无',
@@ -296,15 +374,22 @@ export function buildProcessedRecords(
   provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>,
   manualMatchSelections?: Record<string, string>
 ): ProcessedRecord[] {
+  const duplicateInfo = {
+    scoreCoreKeyCounts: countByCoreMatchKey(scoreRecords),
+    planCoreKeyCounts: countByCoreMatchKey(planRecords),
+  }
+
   return scoreRecords.map((score) => {
     const { matchedPlan, matchStatus, candidatesOut } = pickMatch(
       score,
       planRecords,
       provinceCurrentBatchDictByYear,
+      duplicateInfo,
       manualMatchSelections
     )
 
     const requirement = deriveRequirementFromPlan(matchedPlan)
+    const scoreBatchValid = isBatchInProvinceRules(score, provinceCurrentBatchDictByYear)
     const shouldUsePlanCategory = !!score.subjectCategoryNeedsReview && !!matchedPlan?.subjectCategory
     const finalSubjectCategory = shouldUsePlanCategory
       ? matchedPlan?.subjectCategory
@@ -317,7 +402,7 @@ export function buildProcessedRecords(
       ...score,
       subjectCategory: finalSubjectCategory,
       firstSubject: finalFirstSubject,
-      batch: score.batch || matchedPlan?.batch,
+      batch: scoreBatchValid ? score.batch || matchedPlan?.batch : matchedPlan?.batch || score.batch,
       level1: score.level1 || matchedPlan?.level1,
       enrollmentType: score.enrollmentType || matchedPlan?.enrollmentType,
       enrollmentPlan: score.enrollmentPlan ?? matchedPlan?.enrollmentPlan ?? null,
@@ -336,7 +421,7 @@ export function buildProcessedRecords(
       result,
       matchStatus,
       issues: [],
-      fieldSources: buildFieldSources(score, matchedPlan),
+      fieldSources: buildFieldSources(score, matchedPlan, scoreBatchValid),
     }
   })
 }
