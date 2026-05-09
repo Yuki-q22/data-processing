@@ -242,6 +242,11 @@ function normalizeCategory(raw: string) {
   return { category: text, firstSubject: '' }
 }
 
+function isLegacyArtsScienceCategory(category: string) {
+  const text = t(category)
+  return text === '文科' || text === '理科'
+}
+
 function deriveLevel1(batch: string, schoolName: string) {
   const batchText = t(batch)
   const schoolText = t(schoolName)
@@ -534,10 +539,22 @@ export function processXueyeqiaoData(params: {
     const applyRequirementRaw = t(row['报考要求'])
 
     const normalizedCategory = normalizeCategory(categoryRaw)
-    const level1 = deriveLevel1(batch, schoolName)
-    const requirement = parseApplyRequirement(applyRequirementRaw)
-    const groupCode = buildGroupCode(province, enrollmentCode, groupNo)
-    const fixedRemark = fixRemark(majorRemarkRaw)
+const level1 = deriveLevel1(batch, schoolName)
+const shouldClearSubjectFields = isLegacyArtsScienceCategory(normalizedCategory.category)
+
+const requirement = shouldClearSubjectFields
+  ? { subjectRequirementMode: '', secondSubject: '' }
+  : parseApplyRequirement(applyRequirementRaw)
+
+const groupCode = shouldClearSubjectFields
+  ? ''
+  : buildGroupCode(province, enrollmentCode, groupNo)
+
+const firstSubject = shouldClearSubjectFields
+  ? ''
+  : normalizedCategory.firstSubject
+
+const fixedRemark = fixRemark(majorRemarkRaw)
 
     const ruleCenterValidation = validateSchoolAndMajorComboDetailed({
       validSchoolNames,
@@ -576,9 +593,9 @@ export function processXueyeqiaoData(params: {
       '招生人数（选填）': toNumber(row['招生计划人数']),
       数据来源: '学业桥',
       专业组代码: groupCode,
-      首选科目: normalizedCategory.firstSubject,
-      选科要求: requirement.subjectRequirementMode,
-      次选科目: requirement.secondSubject,
+首选科目: firstSubject,
+选科要求: requirement.subjectRequirementMode,
+次选科目: requirement.secondSubject,
       专业代码: majorCode,
       招生代码: enrollmentCode,
       最低分数区间低: '',
