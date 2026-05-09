@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Empty,
+  Radio,
   Select,
   Space,
   Statistic,
@@ -15,9 +16,11 @@ import {
 import { InboxOutlined } from '@ant-design/icons'
 import * as XLSX from 'xlsx'
 import {
+  NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS,
   downloadBlob,
   exportNormalCollegeScoreWorkbook,
   processNormalCollegeScoreWorkbook,
+  type NormalCollegeScoreInputTemplateType,
   type NormalCollegeScoreProcessResult,
 } from '../../modules/collegeScoreNormal'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
@@ -109,6 +112,8 @@ export default function CollegeScoreNormalTool() {
 
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
+  const [templateType, setTemplateType] =
+    useState<NormalCollegeScoreInputTemplateType>('rawMajorScore')
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<NormalCollegeScoreProcessResult | null>(null)
 
@@ -135,10 +140,15 @@ export default function CollegeScoreNormalTool() {
 
     setProcessing(true)
     try {
-      const processed = processNormalCollegeScoreWorkbook(loadedWorkbook.workbook, sheetName, {
-        validSchoolNames,
-        validMajorCombos,
-      })
+      const processed = processNormalCollegeScoreWorkbook(
+        loadedWorkbook.workbook,
+        sheetName,
+        templateType,
+        {
+          validSchoolNames,
+          validMajorCombos,
+        },
+      )
       setResult(processed)
 
       if (processed.missingColumns.length > 0) {
@@ -179,6 +189,7 @@ export default function CollegeScoreNormalTool() {
       onReset: () => {
         setLoadedWorkbook(null)
         setSheetName(undefined)
+        setTemplateType('rawMajorScore')
         setProcessing(false)
         setResult(null)
       },
@@ -187,25 +198,65 @@ export default function CollegeScoreNormalTool() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="院校分提取（普通类）" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card
+        title="院校分提取（普通类）"
+        extra={(
+          <Button danger onClick={handleResetPage}>
+            重置
+          </Button>
+        )}
+        style={{ borderRadius: 12 }}
+      >
         <Paragraph>
-          已按最新规则更新：从 B2 读取年份、从第 3 行读取正文、校验固定列、按分组规则取最低分代表行、组内取最高分最大值，并将招生人数和录取人数按组求和后导出。
+          支持两种导入模板：专业分原始模板、专业分库中导出模板。导出结果仍保持院校分模板格式不变，省控线科类和省控线批次继续按现有规则自动填充。
         </Paragraph>
 
         <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          <Space direction="vertical" style={{ width: '100%' }} size={8}>
+            <span>导入模板类型</span>
+            <Radio.Group
+              value={templateType}
+              onChange={(event) => {
+                setTemplateType(event.target.value)
+                setResult(null)
+              }}
+              optionType="button"
+              buttonStyle="solid"
+              options={[
+                {
+                  label: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS.rawMajorScore,
+                  value: 'rawMajorScore',
+                },
+                {
+                  label: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS.libraryMajorScore,
+                  value: 'libraryMajorScore',
+                },
+              ]}
+            />
+          </Space>
+
           <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx,.xls">
             <p className="ant-upload-drag-icon">
               <InboxOutlined />
             </p>
-            <p className="ant-upload-text">点击或拖拽上传普通类专业分模板</p>
-            <p className="ant-upload-hint">默认按第 3 行表头读取，年份从 B2 读取</p>
+            <p className="ant-upload-text">
+              点击或拖拽上传{NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS[templateType]}
+            </p>
+            <p className="ant-upload-hint">
+              {templateType === 'rawMajorScore'
+                ? '专业分原始模板：从 B2 读取年份，第 3 行为表头'
+                : '专业分库中导出模板：第 1 行为表头，从 A 列年份字段读取年份'}
+            </p>
           </Dragger>
 
           <Space wrap>
             {loadedWorkbook ? (
               <Select
                 value={sheetName}
-                onChange={setSheetName}
+                onChange={(value) => {
+                  setSheetName(value)
+                  setResult(null)
+                }}
                 style={{ width: 260 }}
                 options={loadedWorkbook.sheetNames.map((name) => ({
                   label: name,
@@ -230,7 +281,10 @@ export default function CollegeScoreNormalTool() {
 
       {result ? (
         <>
-          <Space size={16}>
+          <Space size={16} wrap>
+            <Card>
+              <Statistic title="导入模板" value={result.templateName} />
+            </Card>
             <Card>
               <Statistic title="读取年份" value={result.year || '-'} />
             </Card>
