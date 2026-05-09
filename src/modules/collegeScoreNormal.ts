@@ -362,10 +362,6 @@ function processRows(
       ? t(representative['学校'])
       : t(representative['学校名称'])
 
-    const level = isLibrary
-      ? t(representative['层次'])
-      : t(representative['一级层次'])
-
     const enrollmentCategory = isLibrary
       ? t(representative['科类'])
       : t(representative['招生类别'] || representative['招生科类'] || representative['科类'])
