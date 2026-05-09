@@ -70,7 +70,6 @@ import {
   useRuleCenterStore,
   type RemarkTypeRule,
 } from '../stores/ruleCenterStore'
-import { auth } from '../lib/firebase'
 
 const { Dragger } = Upload
 const { Paragraph, Text, Title } = Typography
@@ -82,8 +81,6 @@ type PreviewRow = {
 }
 
 export default function RuleCenterPage() {
-  console.log('当前UID =', auth.currentUser?.uid)
-
   const {
     validSchoolNames,
     validMajorCombos,
@@ -92,6 +89,10 @@ export default function RuleCenterPage() {
     remarkTypeRules,
     remarkRuleFileName,
     exclusionKeywords,
+    provinceCategoryBatchRules,
+    provinceCategoryBatchRuleFileName,
+    controlLineRules,
+    controlLineRuleFileName,
 
     currentUserEmail,
     isAdminUser,
@@ -106,9 +107,13 @@ export default function RuleCenterPage() {
     importSchoolRuleFile,
     importMajorRuleFile,
     importRemarkRuleFile,
+    importProvinceCategoryBatchRuleFile,
+    importControlLineRuleFile,
 
     clearSchoolRules,
     clearMajorRules,
+    resetProvinceCategoryBatchRules,
+    resetControlLineRules,
 
     addRemarkTypeRule,
     updateRemarkTypeRule,
@@ -214,6 +219,16 @@ export default function RuleCenterPage() {
     [validMajorCombos]
   )
 
+  const provinceCategoryBatchPreview = useMemo(
+    () => provinceCategoryBatchRules.slice(0, 50),
+    [provinceCategoryBatchRules]
+  )
+
+  const controlLinePreview = useMemo(
+    () => controlLineRules.slice(0, 50),
+    [controlLineRules]
+  )
+
   const getAuthErrorMessage = (error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error)
 
@@ -300,6 +315,47 @@ export default function RuleCenterPage() {
     }
 
     return false
+  }
+
+
+  const handleImportProvinceCategoryBatchRules = async (file: File) => {
+    try {
+      await importProvinceCategoryBatchRuleFile(file)
+      message.success(`省份科类批次规则已上传到云端：${file.name}`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '省份科类批次规则导入失败')
+    }
+
+    return false
+  }
+
+  const handleImportControlLineRules = async (file: File) => {
+    try {
+      await importControlLineRuleFile(file)
+      message.success(`省控线科类批次规则已上传到云端：${file.name}`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '省控线科类批次规则导入失败')
+    }
+
+    return false
+  }
+
+  const handleResetProvinceCategoryBatchRules = async () => {
+    try {
+      await resetProvinceCategoryBatchRules()
+      message.success('已恢复内置省份科类批次规则')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '恢复省份科类批次规则失败')
+    }
+  }
+
+  const handleResetControlLineRules = async () => {
+    try {
+      await resetControlLineRules()
+      message.success('已恢复内置省控线科类批次规则')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '恢复省控线科类批次规则失败')
+    }
   }
 
   const handleClearSchoolRules = async () => {
@@ -703,6 +759,117 @@ export default function RuleCenterPage() {
                   title="需要核查关键词数"
                   value={exclusionKeywords.length}
                 />
+              </Card>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Card title="省份科类批次规则" style={{ borderRadius: 12 }}>
+                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="用于专业分模板智能填充、招生计划匹配等流程。文件需包含：年份（可从文件名识别）、省份、招生科类、招生批次。"
+                  />
+
+                  <Upload
+                    disabled={!isAdminUser}
+                    beforeUpload={handleImportProvinceCategoryBatchRules}
+                    showUploadList={false}
+                    accept=".xlsx,.xls"
+                  >
+                    <Button disabled={!isAdminUser}>导入省份科类批次规则</Button>
+                  </Upload>
+
+                  <Descriptions size="small" column={1}>
+                    <Descriptions.Item label="当前来源">
+                      {provinceCategoryBatchRuleFileName || '内置默认规则'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="规则数量">
+                      {provinceCategoryBatchRules.length}
+                    </Descriptions.Item>
+                  </Descriptions>
+
+                  <Button disabled={!isAdminUser} onClick={handleResetProvinceCategoryBatchRules}>
+                    恢复内置规则
+                  </Button>
+
+                  <Table
+                    rowKey={(row) => `${row.year}_${row.province}`}
+                    size="small"
+                    pagination={{ pageSize: 5 }}
+                    dataSource={provinceCategoryBatchPreview}
+                    columns={[
+                      { title: '年份', dataIndex: 'year', key: 'year', width: 80 },
+                      { title: '省份', dataIndex: 'province', key: 'province', width: 90 },
+                      { title: '科类制度', dataIndex: 'categoryType', key: 'categoryType', width: 130 },
+                      {
+                        title: '批次数',
+                        key: 'batchCount',
+                        width: 90,
+                        render: (_, row) => row.batches.length,
+                      },
+                    ]}
+                  />
+                </Space>
+              </Card>
+            </Col>
+
+            <Col span={12}>
+              <Card title="省控线科类批次规则" style={{ borderRadius: 12 }}>
+                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="用于院校分提取（普通类）和招生计划比对导出模板中的省控线科类、省控线批次填充。文件需包含：年份（可从文件名识别）、省份、科类、批次。"
+                  />
+
+                  <Upload
+                    disabled={!isAdminUser}
+                    beforeUpload={handleImportControlLineRules}
+                    showUploadList={false}
+                    accept=".xlsx,.xls"
+                  >
+                    <Button disabled={!isAdminUser}>导入省控线科类批次规则</Button>
+                  </Upload>
+
+                  <Descriptions size="small" column={1}>
+                    <Descriptions.Item label="当前来源">
+                      {controlLineRuleFileName || '内置默认规则'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="规则数量">
+                      {controlLineRules.length}
+                    </Descriptions.Item>
+                  </Descriptions>
+
+                  <Button disabled={!isAdminUser} onClick={handleResetControlLineRules}>
+                    恢复内置规则
+                  </Button>
+
+                  <Table
+                    rowKey={(row) => `${row.year}_${row.province}`}
+                    size="small"
+                    pagination={{ pageSize: 5 }}
+                    dataSource={controlLinePreview}
+                    columns={[
+                      { title: '年份', dataIndex: 'year', key: 'year', width: 80 },
+                      { title: '省份', dataIndex: 'province', key: 'province', width: 90 },
+                      {
+                        title: '科类数',
+                        key: 'categoryCount',
+                        width: 90,
+                        render: (_, row) => row.categories.length,
+                      },
+                      {
+                        title: '批次数',
+                        key: 'batchCount',
+                        width: 90,
+                        render: (_, row) => row.batches.length,
+                      },
+                    ]}
+                  />
+                </Space>
               </Card>
             </Col>
           </Row>

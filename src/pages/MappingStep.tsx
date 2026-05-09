@@ -21,10 +21,11 @@ import { buildScoreRecords, buildPlanRecords } from '../modules/transform'
 import { buildProcessedRecords } from '../modules/match'
 import { attachValidationIssues } from '../modules/validate'
 import type { EditableFieldMappingItem } from '../types/mapping'
+import type { UploadedWorkbook } from '../types/workbook'
 
 const { Paragraph } = Typography
 
-function getSheetHeaders(workbook: any, sheetName?: string): string[] {
+function getSheetHeaders(workbook: UploadedWorkbook | null | undefined, sheetName?: string): string[] {
   if (!workbook || !sheetName) return []
 
   const headerRows = getSheetRows(workbook.workbook, sheetName)
@@ -71,12 +72,14 @@ export default function MappingStep() {
     provinceRules,
     categoryRules,
     batchRules,
-    provinceYearCategoryType,
     ignoredPlanSourceFields,
-    provinceCurrentBatchDictByYear,
   } = useRuleStore()
 
-  const { remarkTypeRules: cloudRemarkTypeRules } = useRuleCenterStore()
+  const {
+    remarkTypeRules: cloudRemarkTypeRules,
+    provinceYearCategoryType,
+    provinceCurrentBatchDictByYear,
+  } = useRuleCenterStore()
 
   const remarkTypeRules = useMemo(
     () =>
@@ -212,7 +215,7 @@ export default function MappingStep() {
       dataIndex: 'ignored',
       key: 'ignored',
       width: 80,
-      render: (_: boolean, record: any) => (
+      render: (_: boolean, record: EditableFieldMappingItem) => (
         <Checkbox
           checked={!!record.ignored}
           onChange={(e) => {
@@ -247,7 +250,7 @@ export default function MappingStep() {
       dataIndex: 'targetField',
       key: 'targetField',
       width: 220,
-      render: (value: string | undefined, record: any) => (
+      render: (value: string | undefined, record: EditableFieldMappingItem) => (
         <Select
           style={{ width: '100%' }}
           allowClear

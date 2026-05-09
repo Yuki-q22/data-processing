@@ -1,3 +1,5 @@
+import { useRuleCenterStore } from '../stores/ruleCenterStore'
+
 export type ControlLineConfig = {
   province: string
   categories: string[]
@@ -573,9 +575,19 @@ function includesAny(text: string, keywords: string[]): boolean {
   return keywords.some((keyword) => text.includes(keyword))
 }
 
-function getProvinceConfig(province: unknown): ControlLineConfig | undefined {
+function getProvinceConfig(province: unknown, year?: string | number): ControlLineConfig | undefined {
   const text = t(province).replace(/省|市|自治区|壮族|回族|维吾尔/g, '')
-  return CONTROL_LINE_2025.find((item) => item.province === text || item.province === t(province))
+  const yearText = String(year ?? '').trim()
+  const rules = useRuleCenterStore.getState().controlLineRules
+  const candidates = rules.filter((item) => {
+    const sameProvince = item.province === text || item.province === t(province)
+    const sameYear = yearText ? String(item.year) === yearText : true
+    return sameProvince && sameYear
+  })
+
+  if (candidates.length) return candidates[0]
+
+  return rules.find((item) => item.province === text || item.province === t(province))
 }
 
 function scoreCategory(option: string, categoryText: string): number {
@@ -746,6 +758,48 @@ export function resolveControlLineBatch(
   return batch
 }
 
+
+function resolveControlLineCategoryByConfig(config: ControlLineConfig, enrollmentCategory: unknown): string {
+  const category = t(enrollmentCategory)
+  const normalizedCategory = normalizeText(category)
+  const best = config.categories
+    .map((option) => ({ option, score: scoreCategory(option, normalizedCategory) }))
+    .sort((a, b) => b.score - a.score)[0]
+
+  if (best && best.score > 0) return best.option
+  return category
+}
+
+function resolveControlLineBatchByConfig(
+  config: ControlLineConfig,
+  enrollmentBatch: unknown,
+  enrollmentCategory: unknown = '',
+): string {
+  const batch = t(enrollmentBatch)
+
+  if (!batch) return ''
+
+  const normalizedBatch = normalizeText(batch)
+  const exactMatch = config.batches.find((option) => t(option) === batch)
+  if (exactMatch) return exactMatch
+
+  const normalizedExactMatch = config.batches.find(
+    (option) => normalizeText(option) === normalizedBatch,
+  )
+  if (normalizedExactMatch) return normalizedExactMatch
+
+  const best = config.batches
+    .map((option) => ({
+      option,
+      score: scoreBatch(option, batch, t(enrollmentCategory)),
+    }))
+    .sort((a, b) => b.score - a.score)[0]
+
+  if (best && best.score > 0) return best.option
+
+  return batch
+}
+
 export function resolveControlLine(
   province: string,
   enrollmentCategory: string,
@@ -756,10 +810,9 @@ export function resolveControlLine(
   batch: string
 } {
   const yearText = String(year ?? '').trim()
+  const config = getProvinceConfig(province, yearText)
 
-  // 这个省控线配置只适用于 2025 年。
-  // 年份为空、2024、2026 等其他年份，都禁止使用。
-  if (yearText !== '2025') {
+  if (!config) {
     return {
       category: '',
       batch: '',
@@ -775,7 +828,7 @@ export function resolveControlLine(
   }
 
   return {
-    category: resolveControlLineCategory(province, enrollmentCategory),
-    batch: resolveControlLineBatch(province, enrollmentBatch, enrollmentCategory),
+    category: resolveControlLineCategoryByConfig(config, enrollmentCategory),
+    batch: resolveControlLineBatchByConfig(config, enrollmentBatch, enrollmentCategory),
   }
 }

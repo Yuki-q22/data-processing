@@ -15,7 +15,8 @@ import {
 } from 'antd'
 import { useMemo, useState } from 'react'
 import { usePreviewStore } from '../stores/previewStore'
-import { useRuleStore } from '../stores/ruleStore'
+import { useRuleCenterStore } from '../stores/ruleCenterStore'
+import type { PlanRecord, ProcessedRecord, ValidationIssue } from '../types/record'
 import { buildProcessedRecords } from '../modules/match'
 import { attachValidationIssues } from '../modules/validate'
 import { getBestRemarkMatchedCandidate } from '../modules/manualMatchHint'
@@ -55,16 +56,16 @@ function normalizeCompareText(value: unknown) {
 }
 
 function buildCandidateRecommendReasons(
-  activeRecord: any,
-  candidate: any,
+  activeRecord: ProcessedRecord,
+  candidate: PlanRecord,
   remarkBestMatch: { bestKey: string; bestScore: number },
 ) {
   const reasons: Array<{ label: string; color?: string }> = []
   const result = activeRecord?.result || {}
 
   IMPORTANT_COMPARE_FIELDS.forEach((field) => {
-    const currentValue = normalizeCompareText(result[field.current])
-    const candidateValue = normalizeCompareText(candidate[field.candidate])
+    const currentValue = normalizeCompareText(result[field.current as keyof typeof result])
+    const candidateValue = normalizeCompareText(candidate[field.candidate as keyof typeof candidate])
     if (!currentValue || !candidateValue) return
     if (currentValue === candidateValue) {
       reasons.push({ label: `${field.label}一致`, color: 'green' })
@@ -97,7 +98,7 @@ export default function ExceptionStep() {
     setProcessedRecords,
   } = usePreviewStore()
 
-  const { provinceCurrentBatchDictByYear } = useRuleStore()
+  const { provinceCurrentBatchDictByYear } = useRuleCenterStore()
 
   const [keyword, setKeyword] = useState('')
   const [matchStatusFilter, setMatchStatusFilter] = useState<
@@ -212,15 +213,9 @@ export default function ExceptionStep() {
       }
     }
 
-    const result = activeRecord.result as any
-    const source = activeRecord.source as any
-
     const currentRemark =
-      result.majorRemark ??
-      result.remark ??
-      source.majorRemark ??
-      source.remark ??
-      source.rawRemark ??
+      activeRecord.result.majorRemark ??
+      activeRecord.source.majorRemark ??
       ''
 
     return getBestRemarkMatchedCandidate(
@@ -229,13 +224,8 @@ export default function ExceptionStep() {
         remark: currentRemark,
         majorRemark: currentRemark,
       },
-      activeRecord.matchCandidates.map((candidate: any) => {
-        const candidateRemark =
-          candidate.majorRemark ??
-          candidate.remark ??
-          candidate.planRemark ??
-          candidate.备注 ??
-          ''
+      activeRecord.matchCandidates.map((candidate: PlanRecord) => {
+        const candidateRemark = candidate.majorRemark ?? ''
 
         return {
           rowId: candidate.rowId,
@@ -253,7 +243,7 @@ export default function ExceptionStep() {
     const records = filteredRecords.length ? filteredRecords : exceptionRecords
     const currentIndex = records.findIndex((item) => item.rowId === activeRowId)
 
-    const hasCandidates = (record: any) => !!record.matchCandidates?.length
+    const hasCandidates = (record: ProcessedRecord) => !!record.matchCandidates?.length
 
     if (currentIndex >= 0) {
       for (let i = currentIndex + 1; i < records.length; i += 1) {
@@ -324,7 +314,7 @@ export default function ExceptionStep() {
     rebuildWithManualSelections(nextSelections)
   }
 
-  const openMatchDrawer = (record: any) => {
+  const openMatchDrawer = (record: ProcessedRecord) => {
     setActiveRowId(record.rowId)
     setDrawerOpen(true)
   }
@@ -383,7 +373,7 @@ export default function ExceptionStep() {
       dataIndex: ['source', 'rawSubjectCategory'],
       key: 'rawSubjectCategory',
       width: 140,
-      render: (value: string, record: any) => {
+      render: (value: string, record: ProcessedRecord) => {
         const needsReview = record?.source?.subjectCategoryNeedsReview
 
         if (!value) {
@@ -524,7 +514,7 @@ export default function ExceptionStep() {
       title: '人工匹配状态',
       key: 'manualStatus',
       width: 140,
-      render: (_: any, record: any) => {
+      render: (_: unknown, record: ProcessedRecord) => {
         const selected = manualMatchSelections[record.rowId]
 
         return selected ? (
@@ -541,7 +531,7 @@ export default function ExceptionStep() {
       key: 'action',
       width: 120,
       fixed: 'right' as const,
-      render: (_: any, record: any) => {
+      render: (_: unknown, record: ProcessedRecord) => {
         const hasCandidates = !!record.matchCandidates?.length
         const hasManual = !!manualMatchSelections[record.rowId]
 
@@ -700,7 +690,7 @@ export default function ExceptionStep() {
                   {activeRecord.issues.length
                     ? activeRecord.issues
                         .map(
-                          (issue: any) =>
+                          (issue: ValidationIssue) =>
                             `【${getIssueLevelLabel(issue.level)}】${issue.message}`
                         )
                         .join('；')
@@ -751,7 +741,7 @@ export default function ExceptionStep() {
                   }
                 >
                   <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                    {activeRecord.matchCandidates.map((candidate: any) => {
+                    {activeRecord.matchCandidates.map((candidate: PlanRecord) => {
                       const selected = activeSelectedId === candidate.rowId
 
                       const isBestRemarkMatch =

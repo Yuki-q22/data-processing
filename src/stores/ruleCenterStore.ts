@@ -41,6 +41,16 @@ import {
   DEFAULT_REMARK_TYPE_RULES,
 } from '../constants/remarkTypeRules'
 import { buildMajorComboForRuleCenter } from '../modules/ruleCenterValidation'
+import {
+  DEFAULT_CONTROL_LINE_RULES,
+  DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
+  buildProvinceCurrentBatchDictByYear,
+  buildProvinceYearCategoryType,
+  type ControlLineRule,
+  type ProvinceCategoryBatchRule,
+} from '../constants/provinceRuleData'
+
+export type { ControlLineRule, ProvinceCategoryBatchRule }
 
 export type RemarkTypeRule = {
   id: string
@@ -59,6 +69,13 @@ type CloudRuleItem = {
   rule_name?: string
   source_text?: string
   target_text?: string
+  year?: string
+  province?: string
+  category_type?: string
+  category_text?: string
+  batch_text?: string
+  categories?: string[]
+  batches?: string[]
   enabled?: boolean
   sort_order?: number
   updated_at?: number
@@ -74,6 +91,13 @@ type RuleCenterStore = {
   remarkTypeRules: RemarkTypeRule[]
   remarkRuleFileName?: string
   exclusionKeywords: string[]
+
+  provinceCategoryBatchRules: ProvinceCategoryBatchRule[]
+  provinceCategoryBatchRuleFileName?: string
+  controlLineRules: ControlLineRule[]
+  controlLineRuleFileName?: string
+  provinceYearCategoryType: Record<string, Record<string, string>>
+  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
 
   currentUserEmail?: string
   currentUid?: string
@@ -91,9 +115,13 @@ type RuleCenterStore = {
   importSchoolRuleFile: (file: File) => Promise<void>
   importMajorRuleFile: (file: File) => Promise<void>
   importRemarkRuleFile: (file: File) => Promise<void>
+  importProvinceCategoryBatchRuleFile: (file: File) => Promise<void>
+  importControlLineRuleFile: (file: File) => Promise<void>
 
   clearSchoolRules: () => Promise<void>
   clearMajorRules: () => Promise<void>
+  resetProvinceCategoryBatchRules: () => Promise<void>
+  resetControlLineRules: () => Promise<void>
 
   addRemarkTypeRule: (rule?: AddRemarkTypeRuleInput) => Promise<void>
   updateRemarkTypeRule: (
@@ -286,6 +314,178 @@ function mapCloudExclusionKeywords(raw: unknown): string[] {
   return getDefaultExclusionKeywords()
 }
 
+
+function splitRuleList(value: unknown): string[] {
+  return Array.from(
+    new Set(
+      String(value ?? '')
+        .split(/[\/／]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+function inferCategoryType(value: unknown): string {
+  const text = String(value ?? '').trim()
+
+  if (text.includes('物理类') && text.includes('历史类')) {
+    return '物理类/历史类'
+  }
+
+  if (text.includes('理科') && text.includes('文科')) {
+    return '文科/理科'
+  }
+
+  if (text.includes('综合')) {
+    return '综合'
+  }
+
+  return text
+}
+
+function getRowValue(row: Record<string, unknown>, names: string[]): string {
+  for (const name of names) {
+    const value = row[name]
+    const text = String(value ?? '').trim()
+    if (text) return text
+  }
+
+  return ''
+}
+
+function mapCloudProvinceCategoryBatchRules(
+  value: Record<string, CloudRuleItem> | null | undefined,
+): ProvinceCategoryBatchRule[] {
+  if (!value || typeof value !== 'object') return DEFAULT_PROVINCE_CATEGORY_BATCH_RULES
+
+  const rules = Object.values(value)
+    .filter((item) => item?.enabled !== false)
+    .map((item) => {
+      const year = String(item?.year ?? '').trim()
+      const province = String(item?.province ?? '').trim()
+      const categoryType = String(item?.category_type ?? '').trim()
+      const categories = Array.isArray(item?.categories)
+        ? item.categories.map((x) => String(x).trim()).filter(Boolean)
+        : splitRuleList(item?.category_text)
+      const batches = Array.isArray(item?.batches)
+        ? item.batches.map((x) => String(x).trim()).filter(Boolean)
+        : splitRuleList(item?.batch_text)
+
+      return {
+        year,
+        province,
+        categoryType: categoryType || inferCategoryType(categories.join('/')),
+        categories,
+        batches,
+      }
+    })
+    .filter((rule) => rule.year && rule.province && rule.categoryType && rule.batches.length)
+
+  return rules.length ? rules : DEFAULT_PROVINCE_CATEGORY_BATCH_RULES
+}
+
+function mapCloudControlLineRules(
+  value: Record<string, CloudRuleItem> | null | undefined,
+): ControlLineRule[] {
+  if (!value || typeof value !== 'object') return DEFAULT_CONTROL_LINE_RULES
+
+  const rules = Object.values(value)
+    .filter((item) => item?.enabled !== false)
+    .map((item) => {
+      const year = String(item?.year ?? '').trim()
+      const province = String(item?.province ?? '').trim()
+      const categories = Array.isArray(item?.categories)
+        ? item.categories.map((x) => String(x).trim()).filter(Boolean)
+        : splitRuleList(item?.category_text)
+      const batches = Array.isArray(item?.batches)
+        ? item.batches.map((x) => String(x).trim()).filter(Boolean)
+        : splitRuleList(item?.batch_text)
+
+      return {
+        year,
+        province,
+        categories,
+        batches,
+      }
+    })
+    .filter((rule) => rule.year && rule.province && rule.categories.length && rule.batches.length)
+
+  return rules.length ? rules : DEFAULT_CONTROL_LINE_RULES
+}
+
+function toCloudPayloadFromProvinceCategoryBatchRules(
+  rules: ProvinceCategoryBatchRule[],
+  uid: string,
+) {
+  const now = Date.now()
+  const payload: Record<string, CloudRuleItem> = {}
+
+  rules.forEach((rule, index) => {
+    const year = String(rule.year ?? '').trim()
+    const province = String(rule.province ?? '').trim()
+    const categoryType = String(rule.categoryType ?? '').trim()
+    const categories = Array.from(new Set((rule.categories || []).map((x) => String(x).trim()).filter(Boolean)))
+    const batches = Array.from(new Set((rule.batches || []).map((x) => String(x).trim()).filter(Boolean)))
+
+    if (!year || !province || !categoryType || !batches.length) return
+
+    payload[createRuleId()] = {
+      rule_name: `${year}-${province}-${categoryType}`,
+      year,
+      province,
+      category_type: categoryType,
+      category_text: categories.join('/'),
+      batch_text: batches.join('/'),
+      categories,
+      batches,
+      enabled: true,
+      sort_order: index + 1,
+      updated_at: now,
+      updated_by: uid,
+    } as CloudRuleItem
+  })
+
+  return payload
+}
+
+function toCloudPayloadFromControlLineRules(rules: ControlLineRule[], uid: string) {
+  const now = Date.now()
+  const payload: Record<string, CloudRuleItem> = {}
+
+  rules.forEach((rule, index) => {
+    const year = String(rule.year ?? '').trim()
+    const province = String(rule.province ?? '').trim()
+    const categories = Array.from(new Set((rule.categories || []).map((x) => String(x).trim()).filter(Boolean)))
+    const batches = Array.from(new Set((rule.batches || []).map((x) => String(x).trim()).filter(Boolean)))
+
+    if (!year || !province || !categories.length || !batches.length) return
+
+    payload[createRuleId()] = {
+      rule_name: `${year}-${province}-省控线`,
+      year,
+      province,
+      category_text: categories.join('/'),
+      batch_text: batches.join('/'),
+      categories,
+      batches,
+      enabled: true,
+      sort_order: index + 1,
+      updated_at: now,
+      updated_by: uid,
+    } as CloudRuleItem
+  })
+
+  return payload
+}
+
+function deriveProvinceRuleMaps(rules: ProvinceCategoryBatchRule[]) {
+  return {
+    provinceYearCategoryType: buildProvinceYearCategoryType(rules),
+    provinceCurrentBatchDictByYear: buildProvinceCurrentBatchDictByYear(rules),
+  }
+}
+
 function clearDataUnsubscribers() {
   dataUnsubscribers.forEach((fn) => fn())
   dataUnsubscribers = []
@@ -318,6 +518,12 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   remarkRuleFileName: '内置默认规则',
   exclusionKeywords: getDefaultExclusionKeywords(),
 
+  provinceCategoryBatchRules: DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
+  provinceCategoryBatchRuleFileName: '内置默认规则',
+  controlLineRules: DEFAULT_CONTROL_LINE_RULES,
+  controlLineRuleFileName: '内置默认规则',
+  ...deriveProvinceRuleMaps(DEFAULT_PROVINCE_CATEGORY_BATCH_RULES),
+
   currentUserEmail: undefined,
   currentUid: undefined,
   isAdminUser: false,
@@ -349,6 +555,11 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
             remarkTypeRules: getDefaultRemarkTypeRules(),
             remarkRuleFileName: '内置默认规则',
             exclusionKeywords: getDefaultExclusionKeywords(),
+            provinceCategoryBatchRules: DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
+            provinceCategoryBatchRuleFileName: '内置默认规则',
+            controlLineRules: DEFAULT_CONTROL_LINE_RULES,
+            controlLineRuleFileName: '内置默认规则',
+            ...deriveProvinceRuleMaps(DEFAULT_PROVINCE_CATEGORY_BATCH_RULES),
           })
 
           return
@@ -368,6 +579,8 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
         const majorRef = ref(db, 'rule_center/major_combo')
         const remarkRef = ref(db, 'rule_center/remark_enrollment_type')
         const exclusionRef = ref(db, 'rule_center/exclusion_keywords')
+        const provinceCategoryBatchRef = ref(db, 'rule_center/province_category_batch')
+        const controlLineRef = ref(db, 'rule_center/control_line')
 
         const offAdmin = onValue(
           adminRef,
@@ -463,12 +676,58 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
           }
         )
 
+
+        const offProvinceCategoryBatch = onValue(
+          provinceCategoryBatchRef,
+          (snapshot) => {
+            const provinceCategoryBatchRules = mapCloudProvinceCategoryBatchRules(snapshot.val())
+
+            setState({
+              provinceCategoryBatchRules,
+              provinceCategoryBatchRuleFileName: provinceCategoryBatchRules.length
+                ? CLOUD_RULE_FILE_NAME
+                : '内置默认规则',
+              ...deriveProvinceRuleMaps(provinceCategoryBatchRules),
+              syncing: false,
+            })
+          },
+          (error) => {
+            setState({
+              authError: error.message,
+              syncing: false,
+            })
+          }
+        )
+
+        const offControlLine = onValue(
+          controlLineRef,
+          (snapshot) => {
+            const controlLineRules = mapCloudControlLineRules(snapshot.val())
+
+            setState({
+              controlLineRules,
+              controlLineRuleFileName: controlLineRules.length
+                ? CLOUD_RULE_FILE_NAME
+                : '内置默认规则',
+              syncing: false,
+            })
+          },
+          (error) => {
+            setState({
+              authError: error.message,
+              syncing: false,
+            })
+          }
+        )
+
         dataUnsubscribers = [
           offAdmin,
           offSchool,
           offMajor,
           offRemark,
           offExclusion,
+          offProvinceCategoryBatch,
+          offControlLine,
         ]
       },
       (error) => {
@@ -635,6 +894,127 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     await updateMetaVersion()
   },
 
+
+  importProvinceCategoryBatchRuleFile: async (file: File) => {
+    const { currentUid, isAdminUser } = getState()
+    await ensureAdmin(currentUid, isAdminUser)
+
+    const workbook = await readWorkbook(file)
+    const rows = getFirstSheetRows(workbook)
+
+    if (!rows.length) {
+      throw new Error('省份科类批次规则文件为空')
+    }
+
+    const firstRow = rows[0]
+    const hasProvince = '省份' in firstRow
+    const hasCategory = '招生科类' in firstRow || '科类' in firstRow
+    const hasBatch = '招生批次' in firstRow || '批次' in firstRow
+
+    if (!hasProvince || !hasCategory || !hasBatch) {
+      throw new Error('省份科类批次规则文件缺少“省份/招生科类/招生批次”列')
+    }
+
+    const yearFromFileName = file.name.match(/20\d{2}/)?.[0]
+
+    const rules: ProvinceCategoryBatchRule[] = rows
+      .map((row) => {
+        const year = getRowValue(row, ['年份', 'year']) || yearFromFileName || ''
+        const province = getRowValue(row, ['省份'])
+        const categoryText = getRowValue(row, ['招生科类', '科类'])
+        const batchText = getRowValue(row, ['招生批次', '批次'])
+        const categories = splitRuleList(categoryText)
+        const batches = splitRuleList(batchText)
+
+        if (!year || !province || !categoryText || !batches.length) return null
+
+        return {
+          year,
+          province,
+          categoryType: inferCategoryType(categoryText),
+          categories,
+          batches,
+        }
+      })
+      .filter(Boolean) as ProvinceCategoryBatchRule[]
+
+    if (!rules.length) {
+      throw new Error('省份科类批次规则文件中没有有效规则')
+    }
+
+    await dbSet(
+      ref(db, 'rule_center/province_category_batch'),
+      toCloudPayloadFromProvinceCategoryBatchRules(rules, currentUid!),
+    )
+
+    setState({
+      provinceCategoryBatchRules: rules,
+      provinceCategoryBatchRuleFileName: CLOUD_RULE_FILE_NAME,
+      ...deriveProvinceRuleMaps(rules),
+    })
+
+    await updateMetaVersion()
+  },
+
+  importControlLineRuleFile: async (file: File) => {
+    const { currentUid, isAdminUser } = getState()
+    await ensureAdmin(currentUid, isAdminUser)
+
+    const workbook = await readWorkbook(file)
+    const rows = getFirstSheetRows(workbook)
+
+    if (!rows.length) {
+      throw new Error('省控线科类批次规则文件为空')
+    }
+
+    const firstRow = rows[0]
+    const hasProvince = '省份' in firstRow
+    const hasCategory = '招生科类' in firstRow || '科类' in firstRow
+    const hasBatch = '招生批次' in firstRow || '批次' in firstRow
+
+    if (!hasProvince || !hasCategory || !hasBatch) {
+      throw new Error('省控线科类批次规则文件缺少“省份/科类/批次”列')
+    }
+
+    const yearFromFileName = file.name.match(/20\d{2}/)?.[0]
+
+    const rules: ControlLineRule[] = rows
+      .map((row) => {
+        const year = getRowValue(row, ['年份', 'year']) || yearFromFileName || ''
+        const province = getRowValue(row, ['省份'])
+        const categoryText = getRowValue(row, ['招生科类', '科类'])
+        const batchText = getRowValue(row, ['招生批次', '批次'])
+        const categories = splitRuleList(categoryText)
+        const batches = splitRuleList(batchText)
+
+        if (!year || !province || !categories.length || !batches.length) return null
+
+        return {
+          year,
+          province,
+          categories,
+          batches,
+        }
+      })
+      .filter(Boolean) as ControlLineRule[]
+
+    if (!rules.length) {
+      throw new Error('省控线科类批次规则文件中没有有效规则')
+    }
+
+    await dbSet(
+      ref(db, 'rule_center/control_line'),
+      toCloudPayloadFromControlLineRules(rules, currentUid!),
+    )
+
+    setState({
+      controlLineRules: rules,
+      controlLineRuleFileName: CLOUD_RULE_FILE_NAME,
+    })
+
+    await updateMetaVersion()
+  },
+
   clearSchoolRules: async () => {
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
@@ -648,6 +1028,45 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     await ensureAdmin(currentUid, isAdminUser)
 
     await dbRemove(ref(db, 'rule_center/major_combo'))
+    await updateMetaVersion()
+  },
+
+
+  resetProvinceCategoryBatchRules: async () => {
+    const { currentUid, isAdminUser } = getState()
+    await ensureAdmin(currentUid, isAdminUser)
+
+    await dbSet(
+      ref(db, 'rule_center/province_category_batch'),
+      toCloudPayloadFromProvinceCategoryBatchRules(
+        DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
+        currentUid!,
+      ),
+    )
+
+    setState({
+      provinceCategoryBatchRules: DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
+      provinceCategoryBatchRuleFileName: CLOUD_RULE_FILE_NAME,
+      ...deriveProvinceRuleMaps(DEFAULT_PROVINCE_CATEGORY_BATCH_RULES),
+    })
+
+    await updateMetaVersion()
+  },
+
+  resetControlLineRules: async () => {
+    const { currentUid, isAdminUser } = getState()
+    await ensureAdmin(currentUid, isAdminUser)
+
+    await dbSet(
+      ref(db, 'rule_center/control_line'),
+      toCloudPayloadFromControlLineRules(DEFAULT_CONTROL_LINE_RULES, currentUid!),
+    )
+
+    setState({
+      controlLineRules: DEFAULT_CONTROL_LINE_RULES,
+      controlLineRuleFileName: CLOUD_RULE_FILE_NAME,
+    })
+
     await updateMetaVersion()
   },
 
