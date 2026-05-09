@@ -277,6 +277,43 @@ export default function ExceptionStep() {
     )
   }, [activeRowId, filteredRecords, exceptionRecords])
 
+const prevActionableRecord = useMemo(() => {
+  if (!activeRowId) return null
+
+  const records = filteredRecords.length ? filteredRecords : exceptionRecords
+  const currentIndex = records.findIndex((item) => item.rowId === activeRowId)
+
+  const hasCandidates = (record: any) => !!record.matchCandidates?.length
+
+  if (currentIndex >= 0) {
+    for (let i = currentIndex - 1; i >= 0; i -= 1) {
+      if (hasCandidates(records[i])) {
+        return records[i]
+      }
+    }
+  }
+
+  const currentRowNumber = Number(activeRowId)
+
+  if (!Number.isNaN(currentRowNumber)) {
+    const prevByRowId = records
+      .filter((item) => {
+        const rowNumber = Number(item.rowId)
+
+        return (
+          !Number.isNaN(rowNumber) &&
+          rowNumber < currentRowNumber &&
+          hasCandidates(item)
+        )
+      })
+      .sort((a, b) => Number(b.rowId) - Number(a.rowId))[0]
+
+    if (prevByRowId) return prevByRowId
+  }
+
+  return null
+}, [activeRowId, filteredRecords, exceptionRecords])
+
   const rebuildWithManualSelections = (
     nextManualSelections: Record<string, string>
   ) => {
@@ -324,11 +361,17 @@ export default function ExceptionStep() {
     setActiveRowId(null)
   }
 
-  const goNextRecord = () => {
-    if (!nextActionableRecord) return
+  const goPrevRecord = () => {
+  if (!prevActionableRecord) return
 
-    setActiveRowId(nextActionableRecord.rowId)
-  }
+  setActiveRowId(prevActionableRecord.rowId)
+}
+
+const goNextRecord = () => {
+  if (!nextActionableRecord) return
+
+  setActiveRowId(nextActionableRecord.rowId)
+}
 
   const columns = [
     {
@@ -720,13 +763,21 @@ export default function ExceptionStep() {
                   ) : null}
 
                   <Button
-                    size="small"
-                    type="primary"
-                    onClick={goNextRecord}
-                    disabled={!nextActionableRecord}
-                  >
-                    下一个
-                  </Button>
+  size="small"
+  onClick={goPrevRecord}
+  disabled={!prevActionableRecord}
+>
+  上一条
+</Button>
+
+<Button
+  size="small"
+  type="primary"
+  onClick={goNextRecord}
+  disabled={!nextActionableRecord}
+>
+  下一条
+</Button>
                 </Space>
               }
             >
