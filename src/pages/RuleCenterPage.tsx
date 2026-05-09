@@ -39,6 +39,7 @@ import {
   Modal,
   Row,
   Space,
+  Select,
   Statistic,
   Table,
   Tag,
@@ -171,6 +172,14 @@ export default function RuleCenterPage() {
     priority: 1,
   })
 
+  /**
+   * 多年份规则预览筛选。
+   * 默认查看 2025 年，便于核对当前最常用年份；如没有 2025，则回退到全部。
+   */
+  const [provinceCategoryBatchYearFilter, setProvinceCategoryBatchYearFilter] =
+    useState('2025')
+  const [controlLineYearFilter, setControlLineYearFilter] = useState('2025')
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -219,15 +228,56 @@ export default function RuleCenterPage() {
     [validMajorCombos]
   )
 
-  const provinceCategoryBatchPreview = useMemo(
-    () => provinceCategoryBatchRules.slice(0, 50),
+  const provinceCategoryBatchYears = useMemo(
+    () =>
+      Array.from(new Set(provinceCategoryBatchRules.map((rule) => rule.year)))
+        .filter(Boolean)
+        .sort((a, b) => Number(b) - Number(a)),
     [provinceCategoryBatchRules]
   )
 
-  const controlLinePreview = useMemo(
-    () => controlLineRules.slice(0, 50),
+  const controlLineYears = useMemo(
+    () =>
+      Array.from(new Set(controlLineRules.map((rule) => rule.year)))
+        .filter(Boolean)
+        .sort((a, b) => Number(b) - Number(a)),
     [controlLineRules]
   )
+
+  const provinceCategoryBatchFiltered = useMemo(
+    () =>
+      provinceCategoryBatchYearFilter === '全部'
+        ? provinceCategoryBatchRules
+        : provinceCategoryBatchRules.filter(
+            (rule) => rule.year === provinceCategoryBatchYearFilter
+          ),
+    [provinceCategoryBatchRules, provinceCategoryBatchYearFilter]
+  )
+
+  const controlLineFiltered = useMemo(
+    () =>
+      controlLineYearFilter === '全部'
+        ? controlLineRules
+        : controlLineRules.filter((rule) => rule.year === controlLineYearFilter),
+    [controlLineRules, controlLineYearFilter]
+  )
+
+  useEffect(() => {
+    if (provinceCategoryBatchYearFilter === '全部') return
+    if (provinceCategoryBatchYears.includes(provinceCategoryBatchYearFilter)) return
+
+    setProvinceCategoryBatchYearFilter(
+      provinceCategoryBatchYears.includes('2025') ? '2025' : '全部'
+    )
+  }, [provinceCategoryBatchYearFilter, provinceCategoryBatchYears])
+
+  useEffect(() => {
+    if (controlLineYearFilter === '全部') return
+    if (controlLineYears.includes(controlLineYearFilter)) return
+
+    setControlLineYearFilter(controlLineYears.includes('2025') ? '2025' : '全部')
+  }, [controlLineYearFilter, controlLineYears])
+
 
   const getAuthErrorMessage = (error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error)
@@ -773,21 +823,39 @@ export default function RuleCenterPage() {
                     message="用于专业分模板智能填充、招生计划匹配等流程。文件需包含：年份（可从文件名识别）、省份、招生科类、招生批次。"
                   />
 
-                  <Upload
-                    disabled={!isAdminUser}
-                    beforeUpload={handleImportProvinceCategoryBatchRules}
-                    showUploadList={false}
-                    accept=".xlsx,.xls"
-                  >
-                    <Button disabled={!isAdminUser}>导入省份科类批次规则</Button>
-                  </Upload>
+                  <Space wrap>
+                    <Upload
+                      disabled={!isAdminUser}
+                      beforeUpload={handleImportProvinceCategoryBatchRules}
+                      showUploadList={false}
+                      accept=".xlsx,.xls"
+                    >
+                      <Button disabled={!isAdminUser}>导入省份科类批次规则</Button>
+                    </Upload>
+
+                    <Select
+                      style={{ width: 160 }}
+                      value={provinceCategoryBatchYearFilter}
+                      onChange={setProvinceCategoryBatchYearFilter}
+                      options={[
+                        { label: '全部年份', value: '全部' },
+                        ...provinceCategoryBatchYears.map((year) => ({
+                          label: `${year} 年`,
+                          value: year,
+                        })),
+                      ]}
+                    />
+                  </Space>
 
                   <Descriptions size="small" column={1}>
                     <Descriptions.Item label="当前来源">
                       {provinceCategoryBatchRuleFileName || '内置默认规则'}
                     </Descriptions.Item>
-                    <Descriptions.Item label="规则数量">
+                    <Descriptions.Item label="规则总数">
                       {provinceCategoryBatchRules.length}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="当前筛选数量">
+                      {provinceCategoryBatchFiltered.length}
                     </Descriptions.Item>
                   </Descriptions>
 
@@ -799,7 +867,7 @@ export default function RuleCenterPage() {
                     rowKey={(row) => `${row.year}_${row.province}`}
                     size="small"
                     pagination={{ pageSize: 5 }}
-                    dataSource={provinceCategoryBatchPreview}
+                    dataSource={provinceCategoryBatchFiltered}
                     columns={[
                       { title: '年份', dataIndex: 'year', key: 'year', width: 80 },
                       { title: '省份', dataIndex: 'province', key: 'province', width: 90 },
@@ -825,21 +893,39 @@ export default function RuleCenterPage() {
                     message="用于院校分提取（普通类）和招生计划比对导出模板中的省控线科类、省控线批次填充。文件需包含：年份（可从文件名识别）、省份、科类、批次。"
                   />
 
-                  <Upload
-                    disabled={!isAdminUser}
-                    beforeUpload={handleImportControlLineRules}
-                    showUploadList={false}
-                    accept=".xlsx,.xls"
-                  >
-                    <Button disabled={!isAdminUser}>导入省控线科类批次规则</Button>
-                  </Upload>
+                  <Space wrap>
+                    <Upload
+                      disabled={!isAdminUser}
+                      beforeUpload={handleImportControlLineRules}
+                      showUploadList={false}
+                      accept=".xlsx,.xls"
+                    >
+                      <Button disabled={!isAdminUser}>导入省控线科类批次规则</Button>
+                    </Upload>
+
+                    <Select
+                      style={{ width: 160 }}
+                      value={controlLineYearFilter}
+                      onChange={setControlLineYearFilter}
+                      options={[
+                        { label: '全部年份', value: '全部' },
+                        ...controlLineYears.map((year) => ({
+                          label: `${year} 年`,
+                          value: year,
+                        })),
+                      ]}
+                    />
+                  </Space>
 
                   <Descriptions size="small" column={1}>
                     <Descriptions.Item label="当前来源">
                       {controlLineRuleFileName || '内置默认规则'}
                     </Descriptions.Item>
-                    <Descriptions.Item label="规则数量">
+                    <Descriptions.Item label="规则总数">
                       {controlLineRules.length}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="当前筛选数量">
+                      {controlLineFiltered.length}
                     </Descriptions.Item>
                   </Descriptions>
 
@@ -851,7 +937,7 @@ export default function RuleCenterPage() {
                     rowKey={(row) => `${row.year}_${row.province}`}
                     size="small"
                     pagination={{ pageSize: 5 }}
-                    dataSource={controlLinePreview}
+                    dataSource={controlLineFiltered}
                     columns={[
                       { title: '年份', dataIndex: 'year', key: 'year', width: 80 },
                       { title: '省份', dataIndex: 'province', key: 'province', width: 90 },

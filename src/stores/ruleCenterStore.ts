@@ -382,7 +382,9 @@ function mapCloudProvinceCategoryBatchRules(
     })
     .filter((rule) => rule.year && rule.province && rule.categoryType && rule.batches.length)
 
-  return rules.length ? rules : DEFAULT_PROVINCE_CATEGORY_BATCH_RULES
+  return rules.length
+    ? mergeProvinceCategoryBatchRules(DEFAULT_PROVINCE_CATEGORY_BATCH_RULES, rules)
+    : DEFAULT_PROVINCE_CATEGORY_BATCH_RULES
 }
 
 function mapCloudControlLineRules(
@@ -411,7 +413,9 @@ function mapCloudControlLineRules(
     })
     .filter((rule) => rule.year && rule.province && rule.categories.length && rule.batches.length)
 
-  return rules.length ? rules : DEFAULT_CONTROL_LINE_RULES
+  return rules.length
+    ? mergeControlLineRules(DEFAULT_CONTROL_LINE_RULES, rules)
+    : DEFAULT_CONTROL_LINE_RULES
 }
 
 function toCloudPayloadFromProvinceCategoryBatchRules(
@@ -477,6 +481,49 @@ function toCloudPayloadFromControlLineRules(rules: ControlLineRule[], uid: strin
   })
 
   return payload
+}
+
+
+function mergeProvinceCategoryBatchRules(
+  baseRules: ProvinceCategoryBatchRule[],
+  overrideRules: ProvinceCategoryBatchRule[],
+): ProvinceCategoryBatchRule[] {
+  const merged = new Map<string, ProvinceCategoryBatchRule>()
+
+  baseRules.forEach((rule) => {
+    merged.set(`${rule.year}__${rule.province}`, rule)
+  })
+
+  overrideRules.forEach((rule) => {
+    merged.set(`${rule.year}__${rule.province}`, rule)
+  })
+
+  return Array.from(merged.values()).sort((a, b) => {
+    const yearDiff = Number(a.year) - Number(b.year)
+    if (yearDiff !== 0) return yearDiff
+    return a.province.localeCompare(b.province, 'zh-CN')
+  })
+}
+
+function mergeControlLineRules(
+  baseRules: ControlLineRule[],
+  overrideRules: ControlLineRule[],
+): ControlLineRule[] {
+  const merged = new Map<string, ControlLineRule>()
+
+  baseRules.forEach((rule) => {
+    merged.set(`${rule.year}__${rule.province}`, rule)
+  })
+
+  overrideRules.forEach((rule) => {
+    merged.set(`${rule.year}__${rule.province}`, rule)
+  })
+
+  return Array.from(merged.values()).sort((a, b) => {
+    const yearDiff = Number(a.year) - Number(b.year)
+    if (yearDiff !== 0) return yearDiff
+    return a.province.localeCompare(b.province, 'zh-CN')
+  })
 }
 
 function deriveProvinceRuleMaps(rules: ProvinceCategoryBatchRule[]) {
@@ -942,15 +989,22 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       throw new Error('省份科类批次规则文件中没有有效规则')
     }
 
+    const mergedRules = mergeProvinceCategoryBatchRules(
+      getState().provinceCategoryBatchRules.length
+        ? getState().provinceCategoryBatchRules
+        : DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
+      rules,
+    )
+
     await dbSet(
       ref(db, 'rule_center/province_category_batch'),
-      toCloudPayloadFromProvinceCategoryBatchRules(rules, currentUid!),
+      toCloudPayloadFromProvinceCategoryBatchRules(mergedRules, currentUid!),
     )
 
     setState({
-      provinceCategoryBatchRules: rules,
+      provinceCategoryBatchRules: mergedRules,
       provinceCategoryBatchRuleFileName: CLOUD_RULE_FILE_NAME,
-      ...deriveProvinceRuleMaps(rules),
+      ...deriveProvinceRuleMaps(mergedRules),
     })
 
     await updateMetaVersion()
@@ -1002,13 +1056,20 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       throw new Error('省控线科类批次规则文件中没有有效规则')
     }
 
+    const mergedRules = mergeControlLineRules(
+      getState().controlLineRules.length
+        ? getState().controlLineRules
+        : DEFAULT_CONTROL_LINE_RULES,
+      rules,
+    )
+
     await dbSet(
       ref(db, 'rule_center/control_line'),
-      toCloudPayloadFromControlLineRules(rules, currentUid!),
+      toCloudPayloadFromControlLineRules(mergedRules, currentUid!),
     )
 
     setState({
-      controlLineRules: rules,
+      controlLineRules: mergedRules,
       controlLineRuleFileName: CLOUD_RULE_FILE_NAME,
     })
 
