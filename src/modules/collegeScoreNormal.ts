@@ -557,7 +557,7 @@ export async function exportNormalCollegeScoreWorkbook(
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet("院校分提取结果");
 
-  ws.mergeCells("A1:Z1");
+  ws.mergeCells("A1:U1");
   const noteCell = ws.getCell("A1");
   noteCell.value = TEMPLATE_NOTE;
   noteCell.font = { color: { argb: "FFFF0000" }, size: 11 };
