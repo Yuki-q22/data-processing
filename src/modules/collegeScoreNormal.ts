@@ -1,147 +1,151 @@
-import * as XLSX from 'xlsx'
-import ExcelJS from 'exceljs'
-import { resolveControlLine } from './controlLine'
-import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
+import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import { resolveControlLine } from "./controlLine";
+import { validateSchoolAndMajorComboDetailed } from "./ruleCenterValidation";
 
-export type NormalCollegeScoreInputTemplateType = 'rawMajorScore' | 'libraryMajorScore'
+export type NormalCollegeScoreInputTemplateType =
+  | "rawMajorScore"
+  | "libraryMajorScore";
 
 export const NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS: Record<
   NormalCollegeScoreInputTemplateType,
   string
 > = {
-  rawMajorScore: '专业分原始模板',
-  libraryMajorScore: '专业分库中导出模板',
-}
+  rawMajorScore: "专业分原始模板",
+  libraryMajorScore: "专业分库中导出模板",
+};
 
 export type NormalCollegeScoreOutputRow = {
-  学校名称: string
-  省份: string
-  招生类别: string
-  招生批次: string
-  招生类型: string
-  选测等级: string
-  最高分: number | null
-  最低分: number | null
-  平均分: number | null
-  最高位次: number | null
-  最低位次: number | null
-  平均位次: number | null
-  录取人数: number | null
-  招生人数: number | null
-  数据来源: string
-  省控线科类: string
-  省控线批次: string
-  省控线备注: string
-  专业组代码: string
-  首选科目: string
-  院校招生代码: string
-  数据是否有问题: string
-  问题列表: string
-  学校名称校验结果: string
-  专业名称校验结果: string
-}
+  学校名称: string;
+  省份: string;
+  招生类别: string;
+  招生批次: string;
+  招生类型: string;
+  选测等级: string;
+  最高分: number | null;
+  最低分: number | null;
+  平均分: number | null;
+  最高位次: number | null;
+  最低位次: number | null;
+  平均位次: number | null;
+  录取人数: number | null;
+  招生人数: number | null;
+  数据来源: string;
+  省控线科类: string;
+  省控线批次: string;
+  省控线备注: string;
+  专业组代码: string;
+  首选科目: string;
+  院校招生代码: string;
+  层次: string;
+  数据是否有问题: string;
+  问题列表: string;
+  学校名称校验结果: string;
+  专业名称校验结果: string;
+};
 
 export type NormalCollegeScoreProcessResult = {
-  templateType: NormalCollegeScoreInputTemplateType
-  templateName: string
-  year: string
-  inputRowCount: number
-  outputRowCount: number
-  rows: NormalCollegeScoreOutputRow[]
-  missingColumns: string[]
-  detectedHeaders: string[]
-}
+  templateType: NormalCollegeScoreInputTemplateType;
+  templateName: string;
+  year: string;
+  inputRowCount: number;
+  outputRowCount: number;
+  rows: NormalCollegeScoreOutputRow[];
+  missingColumns: string[];
+  detectedHeaders: string[];
+};
 
 const RAW_MAJOR_SCORE_EXPECTED_COLUMNS = [
-  '学校名称',
-  '省份',
-  '招生专业',
-  '专业方向（选填）',
-  '专业备注（选填）',
-  '一级层次',
-  '招生科类',
-  '招生批次',
-  '招生类型（选填）',
-  '最高分',
-  '最低分',
-  '平均分',
-  '最低分位次（选填）',
-  '招生人数（选填）',
-  '数据来源',
-  '专业组代码',
-  '首选科目',
-  '选科要求',
-  '次选科目',
-  '专业代码',
-  '招生代码',
-  '最低分数区间低',
-  '最低分数区间高',
-  '最低分数区间位次低',
-  '最低分数区间位次高',
-  '录取人数（选填）',
-]
+  "学校名称",
+  "省份",
+  "招生专业",
+  "专业方向（选填）",
+  "专业备注（选填）",
+  "一级层次",
+  "招生科类",
+  "招生批次",
+  "招生类型（选填）",
+  "最高分",
+  "最低分",
+  "平均分",
+  "最低分位次（选填）",
+  "招生人数（选填）",
+  "数据来源",
+  "专业组代码",
+  "首选科目",
+  "选科要求",
+  "次选科目",
+  "专业代码",
+  "招生代码",
+  "最低分数区间低",
+  "最低分数区间高",
+  "最低分数区间位次低",
+  "最低分数区间位次高",
+  "录取人数（选填）",
+];
 
 const LIBRARY_MAJOR_SCORE_EXPECTED_COLUMNS = [
-  '年份',
-  '省份',
-  '学校',
-  '学校所在省份',
-  '是否是985',
-  '是否是211',
-  '是否是双一流',
-  '办学类型',
-  '办学性质',
-  '科类',
-  '批次',
-  '招生类型',
-  '专业',
-  '层次',
-  '门类',
-  '大类',
-  '方向',
-  '备注',
-  '最高分',
-  '平均分',
-  '最低分',
-  '最低分位次',
-  '招生人数',
-  '录取人数',
-  '专业组代码',
-  '专业组名',
-  '专业组选科要求',
-  '专业选科要求(新高考专业省份)',
-  '招生代码',
-  '专业代码',
-  '数据来源',
-]
+  "年份",
+  "省份",
+  "学校",
+  "学校所在省份",
+  "是否是985",
+  "是否是211",
+  "是否是双一流",
+  "办学类型",
+  "办学性质",
+  "科类",
+  "批次",
+  "招生类型",
+  "专业",
+  "层次",
+  "门类",
+  "大类",
+  "方向",
+  "备注",
+  "最高分",
+  "平均分",
+  "最低分",
+  "最低分位次",
+  "招生人数",
+  "录取人数",
+  "专业组代码",
+  "专业组名",
+  "专业组选科要求",
+  "专业选科要求(新高考专业省份)",
+  "招生代码",
+  "专业代码",
+  "数据来源",
+];
 
 const OUTPUT_HEADERS = [
-  '学校名称',
-  '省份',
-  '招生类别',
-  '招生批次',
-  '招生类型',
-  '选测等级',
-  '最高分',
-  '最低分',
-  '平均分',
-  '最高位次',
-  '最低位次',
-  '平均位次',
-  '录取人数',
-  '招生人数',
-  '数据来源',
-  '省控线科类',
-  '省控线批次',
-  '省控线备注',
-  '专业组代码',
-  '首选科目',
-  '院校招生代码',
-  '数据是否有问题',
-  '问题列表',
-  '学校名称校验结果',
-  '专业名称校验结果',
-] as const
+  "学校名称",
+  "省份",
+  "招生类别",
+  "招生批次",
+  "招生类型",
+  "选测等级",
+  "最高分",
+  "最低分",
+  "平均分",
+  "最高位次",
+  "最低位次",
+  "平均位次",
+  "录取人数",
+  "招生人数",
+  "数据来源",
+  "省控线科类",
+  "省控线批次",
+  "省控线备注",
+  "专业组代码",
+  "首选科目",
+  "院校招生代码",
+  "层次",
+  "数据是否有问题",
+  "问题列表",
+  "学校名称校验结果",
+  "专业名称校验结果",
+] as const;
 
 const TEMPLATE_NOTE = `备注：请删除示例后再填写；
 
@@ -167,248 +171,285 @@ const TEMPLATE_NOTE = `备注：请删除示例后再填写；
 
 6.录取人数：仅能填写数字
 
-7.首选科目：新八省必填，只能填写（历史或物理）`
+7.首选科目：新八省必填，只能填写（历史或物理）`;
 
 type InputRow = Record<string, unknown> & {
-  __templateType: NormalCollegeScoreInputTemplateType
-  __rowNo: number
-  __highestScore: number | null
-  __lowestScore: number | null
-  __avgScore: number | null
-  __lowestRank: number | null
-  __enrollCount: number | null
-  __admitCount: number | null
-  __normalizedFirstSubject: string
-}
+  __templateType: NormalCollegeScoreInputTemplateType;
+  __rowNo: number;
+  __highestScore: number | null;
+  __lowestScore: number | null;
+  __avgScore: number | null;
+  __lowestRank: number | null;
+  __enrollCount: number | null;
+  __admitCount: number | null;
+  __normalizedFirstSubject: string;
+};
 
 function t(value: unknown): string {
-  if (value === null || value === undefined) return ''
-  return String(value).trim()
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+function cleanTextCode(value: unknown): string {
+  return t(value).replace(/[\^＾]/g, "");
 }
 
 function isTibetProvince(value: unknown): boolean {
-  const text = t(value)
-  return text === '西藏' || text === '西藏自治区'
+  const text = t(value);
+  return text === "西藏" || text === "西藏自治区";
 }
 
 function toNumber(value: unknown): number | null {
-  const text = t(value).replace(/,/g, '')
-  if (!text) return null
-  const n = Number(text)
-  return Number.isNaN(n) ? null : n
+  const text = t(value).replace(/,/g, "");
+  if (!text) return null;
+  const n = Number(text);
+  return Number.isNaN(n) ? null : n;
 }
 
 function pickText(row: Record<string, unknown>, keys: string[]): string {
   for (const key of keys) {
-    const value = t(row[key])
-    if (value) return value
+    const value = t(row[key]);
+    if (value) return value;
   }
-  return ''
+  return "";
 }
 
-function pickNumber(row: Record<string, unknown>, keys: string[]): number | null {
+function pickNumber(
+  row: Record<string, unknown>,
+  keys: string[],
+): number | null {
   for (const key of keys) {
-    const value = toNumber(row[key])
-    if (value !== null) return value
+    const value = toNumber(row[key]);
+    if (value !== null) return value;
   }
-  return null
+  return null;
 }
 
 function normalizeFirstSubject(value: unknown): string {
-  const text = t(value)
-  if (text === '物') return '物理'
-  if (text === '历') return '历史'
-  if (text === '物理') return '物理'
-  if (text === '历史') return '历史'
-  return text
+  const text = t(value);
+  if (text === "物") return "物理";
+  if (text === "历") return "历史";
+  if (text === "物理") return "物理";
+  if (text === "历史") return "历史";
+  return text;
 }
 
 function normalizeFirstSubjectFromCategory(value: unknown): string {
-  const text = t(value)
-  if (text === '物理类') return '物理'
-  if (text === '历史类') return '历史'
-  return ''
+  const text = t(value);
+  if (text === "物理类") return "物理";
+  if (text === "历史类") return "历史";
+  return "";
 }
 
 function getCellText(sheet: XLSX.WorkSheet, address: string): string {
-  const cell = sheet[address]
-  if (!cell) return ''
-  if ('w' in cell && cell.w) return String(cell.w).trim()
-  return t(cell.v)
+  const cell = sheet[address];
+  if (!cell) return "";
+  if ("w" in cell && cell.w) return String(cell.w).trim();
+  return t(cell.v);
 }
 
 function readHeaders(sheet: XLSX.WorkSheet, headerRowIndex: number): string[] {
   const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     raw: false,
-    defval: '',
-  })
-  const headerRow = aoa[headerRowIndex] || []
-  return headerRow.map((item) => t(item)).filter(Boolean)
+    defval: "",
+  });
+  const headerRow = aoa[headerRowIndex] || [];
+  return headerRow.map((item) => t(item)).filter(Boolean);
 }
 
 function buildGroupKey(row: InputRow): string {
-  if (row.__templateType === 'libraryMajorScore') {
+  if (row.__templateType === "libraryMajorScore") {
     const base = [
-      t(row['学校']),
-      t(row['省份']),
-      t(row['层次']),
-      t(row['科类']),
-      t(row['批次']),
-      t(row['招生类型']),
-    ]
+      t(row["学校"]),
+      t(row["省份"]),
+      t(row["层次"]),
+      t(row["科类"]),
+      t(row["批次"]),
+      t(row["招生类型"]),
+    ];
 
-    const groupCode = t(row['专业组代码'])
-    const recruitCode = t(row['招生代码'])
+    const groupCode = cleanTextCode(row["专业组代码"]);
+    const recruitCode = cleanTextCode(row["招生代码"]);
 
     if (groupCode) {
-      return [...base, groupCode, recruitCode].join('||')
+      return [...base, groupCode, recruitCode].join("||");
     }
 
-    return [...base, recruitCode].join('||')
+    return [...base, recruitCode].join("||");
   }
 
   const base = [
-    t(row['学校名称']),
-    t(row['省份']),
-    t(row['一级层次']),
-    t(row['招生科类']),
-    t(row['招生批次']),
-    t(row['招生类型（选填）']),
-  ]
+    t(row["学校名称"]),
+    t(row["省份"]),
+    t(row["一级层次"]),
+    t(row["招生科类"]),
+    t(row["招生批次"]),
+    t(row["招生类型（选填）"]),
+  ];
 
-  const groupCode = t(row['专业组代码'])
-  const recruitCode = t(row['招生代码'])
+  const groupCode = t(row["专业组代码"]);
+  const recruitCode = t(row["招生代码"]);
 
   if (groupCode) {
-    return [...base, groupCode, recruitCode].join('||')
+    return [...base, groupCode, recruitCode].join("||");
   }
 
-  return [...base, recruitCode].join('||')
+  return [...base, recruitCode].join("||");
 }
 
 function maxNullable(values: Array<number | null>): number | null {
-  const valid = values.filter((item): item is number => item !== null)
-  if (!valid.length) return null
-  return Math.max(...valid)
+  const valid = values.filter((item): item is number => item !== null);
+  if (!valid.length) return null;
+  return Math.max(...valid);
 }
 
 function sumNullable(values: Array<number | null>): number | null {
-  const valid = values.filter((item): item is number => item !== null)
-  if (!valid.length) return null
-  return valid.reduce((sum, item) => sum + item, 0)
+  const valid = values.filter((item): item is number => item !== null);
+  if (!valid.length) return null;
+  return valid.reduce((sum, item) => sum + item, 0);
 }
 
 function processRows(
   rows: Record<string, unknown>[],
   templateType: NormalCollegeScoreInputTemplateType,
   yearValue?: string | number,
-  ruleCenterOptions: { validSchoolNames?: string[]; validMajorCombos?: string[] } = {},
+  ruleCenterOptions: {
+    validSchoolNames?: string[];
+    validMajorCombos?: string[];
+  } = {},
 ): NormalCollegeScoreOutputRow[] {
   const normalizedRows: InputRow[] = rows
     .map((row, rowNo) => {
-      const isLibrary = templateType === 'libraryMajorScore'
+      const isLibrary = templateType === "libraryMajorScore";
 
       return {
         ...row,
         __templateType: templateType,
         __rowNo: rowNo,
-        __highestScore: pickNumber(row, ['最高分']),
-        __lowestScore: pickNumber(row, ['最低分']),
-        __avgScore: isLibrary ? null : pickNumber(row, ['平均分']),
-        __lowestRank: pickNumber(row, isLibrary ? ['最低分位次'] : ['最低分位次（选填）']),
-        __enrollCount: pickNumber(row, isLibrary ? ['招生人数'] : ['招生人数（选填）']),
-        __admitCount: pickNumber(row, isLibrary ? ['录取人数'] : ['录取人数（选填）']),
+        __highestScore: pickNumber(row, ["最高分"]),
+        __lowestScore: pickNumber(row, ["最低分"]),
+        __avgScore: isLibrary ? null : pickNumber(row, ["平均分"]),
+        __lowestRank: pickNumber(
+          row,
+          isLibrary ? ["最低分位次"] : ["最低分位次（选填）"],
+        ),
+        __enrollCount: pickNumber(
+          row,
+          isLibrary ? ["招生人数"] : ["招生人数（选填）"],
+        ),
+        __admitCount: pickNumber(
+          row,
+          isLibrary ? ["录取人数"] : ["录取人数（选填）"],
+        ),
         __normalizedFirstSubject: isLibrary
-          ? normalizeFirstSubjectFromCategory(row['科类'])
-          : normalizeFirstSubject(row['首选科目']),
-      }
+          ? normalizeFirstSubjectFromCategory(row["科类"])
+          : normalizeFirstSubject(row["首选科目"]),
+      };
     })
-    .filter((row) => row.__lowestScore !== null)
+    .filter((row) => row.__lowestScore !== null);
 
-  const grouped = new Map<string, InputRow[]>()
+  const grouped = new Map<string, InputRow[]>();
 
   normalizedRows.forEach((row) => {
-    const key = buildGroupKey(row)
+    const key = buildGroupKey(row);
     if (!grouped.has(key)) {
-      grouped.set(key, [])
+      grouped.set(key, []);
     }
-    grouped.get(key)!.push(row)
-  })
+    grouped.get(key)!.push(row);
+  });
 
-  const output: Array<NormalCollegeScoreOutputRow & { __sortNo: number }> = []
+  const output: Array<NormalCollegeScoreOutputRow & { __sortNo: number }> = [];
 
   for (const [, groupRows] of grouped) {
     const sorted = [...groupRows].sort((a, b) => {
-      const aScore = a.__lowestScore ?? Number.POSITIVE_INFINITY
-      const bScore = b.__lowestScore ?? Number.POSITIVE_INFINITY
-      if (aScore !== bScore) return aScore - bScore
-      return a.__rowNo - b.__rowNo
-    })
+      const aScore = a.__lowestScore ?? Number.POSITIVE_INFINITY;
+      const bScore = b.__lowestScore ?? Number.POSITIVE_INFINITY;
+      if (aScore !== bScore) return aScore - bScore;
+      return a.__rowNo - b.__rowNo;
+    });
 
-    const representative = sorted[0]
-    const isLibrary = representative.__templateType === 'libraryMajorScore'
+    const representative = sorted[0];
+    const isLibrary = representative.__templateType === "libraryMajorScore";
 
     const year = t(
-      representative['年份'] ||
-        representative['招生年'] ||
-        representative['招生年份'] ||
+      representative["年份"] ||
+        representative["招生年"] ||
+        representative["招生年份"] ||
         yearValue,
-    )
+    );
 
-    const province = t(representative['省份'])
+    const province = t(representative["省份"]);
 
     const schoolName = isLibrary
-      ? t(representative['学校'])
-      : t(representative['学校名称'])
+      ? t(representative["学校"])
+      : t(representative["学校名称"]);
+
+    const level = isLibrary
+      ? t(representative["层次"])
+      : t(representative["一级层次"]);
 
     const enrollmentCategory = isLibrary
-      ? t(representative['科类'])
-      : t(representative['招生类别'] || representative['招生科类'] || representative['科类'])
+      ? t(representative["科类"])
+      : t(
+          representative["招生类别"] ||
+            representative["招生科类"] ||
+            representative["科类"],
+        );
 
     const enrollmentBatch = isLibrary
-      ? t(representative['批次'])
-      : t(representative['招生批次'] || representative['批次'])
+      ? t(representative["批次"])
+      : t(representative["招生批次"] || representative["批次"]);
 
     const enrollmentType = isLibrary
-      ? t(representative['招生类型'])
-      : t(representative['招生类型（选填）'])
+      ? t(representative["招生类型"])
+      : t(representative["招生类型（选填）"]);
 
-    const dataSource = t(representative['数据来源'])
-    const groupCode = t(representative['专业组代码'])
-    const recruitCode = t(representative['招生代码'])
+    const dataSource = t(representative["数据来源"]);
+    const groupCode = isLibrary
+      ? cleanTextCode(representative["专业组代码"])
+      : t(representative["专业组代码"]);
+    const recruitCode = isLibrary
+      ? cleanTextCode(representative["招生代码"])
+      : t(representative["招生代码"]);
 
     const controlLine = resolveControlLine(
       province,
       enrollmentCategory,
       enrollmentBatch,
       year,
-    )
+    );
 
-    const isTibet = isTibetProvince(province)
+    const isTibet = isTibetProvince(province);
     const schoolValidation = validateSchoolAndMajorComboDetailed({
       validSchoolNames: ruleCenterOptions.validSchoolNames,
       schoolName,
-    })
+    });
     const majorValidations = groupRows.map((item) =>
       validateSchoolAndMajorComboDetailed({
         validMajorCombos: ruleCenterOptions.validMajorCombos,
-        majorName: item.__templateType === 'libraryMajorScore' ? item['专业'] : item['招生专业'],
-        level: item.__templateType === 'libraryMajorScore' ? item['层次'] : item['一级层次'],
+        majorName:
+          item.__templateType === "libraryMajorScore"
+            ? item["专业"]
+            : item["招生专业"],
+        level:
+          item.__templateType === "libraryMajorScore"
+            ? item["层次"]
+            : item["一级层次"],
       }),
-    )
+    );
     const majorResult =
       (ruleCenterOptions.validMajorCombos || []).length === 0
-        ? '未启用专业规则'
-        : majorValidations.some((item) => item.majorResult !== '匹配')
-          ? '未匹配'
-          : '匹配'
+        ? "未启用专业规则"
+        : majorValidations.some((item) => item.majorResult !== "匹配")
+          ? "未匹配"
+          : "匹配";
     const ruleCenterIssues = Array.from(
       new Set([
         ...schoolValidation.issues,
         ...majorValidations.flatMap((item) => item.issues),
       ]),
-    )
+    );
 
     output.push({
       学校名称: schoolName,
@@ -416,7 +457,7 @@ function processRows(
       招生类别: enrollmentCategory,
       招生批次: enrollmentBatch,
       招生类型: enrollmentType,
-      选测等级: '',
+      选测等级: "",
       最高分: maxNullable(groupRows.map((row) => row.__highestScore)),
       最低分: representative.__lowestScore,
       平均分: isLibrary ? null : representative.__avgScore,
@@ -426,47 +467,55 @@ function processRows(
       录取人数: sumNullable(groupRows.map((row) => row.__admitCount)),
       招生人数: sumNullable(groupRows.map((row) => row.__enrollCount)),
       数据来源: dataSource,
-      省控线科类: isTibet ? '' : controlLine.category,
-      省控线批次: isTibet ? '' : controlLine.batch,
-      省控线备注: '',
+      省控线科类: isTibet ? "" : controlLine.category,
+      省控线批次: isTibet ? "" : controlLine.batch,
+      省控线备注: "",
       专业组代码: groupCode,
       首选科目: representative.__normalizedFirstSubject,
       院校招生代码: recruitCode,
-      数据是否有问题: ruleCenterIssues.length ? '有问题' : '无问题',
-      问题列表: ruleCenterIssues.length ? ruleCenterIssues.join('；') : '无问题',
+      层次: level,
+      数据是否有问题: ruleCenterIssues.length ? "有问题" : "无问题",
+      问题列表: ruleCenterIssues.length
+        ? ruleCenterIssues.join("；")
+        : "无问题",
       学校名称校验结果: schoolValidation.schoolResult,
       专业名称校验结果: majorResult,
       __sortNo: representative.__rowNo,
-    })
+    });
   }
 
   return output
     .sort((a, b) => a.__sortNo - b.__sortNo)
-    .map(({ __sortNo, ...rest }) => rest)
+    .map(({ __sortNo, ...rest }) => rest);
 }
 
 export function processNormalCollegeScoreWorkbook(
   workbook: XLSX.WorkBook,
   sheetName: string,
   templateType: NormalCollegeScoreInputTemplateType,
-  ruleCenterOptions: { validSchoolNames?: string[]; validMajorCombos?: string[] } = {},
+  ruleCenterOptions: {
+    validSchoolNames?: string[];
+    validMajorCombos?: string[];
+  } = {},
 ): NormalCollegeScoreProcessResult {
-  const sheet = workbook.Sheets[sheetName]
+  const sheet = workbook.Sheets[sheetName];
   if (!sheet) {
-    throw new Error('未找到所选 Sheet')
+    throw new Error("未找到所选 Sheet");
   }
 
-  const isLibrary = templateType === 'libraryMajorScore'
+  const isLibrary = templateType === "libraryMajorScore";
   const expectedColumns = isLibrary
     ? LIBRARY_MAJOR_SCORE_EXPECTED_COLUMNS
-    : RAW_MAJOR_SCORE_EXPECTED_COLUMNS
+    : RAW_MAJOR_SCORE_EXPECTED_COLUMNS;
 
-  const headerRowIndex = isLibrary ? 0 : 2
-  const dataRange = isLibrary ? 0 : 2
+  const headerRowIndex = isLibrary ? 0 : 2;
+  const dataRange = isLibrary ? 0 : 2;
 
-  const detectedHeaders = readHeaders(sheet, headerRowIndex)
-  const missingColumns = expectedColumns.filter((col) => !detectedHeaders.includes(col))
-  const yearFromB2 = getCellText(sheet, 'B2')
+  const detectedHeaders = readHeaders(sheet, headerRowIndex);
+  const missingColumns = expectedColumns.filter(
+    (col) => !detectedHeaders.includes(col),
+  );
+  const yearFromB2 = getCellText(sheet, "B2");
 
   if (missingColumns.length > 0) {
     return {
@@ -478,17 +527,17 @@ export function processNormalCollegeScoreWorkbook(
       rows: [],
       missingColumns,
       detectedHeaders,
-    }
+    };
   }
 
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     range: dataRange,
     raw: false,
-    defval: '',
-  })
+    defval: "",
+  });
 
-  const year = isLibrary ? pickText(rows[0] || {}, ['年份']) : yearFromB2
-  const outputRows = processRows(rows, templateType, year, ruleCenterOptions)
+  const year = isLibrary ? pickText(rows[0] || {}, ["年份"]) : yearFromB2;
+  const outputRows = processRows(rows, templateType, year, ruleCenterOptions);
 
   return {
     templateType,
@@ -499,59 +548,59 @@ export function processNormalCollegeScoreWorkbook(
     rows: outputRows,
     missingColumns,
     detectedHeaders,
-  }
+  };
 }
 
 export async function exportNormalCollegeScoreWorkbook(
   result: NormalCollegeScoreProcessResult,
 ): Promise<Blob> {
-  const workbook = new ExcelJS.Workbook()
-  const ws = workbook.addWorksheet('院校分提取结果')
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet("院校分提取结果");
 
-  ws.mergeCells('A1:U1')
-  const noteCell = ws.getCell('A1')
-  noteCell.value = TEMPLATE_NOTE
-  noteCell.font = { color: { argb: 'FFFF0000' }, size: 11 }
+  ws.mergeCells("A1:Z1");
+  const noteCell = ws.getCell("A1");
+  noteCell.value = TEMPLATE_NOTE;
+  noteCell.font = { color: { argb: "FFFF0000" }, size: 11 };
   noteCell.alignment = {
     wrapText: true,
-    vertical: 'top',
-    horizontal: 'left',
-  }
-  ws.getRow(1).height = 350
+    vertical: "top",
+    horizontal: "left",
+  };
+  ws.getRow(1).height = 350;
 
-  ws.getCell('A2').value = '招生年'
-  ws.getCell('B2').value = result.year
-  ws.getCell('C2').value = 1
-  ws.getCell('D2').value = '模板类型（模板标识不要更改）'
+  ws.getCell("A2").value = "招生年";
+  ws.getCell("B2").value = result.year;
+  ws.getCell("C2").value = 1;
+  ws.getCell("D2").value = "模板类型（模板标识不要更改）";
 
   OUTPUT_HEADERS.forEach((header, headerNo) => {
-    const cell = ws.getCell(3, headerNo + 1)
-    cell.value = header
-    cell.font = { bold: true }
+    const cell = ws.getCell(3, headerNo + 1);
+    cell.value = header;
+    cell.font = { bold: true };
     cell.alignment = {
-      horizontal: 'center',
-      vertical: 'middle',
-    }
-  })
+      horizontal: "center",
+      vertical: "middle",
+    };
+  });
 
   result.rows.forEach((row, rowNo) => {
     OUTPUT_HEADERS.forEach((header, colNo) => {
-      const cell = ws.getCell(rowNo + 4, colNo + 1)
-      const value = row[header]
+      const cell = ws.getCell(rowNo + 4, colNo + 1);
+      const value = row[header];
 
-      if (header === '专业组代码' || header === '院校招生代码') {
-        cell.numFmt = '@'
-        cell.value = String(value ?? '')
+      if (header === "专业组代码" || header === "院校招生代码") {
+        cell.numFmt = "@";
+        cell.value = String(value ?? "");
       } else {
-        cell.value = value as string | number | null
+        cell.value = value as string | number | null;
       }
 
       cell.alignment = {
-        horizontal: 'center',
-        vertical: 'middle',
-      }
-    })
-  })
+        horizontal: "center",
+        vertical: "middle",
+      };
+    });
+  });
 
   const widths: Record<string, number> = {
     A: 18,
@@ -575,27 +624,28 @@ export async function exportNormalCollegeScoreWorkbook(
     S: 14,
     T: 10,
     U: 14,
-    V: 16,
-    W: 26,
-    X: 18,
+    V: 10,
+    W: 16,
+    X: 26,
     Y: 18,
-  }
+    Z: 18,
+  };
 
   Object.entries(widths).forEach(([col, width]) => {
-    ws.getColumn(col).width = width
-  })
+    ws.getColumn(col).width = width;
+  });
 
-  const buffer = await workbook.xlsx.writeBuffer()
+  const buffer = await workbook.xlsx.writeBuffer();
   return new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  })
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
