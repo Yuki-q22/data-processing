@@ -11,7 +11,7 @@ export const NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS: Record<
   NormalCollegeScoreInputTemplateType,
   string
 > = {
-  rawMajorScore: "专业分原始模板",
+  rawMajorScore: "专业分批量导入模板",
   libraryMajorScore: "专业分库中导出模板",
 };
 
@@ -330,7 +330,8 @@ function processRows(
         ),
         __normalizedFirstSubject: isLibrary
           ? normalizeFirstSubjectFromCategory(row["科类"])
-          : normalizeFirstSubject(row["首选科目"]),
+          : normalizeFirstSubjectFromCategory(row["招生科类"]) ||
+          normalizeFirstSubject(row["首选科目"]),
       };
     })
     .filter((row) => row.__lowestScore !== null);
