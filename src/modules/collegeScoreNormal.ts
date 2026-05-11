@@ -259,43 +259,29 @@ function readHeaders(sheet: XLSX.WorkSheet, headerRowIndex: number): string[] {
 }
 
 function buildGroupKey(row: InputRow): string {
-  if (row.__templateType === "libraryMajorScore") {
-    const base = [
-      t(row["学校"]),
-      t(row["省份"]),
-      t(row["层次"]),
-      t(row["科类"]),
-      t(row["批次"]),
-      t(row["招生类型"]),
-    ];
+  const isLibrary = row.__templateType === "libraryMajorScore";
 
-    const groupCode = cleanTextCode(row["专业组代码"]);
-    const recruitCode = cleanTextCode(row["招生代码"]);
+  const schoolName = isLibrary ? t(row["学校"]) : t(row["学校名称"]);
+  const province = t(row["省份"]);
+  const level = isLibrary ? t(row["层次"]) : t(row["一级层次"]);
+  const category = isLibrary ? t(row["科类"]) : t(row["招生科类"]);
+  const batch = isLibrary ? t(row["批次"]) : t(row["招生批次"]);
+  const enrollmentType = isLibrary
+    ? t(row["招生类型"])
+    : t(row["招生类型（选填）"]);
+  const groupCode = cleanTextCode(row["专业组代码"]);
+  const recruitCode = cleanTextCode(row["招生代码"]);
 
-    if (groupCode) {
-      return [...base, groupCode, recruitCode].join("||");
-    }
-
-    return [...base, recruitCode].join("||");
-  }
-
-  const base = [
-    t(row["学校名称"]),
-    t(row["省份"]),
-    t(row["一级层次"]),
-    t(row["招生科类"]),
-    t(row["招生批次"]),
-    t(row["招生类型（选填）"]),
-  ];
-
-  const groupCode = t(row["专业组代码"]);
-  const recruitCode = t(row["招生代码"]);
-
-  if (groupCode) {
-    return [...base, groupCode, recruitCode].join("||");
-  }
-
-  return [...base, recruitCode].join("||");
+  return [
+    schoolName,
+    province,
+    level,
+    category,
+    batch,
+    enrollmentType,
+    groupCode,
+    recruitCode,
+  ].join("||");
 }
 
 function maxNullable(values: Array<number | null>): number | null {
@@ -329,7 +315,7 @@ function processRows(
         __rowNo: rowNo,
         __highestScore: pickNumber(row, ["最高分"]),
         __lowestScore: pickNumber(row, ["最低分"]),
-        __avgScore: isLibrary ? null : pickNumber(row, ["平均分"]),
+        __avgScore: null,
         __lowestRank: pickNumber(
           row,
           isLibrary ? ["最低分位次"] : ["最低分位次（选填）"],
@@ -460,7 +446,7 @@ function processRows(
       选测等级: "",
       最高分: maxNullable(groupRows.map((row) => row.__highestScore)),
       最低分: representative.__lowestScore,
-      平均分: isLibrary ? null : representative.__avgScore,
+      平均分: null,
       最高位次: null,
       最低位次: representative.__lowestRank,
       平均位次: null,
