@@ -40,7 +40,6 @@ import {
   Row,
   Space,
   Select,
-  Statistic,
   Table,
   Tag,
   Typography,
@@ -50,7 +49,6 @@ import {
 import {
   GoogleOutlined,
   HolderOutlined,
-  InboxOutlined,
 } from '@ant-design/icons'
 import {
   DndContext,
@@ -70,11 +68,13 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   useRuleCenterStore,
   type RemarkTypeRule,
+  type ProvinceCategoryBatchRule,
+  type ControlLineRule,
 } from '../stores/ruleCenterStore'
 
-const { Dragger } = Upload
 const { Paragraph, Text, Title } = Typography
 const { TextArea, Password } = Input
+
 
 type PreviewRow = {
   key: string
@@ -180,6 +180,26 @@ export default function RuleCenterPage() {
     useState('2025')
   const [controlLineYearFilter, setControlLineYearFilter] = useState('2025')
 
+  /**
+   * 科类批次规则查看筛选。
+   * 只影响页面展示，不影响规则本身。
+   */
+  const [activeWorkspace, setActiveWorkspace] = useState<
+    'batch' | 'validation' | 'remark'
+  >('remark')
+  const [rulePanelTab, setRulePanelTab] = useState<'provinceBatch' | 'controlLine'>(
+    'provinceBatch'
+  )
+  const [provinceCategoryTypeFilter, setProvinceCategoryTypeFilter] =
+    useState('全部')
+  const [provinceCategoryBatchKeyword, setProvinceCategoryBatchKeyword] =
+    useState('')
+  const [controlLineKeyword, setControlLineKeyword] = useState('')
+  const [provinceCategoryBatchDetail, setProvinceCategoryBatchDetail] =
+    useState<ProvinceCategoryBatchRule | null>(null)
+  const [controlLineDetail, setControlLineDetail] =
+    useState<ControlLineRule | null>(null)
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -244,22 +264,77 @@ export default function RuleCenterPage() {
     [controlLineRules]
   )
 
-  const provinceCategoryBatchFiltered = useMemo(
+  const provinceCategoryTypeOptions = useMemo(
     () =>
-      provinceCategoryBatchYearFilter === '全部'
-        ? provinceCategoryBatchRules
-        : provinceCategoryBatchRules.filter(
-            (rule) => rule.year === provinceCategoryBatchYearFilter
-          ),
-    [provinceCategoryBatchRules, provinceCategoryBatchYearFilter]
+      Array.from(
+        new Set(provinceCategoryBatchRules.map((rule) => rule.categoryType))
+      )
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'zh-CN')),
+    [provinceCategoryBatchRules]
   )
 
-  const controlLineFiltered = useMemo(
-    () =>
-      controlLineYearFilter === '全部'
-        ? controlLineRules
-        : controlLineRules.filter((rule) => rule.year === controlLineYearFilter),
-    [controlLineRules, controlLineYearFilter]
+  const provinceCategoryBatchFiltered = useMemo(() => {
+    const keyword = provinceCategoryBatchKeyword.trim()
+
+    return provinceCategoryBatchRules.filter((rule) => {
+      if (
+        provinceCategoryBatchYearFilter !== '全部' &&
+        rule.year !== provinceCategoryBatchYearFilter
+      ) {
+        return false
+      }
+
+      if (
+        provinceCategoryTypeFilter !== '全部' &&
+        rule.categoryType !== provinceCategoryTypeFilter
+      ) {
+        return false
+      }
+
+      if (!keyword) return true
+
+      return [
+        rule.year,
+        rule.province,
+        rule.categoryType,
+        ...rule.categories,
+        ...rule.batches,
+      ]
+        .join(' ')
+        .includes(keyword)
+    })
+  }, [
+    provinceCategoryBatchRules,
+    provinceCategoryBatchYearFilter,
+    provinceCategoryTypeFilter,
+    provinceCategoryBatchKeyword,
+  ])
+
+  const controlLineFiltered = useMemo(() => {
+    const keyword = controlLineKeyword.trim()
+
+    return controlLineRules.filter((rule) => {
+      if (controlLineYearFilter !== '全部' && rule.year !== controlLineYearFilter) {
+        return false
+      }
+
+      if (!keyword) return true
+
+      return [rule.year, rule.province, ...rule.categories, ...rule.batches]
+        .join(' ')
+        .includes(keyword)
+    })
+  }, [controlLineRules, controlLineYearFilter, controlLineKeyword])
+
+  const provinceCategoryBatchSummary = useMemo(
+    () => buildYearSummary(provinceCategoryBatchFiltered),
+    [provinceCategoryBatchFiltered]
+  )
+
+  const controlLineSummary = useMemo(
+    () => buildYearSummary(controlLineFiltered),
+    [controlLineFiltered]
   )
 
   useEffect(() => {
@@ -678,556 +753,705 @@ export default function RuleCenterPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card style={{ borderRadius: 12 }}>
-        <Title level={3} style={{ marginTop: 0, marginBottom: 8 }}>
-          规则中心
-        </Title>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 16,
+        background: '#f5f7fb',
+        padding: 4,
+      }}
+    >
+      <Card
+        style={{ borderRadius: 16, border: '1px solid #eef1f5' }}
+        bodyStyle={{ padding: 20 }}
+      >
+        <Row gutter={[16, 16]} align="middle" justify="space-between">
+          <Col flex="auto">
+            <Title level={3} style={{ margin: 0 }}>
+              规则中心
+            </Title>
+            <Paragraph type="secondary" style={{ margin: '6px 0 0' }}>
+              统一维护学校、专业、备注招生类型、省份科类批次和省控线规则。
+            </Paragraph>
+          </Col>
 
-        <Paragraph style={{ marginBottom: 8 }}>
-          当前页面已切换为{' '}
-          <Text strong>Firebase 云端实时共享规则中心</Text>
-          。管理员改完规则后，其他在线页面会自动同步，不需要手动刷新。
-        </Paragraph>
+          {currentUserEmail ? (
+            <Col>
+              <Space direction="vertical" size={6} align="end">
+                <Space wrap>
+                  <Tag color={isAdminUser ? 'green' : 'blue'}>
+                    {isAdminUser ? '管理员' : '只读用户'}
+                  </Tag>
+                  <Tag color={syncing ? 'processing' : 'success'}>
+                    {syncing ? '同步中' : '已同步'}
+                  </Tag>
+                </Space>
+                <Text type="secondary">{currentUserEmail}</Text>
+                <Button size="small" onClick={handleLogout}>
+                  退出登录
+                </Button>
+              </Space>
+            </Col>
+          ) : null}
+        </Row>
 
         {authError ? (
           <Alert
             type="error"
             showIcon
             message={`身份验证异常：${authError}`}
-            style={{ marginBottom: 12 }}
+            style={{ marginTop: 14 }}
           />
         ) : null}
 
-        {currentUserEmail ? (
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            <Descriptions size="small" column={1}>
-              <Descriptions.Item label="当前账号">
-                {currentUserEmail}
-              </Descriptions.Item>
+        {currentUserEmail && !isAdminUser ? (
+          <Alert
+            type="info"
+            showIcon
+            message="当前账号只有查看权限，规则导入、清空、新增、编辑和恢复默认规则需要管理员权限。"
+            style={{ marginTop: 14 }}
+          />
+        ) : null}
 
-              <Descriptions.Item label="账号权限">
-                {isAdminUser ? (
-                  <Tag color="green">管理员</Tag>
-                ) : (
-                  <Tag color="blue">只读用户</Tag>
-                )}
-
-                {syncing ? (
-                  <Tag color="processing">同步中</Tag>
-                ) : (
-                  <Tag color="success">已同步</Tag>
-                )}
-              </Descriptions.Item>
-            </Descriptions>
-
-            <Space wrap>
-              <Button onClick={handleLogout}>退出登录</Button>
-
-              {!isAdminUser ? (
-                <Text type="secondary">
-                  当前账号只有查看权限，若要编辑规则，请把该账号 UID 加入
-                  Firebase 的 admins 节点。
-                </Text>
-              ) : null}
+        {!currentUserEmail ? (
+          <Card
+            size="small"
+            style={{ marginTop: 16, borderRadius: 14, background: '#fbfcff' }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+              <Alert type="info" showIcon message="请登录后查看和管理云端共享规则" />
+              <Input
+                value={email}
+                placeholder="请输入邮箱"
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <Password
+                value={password}
+                placeholder="请输入密码"
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <Space wrap>
+                <Button type="primary" loading={authSubmitting} onClick={handleLogin}>
+                  登录
+                </Button>
+                <Button
+                  icon={<GoogleOutlined />}
+                  loading={authSubmitting}
+                  onClick={handleGoogleLogin}
+                >
+                  Gmail 登录
+                </Button>
+              </Space>
             </Space>
-          </Space>
-        ) : (
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            <Alert
-              type="info"
-              showIcon
-              message="请使用邮箱密码登录，或使用 Gmail 账号登录"
-            />
-
-            <Input
-              value={email}
-              placeholder="请输入邮箱"
-              onChange={(e) => setEmail(e.target.value)}
-            />
-
-            <Password
-              value={password}
-              placeholder="请输入密码"
-              onChange={(e) => setPassword(e.target.value)}
-            />
-
-            <Space wrap>
-              <Button
-                type="primary"
-                loading={authSubmitting}
-                onClick={handleLogin}
-              >
-                登录
-              </Button>
-
-              <Button
-                icon={<GoogleOutlined />}
-                loading={authSubmitting}
-                onClick={handleGoogleLogin}
-              >
-                Gmail 登录
-              </Button>
-            </Space>
-          </Space>
-        )}
+          </Card>
+        ) : null}
       </Card>
 
       {currentUserEmail ? (
         <>
-          <Row gutter={16}>
-            <Col span={6}>
-              <Card style={{ borderRadius: 12 }}>
-                <Statistic
-                  title="学校名称规则数"
-                  value={validSchoolNames.length}
-                />
-              </Card>
+          <Row gutter={[12, 12]}>
+            <Col xs={12} lg={6}>
+              <RuleMetricCard title="学校名称规则" value={validSchoolNames.length} />
             </Col>
-
-            <Col span={6}>
-              <Card style={{ borderRadius: 12 }}>
-                <Statistic
-                  title="招生专业组合数"
-                  value={validMajorCombos.length}
-                />
-              </Card>
+            <Col xs={12} lg={6}>
+              <RuleMetricCard title="专业组合规则" value={validMajorCombos.length} />
             </Col>
-
-            <Col span={6}>
-              <Card style={{ borderRadius: 12 }}>
-                <Statistic
-                  title="备注招生类型规则数"
-                  value={remarkTypeRules.length}
-                />
-              </Card>
+            <Col xs={12} lg={6}>
+              <RuleMetricCard title="备注招生类型" value={remarkTypeRules.length} />
             </Col>
-
-            <Col span={6}>
-              <Card style={{ borderRadius: 12 }}>
-                <Statistic
-                  title="需要核查关键词数"
-                  value={exclusionKeywords.length}
-                />
-              </Card>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Card title="省份科类批次规则" style={{ borderRadius: 12 }}>
-                <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="用于专业分模板智能填充、招生计划匹配等流程。文件需包含：年份（可从文件名识别）、省份、招生科类、招生批次。"
-                  />
-
-                  <Space wrap>
-                    <Upload
-                      disabled={!isAdminUser}
-                      beforeUpload={handleImportProvinceCategoryBatchRules}
-                      showUploadList={false}
-                      accept=".xlsx,.xls"
-                    >
-                      <Button disabled={!isAdminUser}>导入省份科类批次规则</Button>
-                    </Upload>
-
-                    <Select
-                      style={{ width: 160 }}
-                      value={provinceCategoryBatchYearFilter}
-                      onChange={setProvinceCategoryBatchYearFilter}
-                      options={[
-                        { label: '全部年份', value: '全部' },
-                        ...provinceCategoryBatchYears.map((year) => ({
-                          label: `${year} 年`,
-                          value: year,
-                        })),
-                      ]}
-                    />
-                  </Space>
-
-                  <Descriptions size="small" column={1}>
-                    <Descriptions.Item label="当前来源">
-                      {provinceCategoryBatchRuleFileName || '内置默认规则'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="规则总数">
-                      {provinceCategoryBatchRules.length}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="当前筛选数量">
-                      {provinceCategoryBatchFiltered.length}
-                    </Descriptions.Item>
-                  </Descriptions>
-
-                  <Button disabled={!isAdminUser} onClick={handleResetProvinceCategoryBatchRules}>
-                    恢复内置规则
-                  </Button>
-
-                  <Table
-                    rowKey={(row) => `${row.year}_${row.province}`}
-                    size="small"
-                    pagination={{ pageSize: 5 }}
-                    dataSource={provinceCategoryBatchFiltered}
-                    columns={[
-                      { title: '年份', dataIndex: 'year', key: 'year', width: 80 },
-                      { title: '省份', dataIndex: 'province', key: 'province', width: 90 },
-                      { title: '科类制度', dataIndex: 'categoryType', key: 'categoryType', width: 130 },
-                      {
-                        title: '批次数',
-                        key: 'batchCount',
-                        width: 90,
-                        render: (_, row) => row.batches.length,
-                      },
-                    ]}
-                  />
-                </Space>
-              </Card>
-            </Col>
-
-            <Col span={12}>
-              <Card title="省控线科类批次规则" style={{ borderRadius: 12 }}>
-                <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="用于院校分提取（普通类）和招生计划比对导出模板中的省控线科类、省控线批次填充。文件需包含：年份（可从文件名识别）、省份、科类、批次。"
-                  />
-
-                  <Space wrap>
-                    <Upload
-                      disabled={!isAdminUser}
-                      beforeUpload={handleImportControlLineRules}
-                      showUploadList={false}
-                      accept=".xlsx,.xls"
-                    >
-                      <Button disabled={!isAdminUser}>导入省控线科类批次规则</Button>
-                    </Upload>
-
-                    <Select
-                      style={{ width: 160 }}
-                      value={controlLineYearFilter}
-                      onChange={setControlLineYearFilter}
-                      options={[
-                        { label: '全部年份', value: '全部' },
-                        ...controlLineYears.map((year) => ({
-                          label: `${year} 年`,
-                          value: year,
-                        })),
-                      ]}
-                    />
-                  </Space>
-
-                  <Descriptions size="small" column={1}>
-                    <Descriptions.Item label="当前来源">
-                      {controlLineRuleFileName || '内置默认规则'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="规则总数">
-                      {controlLineRules.length}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="当前筛选数量">
-                      {controlLineFiltered.length}
-                    </Descriptions.Item>
-                  </Descriptions>
-
-                  <Button disabled={!isAdminUser} onClick={handleResetControlLineRules}>
-                    恢复内置规则
-                  </Button>
-
-                  <Table
-                    rowKey={(row) => `${row.year}_${row.province}`}
-                    size="small"
-                    pagination={{ pageSize: 5 }}
-                    dataSource={controlLineFiltered}
-                    columns={[
-                      { title: '年份', dataIndex: 'year', key: 'year', width: 80 },
-                      { title: '省份', dataIndex: 'province', key: 'province', width: 90 },
-                      {
-                        title: '科类数',
-                        key: 'categoryCount',
-                        width: 90,
-                        render: (_, row) => row.categories.length,
-                      },
-                      {
-                        title: '批次数',
-                        key: 'batchCount',
-                        width: 90,
-                        render: (_, row) => row.batches.length,
-                      },
-                    ]}
-                  />
-                </Space>
-              </Card>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Card title="学校名称规则" style={{ borderRadius: 12 }}>
-                <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                  <Dragger
-                    disabled={!isAdminUser}
-                    beforeUpload={handleImportSchoolRules}
-                    showUploadList={false}
-                    accept=".xlsx,.xls"
-                  >
-                    <p className="ant-upload-drag-icon">
-                      <InboxOutlined />
-                    </p>
-                    <p className="ant-upload-text">上传学校名称规则文件</p>
-                    <p className="ant-upload-hint">文件需包含“学校名称”列</p>
-                  </Dragger>
-
-                  <Descriptions size="small" column={1}>
-                    <Descriptions.Item label="当前来源">
-                      {schoolRuleFileName || '未加载'}
-                    </Descriptions.Item>
-
-                    <Descriptions.Item label="学校数量">
-                      {validSchoolNames.length}
-                    </Descriptions.Item>
-                  </Descriptions>
-
-                  <Button
-                    danger
-                    disabled={!isAdminUser}
-                    onClick={handleClearSchoolRules}
-                  >
-                    清空学校规则
-                  </Button>
-
-                  <Divider style={{ margin: '8px 0' }} />
-
-                  <Text strong>预览（前 50 条）</Text>
-
-                  {schoolPreview.length === 0 ? (
-                    <Text type="secondary">暂无学校名称规则</Text>
-                  ) : (
-                    <Table
-                      rowKey="key"
-                      size="small"
-                      pagination={{ pageSize: 10 }}
-                      columns={schoolColumns}
-                      dataSource={schoolPreview}
-                    />
-                  )}
-                </Space>
-              </Card>
-            </Col>
-
-            <Col span={12}>
-              <Card title="招生专业组合规则" style={{ borderRadius: 12 }}>
-                <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                  <Dragger
-                    disabled={!isAdminUser}
-                    beforeUpload={handleImportMajorRules}
-                    showUploadList={false}
-                    accept=".xlsx,.xls"
-                  >
-                    <p className="ant-upload-drag-icon">
-                      <InboxOutlined />
-                    </p>
-                    <p className="ant-upload-text">上传招生专业组合规则文件</p>
-                    <p className="ant-upload-hint">
-                      文件需包含“招生专业组合”列，或“招生专业/专业名称/专业” +
-                      “一级层次/层次/专业层次”列
-                    </p>
-                  </Dragger>
-
-                  <Descriptions size="small" column={1}>
-                    <Descriptions.Item label="当前来源">
-                      {majorRuleFileName || '未加载'}
-                    </Descriptions.Item>
-
-                    <Descriptions.Item label="专业组合数量">
-                      {validMajorCombos.length}
-                    </Descriptions.Item>
-                  </Descriptions>
-
-                  <Button
-                    danger
-                    disabled={!isAdminUser}
-                    onClick={handleClearMajorRules}
-                  >
-                    清空专业组合规则
-                  </Button>
-
-                  <Divider style={{ margin: '8px 0' }} />
-
-                  <Text strong>预览（前 50 条）</Text>
-
-                  {majorPreview.length === 0 ? (
-                    <Text type="secondary">暂无招生专业组合规则</Text>
-                  ) : (
-                    <Table
-                      rowKey="key"
-                      size="small"
-                      pagination={{ pageSize: 10 }}
-                      columns={majorColumns}
-                      dataSource={majorPreview}
-                    />
-                  )}
-                </Space>
-              </Card>
-            </Col>
-          </Row>
-
-          <Card title="备注招生类型规则" style={{ borderRadius: 12 }}>
-            <Space direction="vertical" style={{ width: '100%' }} size={12}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Descriptions size="small" column={1}>
-                    <Descriptions.Item label="当前规则来源">
-                      {remarkRuleFileName || '未加载'}
-                    </Descriptions.Item>
-
-                    <Descriptions.Item label="规则条数">
-                      {remarkTypeRules.length}
-                    </Descriptions.Item>
-                  </Descriptions>
-                </Col>
-
-                <Col span={12}>
-                  <Space wrap>
-                    <Upload
-                      disabled={!isAdminUser}
-                      beforeUpload={handleImportRemarkRules}
-                      showUploadList={false}
-                      accept=".xlsx,.xls"
-                    >
-                      <Button disabled={!isAdminUser}>导入备注规则文件</Button>
-                    </Upload>
-
-                    <Button
-                      type="primary"
-                      disabled={!isAdminUser}
-                      onClick={openAddRemarkRuleModal}
-                    >
-                      新增规则
-                    </Button>
-
-                    <Button
-                      disabled={!isAdminUser}
-                      onClick={handleResetRemarkRules}
-                    >
-                      恢复默认规则
-                    </Button>
-                  </Space>
-                </Col>
-              </Row>
-
-              <Alert
-                type="info"
-                showIcon
-                message="新增规则请点击“新增规则”后在弹窗中填写；已有规则编辑只修改本地草稿，点击对应行的“保存”后才会写入云端。可按住左侧拖拽图标上下调整规则优先级，拖动后会自动保存排序。"
+            <Col xs={12} lg={6}>
+              <RuleMetricCard
+                title="科类 / 批次规则"
+                value={provinceCategoryBatchRules.length + controlLineRules.length}
+                hint="含省份规则和省控线规则"
               />
+            </Col>
+          </Row>
 
-              <div
-                style={{
-                  border: '1px solid #f0f0f0',
-                  borderRadius: 8,
-                  overflow: 'hidden',
-                  opacity: reorderingRemarkRules ? 0.7 : 1,
-                }}
-              >
-                <Row
-                  gutter={12}
-                  align="middle"
+          <Card
+            style={{ borderRadius: 18, border: '1px solid #e8edf5' }}
+            bodyStyle={{ padding: 0 }}
+          >
+            <Row gutter={0} align="stretch">
+              <Col xs={24} lg={6} xl={5}>
+                <div
                   style={{
-                    padding: '10px 12px',
-                    background: '#fafafa',
-                    borderBottom: '1px solid #f0f0f0',
-                    fontWeight: 600,
+                    height: '100%',
+                    padding: 16,
+                    borderRight: '1px solid #eef1f5',
+                    background: '#fbfcff',
+                    borderRadius: '18px 0 0 18px',
                   }}
                 >
-                  <Col flex="40px">拖动</Col>
-                  <Col span={7}>备注查找字段</Col>
-                  <Col span={7}>输出招生类型</Col>
-                  <Col span={3}>优先级</Col>
-                  <Col span={5}>操作</Col>
-                </Row>
+                  <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        规则工作台
+                      </Text>
+                      <Title level={4} style={{ margin: '4px 0 0' }}>
+                        选择要维护的规则
+                      </Title>
+                    </div>
 
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleRemarkRuleDragEnd}
-                >
-                  <SortableContext
-                    items={remarkRuleDrafts.map((rule) => rule.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {remarkRuleDrafts.map((rule) => (
-                      <SortableRemarkRuleRow
-                        key={rule.id}
-                        rule={rule}
-                        isAdminUser={isAdminUser}
-                        isSaving={Boolean(savingRemarkRuleIds[rule.id])}
-                        isDirty={Boolean(dirtyRemarkRuleIds[rule.id])}
-                        isReordering={reorderingRemarkRules}
-                        onKeywordChange={(value) =>
-                          updateRemarkRuleDraft(rule.id, { keyword: value })
-                        }
-                        onOutputTypeChange={(value) =>
-                          updateRemarkRuleDraft(rule.id, { outputType: value })
-                        }
-                        onPriorityChange={(value) =>
-                          updateRemarkRuleDraft(rule.id, {
-                            priority: typeof value === 'number' ? value : 9999,
-                          })
-                        }
-                        onSave={() => saveRemarkRuleDraft(rule.id)}
-                        onDelete={() => handleRemoveRemarkRule(rule.id)}
+                    <RuleTypeCard
+                      active={activeWorkspace === 'remark'}
+                      title="备注招生类型"
+                      description="根据备注关键词提取招生类型。"
+                      count={remarkTypeRules.length}
+                      source={remarkRuleFileName || '云端默认规则'}
+                      onClick={() => setActiveWorkspace('remark')}
                       />
-                    ))}
-                  </SortableContext>
-                </DndContext>
+                    <RuleTypeCard
+                      active={activeWorkspace === 'batch'}
+                      title="科类 / 批次"
+                      description="省份科类批次、省控线科类批次。"
+                      count={provinceCategoryBatchRules.length + controlLineRules.length}
+                      source="按年份、省份管理"
+                      onClick={() => setActiveWorkspace('batch')}
+                      />
+                    <RuleTypeCard
+                      active={activeWorkspace === 'validation'}
+                      title="学校 / 专业"
+                      description="用于导出前校验学校名称和专业组合。"
+                      count={validSchoolNames.length + validMajorCombos.length}
+                      source="Excel 导入维护"
+                      onClick={() => setActiveWorkspace('validation')}
+                      />
 
-                {remarkRuleDrafts.length === 0 ? (
-                  <div style={{ padding: 16, color: '#8c8c8c' }}>
-                    暂无备注招生类型规则
-                  </div>
-                ) : null}
-              </div>
+                    <Divider style={{ margin: '4px 0' }} />
 
-              <Divider style={{ margin: '8px 0' }} />
+                    <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        当前数据量
+                      </Text>
+                      <Space wrap size={[6, 6]}>
+                        <Tag>学校 {validSchoolNames.length}</Tag>
+                        <Tag>专业 {validMajorCombos.length}</Tag>
+                        <Tag>备注 {remarkTypeRules.length}</Tag>
+                        <Tag>批次 {provinceCategoryBatchRules.length}</Tag>
+                        <Tag>省控线 {controlLineRules.length}</Tag>
+                      </Space>
+                    </Space>
+                  </Space>
+                </div>
+              </Col>
 
-              <div>
-                <Text strong>需要核查关键词</Text>
+              <Col xs={24} lg={18} xl={19}>
+                <div style={{ padding: 18 }}>
+                  {activeWorkspace === 'batch' ? (
+                    <Space direction="vertical" style={{ width: '100%' }} size={14}>
+                      <Row gutter={[12, 12]} align="middle" justify="space-between">
+                        <Col>
+                          <Title level={4} style={{ margin: 0 }}>
+                            科类 / 批次规则
+                          </Title>
+                          <Text type="secondary">
+                            默认只看一种规则，先选规则类型，再筛年份、省份、科类或批次。
+                          </Text>
+                        </Col>
+                        <Col>
+                          <Space.Compact>
+                            <Button
+                              type={rulePanelTab === 'provinceBatch' ? 'primary' : 'default'}
+                              onClick={() => setRulePanelTab('provinceBatch')}
+                            >
+                              省份科类批次
+                            </Button>
+                            <Button
+                              type={rulePanelTab === 'controlLine' ? 'primary' : 'default'}
+                              onClick={() => setRulePanelTab('controlLine')}
+                            >
+                              省控线规则
+                            </Button>
+                          </Space.Compact>
+                        </Col>
+                      </Row>
 
-                <Paragraph type="secondary" style={{ marginTop: 4 }}>
-                  当前关键词：
-                  {exclusionKeywords.length === 0 ? (
-                    <Tag style={{ marginLeft: 8 }}>无</Tag>
-                  ) : (
-                    exclusionKeywords.map((word) => (
-                      <Tag key={word} style={{ marginLeft: 8 }}>
-                        {word}
-                      </Tag>
-                    ))
-                  )}
-                </Paragraph>
+                      <Row gutter={[12, 12]}>
+                        <Col xs={24} md={8}>
+                          <RuleMetricCard
+                            title="当前规则"
+                            value={
+                              rulePanelTab === 'provinceBatch'
+                                ? provinceCategoryBatchRules.length
+                                : controlLineRules.length
+                            }
+                            hint={rulePanelTab === 'provinceBatch' ? '省份科类批次' : '省控线科类批次'}
+                          />
+                        </Col>
+                        <Col xs={24} md={8}>
+                          <RuleMetricCard
+                            title="当前筛选"
+                            value={
+                              rulePanelTab === 'provinceBatch'
+                                ? provinceCategoryBatchFiltered.length
+                                : controlLineFiltered.length
+                            }
+                            hint="表格展示数量"
+                          />
+                        </Col>
+                        <Col xs={24} md={8}>
+                          <RuleMetricCard
+                            title="规则来源"
+                            value={
+                              rulePanelTab === 'provinceBatch'
+                                ? provinceCategoryBatchRuleFileName
+                                  ? '云端'
+                                  : '内置'
+                                : controlLineRuleFileName
+                                  ? '云端'
+                                  : '内置'
+                            }
+                            hint={
+                              rulePanelTab === 'provinceBatch'
+                                ? provinceCategoryBatchRuleFileName || '内置默认规则'
+                                : controlLineRuleFileName || '内置默认规则'
+                            }
+                          />
+                        </Col>
+                      </Row>
 
-                <TextArea
-                  disabled={!isAdminUser}
-                  rows={4}
-                  value={exclusionDraft}
-                  onChange={(e) => setExclusionDraft(e.target.value)}
-                  placeholder="每行一个关键词，例如：除了"
-                />
+                      <Card
+                        size="small"
+                        style={{ borderRadius: 14, background: '#f8fafc' }}
+                        bodyStyle={{ padding: 12 }}
+                      >
+                        {rulePanelTab === 'provinceBatch' ? (
+                          <Row gutter={[10, 10]} align="middle">
+                            <Col xs={24} md={5}>
+                              <Select
+                                style={{ width: '100%' }}
+                                value={provinceCategoryBatchYearFilter}
+                                onChange={setProvinceCategoryBatchYearFilter}
+                                options={[
+                                  { label: '全部年份', value: '全部' },
+                                  ...provinceCategoryBatchYears.map((year) => ({
+                                    label: `${year} 年`,
+                                    value: year,
+                                  })),
+                                ]}
+                              />
+                            </Col>
+                            <Col xs={24} md={6}>
+                              <Select
+                                style={{ width: '100%' }}
+                                value={provinceCategoryTypeFilter}
+                                onChange={setProvinceCategoryTypeFilter}
+                                options={[
+                                  { label: '全部科类制度', value: '全部' },
+                                  ...provinceCategoryTypeOptions.map((item) => ({
+                                    label: item,
+                                    value: item,
+                                  })),
+                                ]}
+                              />
+                            </Col>
+                            <Col xs={24} md={7}>
+                              <Input.Search
+                                allowClear
+                                value={provinceCategoryBatchKeyword}
+                                placeholder="搜索省份、科类、批次"
+                                onChange={(e) => setProvinceCategoryBatchKeyword(e.target.value)}
+                              />
+                            </Col>
+                            <Col xs={24} md={6}>
+                              <Space wrap style={{ justifyContent: 'flex-end', width: '100%' }}>
+                                <Upload
+                                  disabled={!isAdminUser}
+                                  beforeUpload={handleImportProvinceCategoryBatchRules}
+                                  showUploadList={false}
+                                  accept=".xlsx,.xls"
+                                >
+                                  <Button disabled={!isAdminUser}>导入</Button>
+                                </Upload>
+                                <Button
+                                  disabled={!isAdminUser}
+                                  onClick={handleResetProvinceCategoryBatchRules}
+                                >
+                                  恢复内置
+                                </Button>
+                              </Space>
+                            </Col>
+                          </Row>
+                        ) : (
+                          <Row gutter={[10, 10]} align="middle">
+                            <Col xs={24} md={5}>
+                              <Select
+                                style={{ width: '100%' }}
+                                value={controlLineYearFilter}
+                                onChange={setControlLineYearFilter}
+                                options={[
+                                  { label: '全部年份', value: '全部' },
+                                  ...controlLineYears.map((year) => ({
+                                    label: `${year} 年`,
+                                    value: year,
+                                  })),
+                                ]}
+                              />
+                            </Col>
+                            <Col xs={24} md={11}>
+                              <Input.Search
+                                allowClear
+                                value={controlLineKeyword}
+                                placeholder="搜索省份、科类、批次"
+                                onChange={(e) => setControlLineKeyword(e.target.value)}
+                              />
+                            </Col>
+                            <Col xs={24} md={8}>
+                              <Space wrap style={{ justifyContent: 'flex-end', width: '100%' }}>
+                                <Upload
+                                  disabled={!isAdminUser}
+                                  beforeUpload={handleImportControlLineRules}
+                                  showUploadList={false}
+                                  accept=".xlsx,.xls"
+                                >
+                                  <Button disabled={!isAdminUser}>导入</Button>
+                                </Upload>
+                                <Button
+                                  disabled={!isAdminUser}
+                                  onClick={handleResetControlLineRules}
+                                >
+                                  恢复内置
+                                </Button>
+                              </Space>
+                            </Col>
+                          </Row>
+                        )}
+                      </Card>
 
-                <Space style={{ marginTop: 8 }}>
-                  <Button
-                    type="primary"
-                    disabled={!isAdminUser}
-                    onClick={handleSaveExclusionKeywords}
-                  >
-                    保存关键词
-                  </Button>
-                </Space>
-              </div>
-            </Space>
+                      {rulePanelTab === 'provinceBatch' ? (
+                        <>
+                          <RuleYearSummary title="年份分布" data={provinceCategoryBatchSummary} />
+                          <Table
+                            rowKey={(row) => `${row.year}_${row.province}_${row.categoryType}`}
+                            size="small"
+                            pagination={{ pageSize: 12, showSizeChanger: true }}
+                            dataSource={provinceCategoryBatchFiltered}
+                            columns={[
+                              { title: '年份', dataIndex: 'year', key: 'year', width: 78 },
+                              { title: '省份', dataIndex: 'province', key: 'province', width: 90 },
+                              {
+                                title: '科类制度',
+                                dataIndex: 'categoryType',
+                                key: 'categoryType',
+                                width: 130,
+                                render: (value: string) => <Tag color="blue">{value}</Tag>,
+                              },
+                              {
+                                title: '科类',
+                                key: 'categories',
+                                render: (_, row) => <RuleTagList items={row.categories} max={5} />,
+                              },
+                              {
+                                title: '批次',
+                                key: 'batches',
+                                render: (_, row) => <RuleTagList items={row.batches} max={5} />,
+                              },
+                              {
+                                title: '操作',
+                                key: 'action',
+                                width: 84,
+                                render: (_, row) => (
+                                  <Button size="small" onClick={() => setProvinceCategoryBatchDetail(row)}>
+                                    详情
+                                  </Button>
+                                ),
+                              },
+                            ]}
+                            scroll={{ x: 900 }}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <RuleYearSummary title="年份分布" data={controlLineSummary} />
+                          <Table
+                            rowKey={(row) => `${row.year}_${row.province}`}
+                            size="small"
+                            pagination={{ pageSize: 12, showSizeChanger: true }}
+                            dataSource={controlLineFiltered}
+                            columns={[
+                              { title: '年份', dataIndex: 'year', key: 'year', width: 78 },
+                              { title: '省份', dataIndex: 'province', key: 'province', width: 90 },
+                              {
+                                title: '省控线科类',
+                                key: 'categories',
+                                render: (_, row) => <RuleTagList items={row.categories} max={6} />,
+                              },
+                              {
+                                title: '省控线批次',
+                                key: 'batches',
+                                render: (_, row) => <RuleTagList items={row.batches} max={6} />,
+                              },
+                              {
+                                title: '操作',
+                                key: 'action',
+                                width: 84,
+                                render: (_, row) => (
+                                  <Button size="small" onClick={() => setControlLineDetail(row)}>
+                                    详情
+                                  </Button>
+                                ),
+                              },
+                            ]}
+                            scroll={{ x: 780 }}
+                          />
+                        </>
+                      )}
+                    </Space>
+                  ) : null}
+
+                  {activeWorkspace === 'validation' ? (
+                    <Space direction="vertical" style={{ width: '100%' }} size={14}>
+                      <div>
+                        <Title level={4} style={{ margin: 0 }}>
+                          学校 / 专业校验规则
+                        </Title>
+                        <Text type="secondary">
+                          只保留上传入口、当前来源和前 50 条预览，减少页面噪音。
+                        </Text>
+                      </div>
+
+                      <Row gutter={[14, 14]}>
+                        <Col xs={24} lg={12}>
+                          <Card title="学校名称规则" style={{ borderRadius: 14 }}>
+                            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                              <Upload
+                                disabled={!isAdminUser}
+                                beforeUpload={handleImportSchoolRules}
+                                showUploadList={false}
+                                accept=".xlsx,.xls"
+                              >
+                                <Button disabled={!isAdminUser} type="primary">
+                                  上传学校规则
+                                </Button>
+                              </Upload>
+                              <Descriptions size="small" column={1} bordered>
+                                <Descriptions.Item label="当前来源">
+                                  {schoolRuleFileName || '未加载'}
+                                </Descriptions.Item>
+                                <Descriptions.Item label="学校数量">
+                                  {validSchoolNames.length}
+                                </Descriptions.Item>
+                              </Descriptions>
+                              <Button danger disabled={!isAdminUser} onClick={handleClearSchoolRules}>
+                                清空学校规则
+                              </Button>
+                              <Table
+                                rowKey="key"
+                                size="small"
+                                pagination={{ pageSize: 10 }}
+                                columns={schoolColumns}
+                                dataSource={schoolPreview}
+                              />
+                            </Space>
+                          </Card>
+                        </Col>
+
+                        <Col xs={24} lg={12}>
+                          <Card title="招生专业组合规则" style={{ borderRadius: 14 }}>
+                            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                              <Upload
+                                disabled={!isAdminUser}
+                                beforeUpload={handleImportMajorRules}
+                                showUploadList={false}
+                                accept=".xlsx,.xls"
+                              >
+                                <Button disabled={!isAdminUser} type="primary">
+                                  上传专业规则
+                                </Button>
+                              </Upload>
+                              <Descriptions size="small" column={1} bordered>
+                                <Descriptions.Item label="当前来源">
+                                  {majorRuleFileName || '未加载'}
+                                </Descriptions.Item>
+                                <Descriptions.Item label="专业组合数量">
+                                  {validMajorCombos.length}
+                                </Descriptions.Item>
+                              </Descriptions>
+                              <Button danger disabled={!isAdminUser} onClick={handleClearMajorRules}>
+                                清空专业组合规则
+                              </Button>
+                              <Table
+                                rowKey="key"
+                                size="small"
+                                pagination={{ pageSize: 10 }}
+                                columns={majorColumns}
+                                dataSource={majorPreview}
+                              />
+                            </Space>
+                          </Card>
+                        </Col>
+                      </Row>
+                    </Space>
+                  ) : null}
+
+                  {activeWorkspace === 'remark' ? (
+                    <Space direction="vertical" style={{ width: '100%' }} size={14}>
+                      <Row gutter={[12, 12]} align="middle" justify="space-between">
+                        <Col>
+                          <Title level={4} style={{ margin: 0 }}>
+                            备注招生类型规则
+                          </Title>
+                          <Text type="secondary">
+                            编辑后按行保存；拖动左侧图标可调整优先级。
+                          </Text>
+                        </Col>
+                        <Col>
+                          <Space wrap>
+                            <Upload
+                              disabled={!isAdminUser}
+                              beforeUpload={handleImportRemarkRules}
+                              showUploadList={false}
+                              accept=".xlsx,.xls"
+                            >
+                              <Button disabled={!isAdminUser}>导入备注规则</Button>
+                            </Upload>
+                            <Button type="primary" disabled={!isAdminUser} onClick={openAddRemarkRuleModal}>
+                              新增规则
+                            </Button>
+                            <Button disabled={!isAdminUser} onClick={handleResetRemarkRules}>
+                              恢复默认
+                            </Button>
+                          </Space>
+                        </Col>
+                      </Row>
+
+                      <Card size="small" style={{ borderRadius: 14, background: '#f8fafc' }}>
+                        <Descriptions size="small" column={{ xs: 1, md: 3 }}>
+                          <Descriptions.Item label="当前来源">
+                            {remarkRuleFileName || '未加载'}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="规则数量">
+                            {remarkRuleDrafts.length}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="核查关键词">
+                            {exclusionKeywords.length}
+                          </Descriptions.Item>
+                        </Descriptions>
+                      </Card>
+
+                      <div
+                        style={{
+                          border: '1px solid #f0f0f0',
+                          borderRadius: 12,
+                          overflow: 'hidden',
+                          opacity: reorderingRemarkRules ? 0.7 : 1,
+                          background: '#fff',
+                        }}
+                      >
+                        <Row
+                          gutter={12}
+                          align="middle"
+                          style={{
+                            padding: '10px 12px',
+                            background: '#fafafa',
+                            borderBottom: '1px solid #f0f0f0',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <Col flex="40px">拖动</Col>
+                          <Col span={7}>备注查找字段</Col>
+                          <Col span={7}>输出招生类型</Col>
+                          <Col span={3}>优先级</Col>
+                          <Col span={5}>操作</Col>
+                        </Row>
+
+                        <DndContext
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={handleRemarkRuleDragEnd}
+                        >
+                          <SortableContext
+                            items={remarkRuleDrafts.map((rule) => rule.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {remarkRuleDrafts.map((rule) => (
+                              <SortableRemarkRuleRow
+                                key={rule.id}
+                                rule={rule}
+                                isAdminUser={isAdminUser}
+                                isSaving={Boolean(savingRemarkRuleIds[rule.id])}
+                                isDirty={Boolean(dirtyRemarkRuleIds[rule.id])}
+                                isReordering={reorderingRemarkRules}
+                                onKeywordChange={(value) =>
+                                  updateRemarkRuleDraft(rule.id, { keyword: value })
+                                }
+                                onOutputTypeChange={(value) =>
+                                  updateRemarkRuleDraft(rule.id, { outputType: value })
+                                }
+                                onPriorityChange={(value) =>
+                                  updateRemarkRuleDraft(rule.id, {
+                                    priority: typeof value === 'number' ? value : 9999,
+                                  })
+                                }
+                                onSave={() => saveRemarkRuleDraft(rule.id)}
+                                onDelete={() => handleRemoveRemarkRule(rule.id)}
+                              />
+                            ))}
+                          </SortableContext>
+                        </DndContext>
+
+                        {remarkRuleDrafts.length === 0 ? (
+                          <div style={{ padding: 16, color: '#8c8c8c' }}>
+                            暂无备注招生类型规则
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <Card title="需要核查关键词" size="small" style={{ borderRadius: 14 }}>
+                        <Paragraph type="secondary" style={{ marginTop: 0 }}>
+                          {exclusionKeywords.length === 0 ? (
+                            <Tag>无</Tag>
+                          ) : (
+                            exclusionKeywords.map((word) => <Tag key={word}>{word}</Tag>)
+                          )}
+                        </Paragraph>
+                        <TextArea
+                          disabled={!isAdminUser}
+                          rows={4}
+                          value={exclusionDraft}
+                          onChange={(e) => setExclusionDraft(e.target.value)}
+                          placeholder="每行一个关键词，例如：除了"
+                        />
+                        <Button
+                          type="primary"
+                          disabled={!isAdminUser}
+                          onClick={handleSaveExclusionKeywords}
+                          style={{ marginTop: 8 }}
+                        >
+                          保存关键词
+                        </Button>
+                      </Card>
+                    </Space>
+                  ) : null}
+                </div>
+              </Col>
+            </Row>
           </Card>
         </>
       ) : null}
+
+      <RuleDetailModal
+        title="省份科类批次规则详情"
+        open={Boolean(provinceCategoryBatchDetail)}
+        year={provinceCategoryBatchDetail?.year}
+        province={provinceCategoryBatchDetail?.province}
+        categoryType={provinceCategoryBatchDetail?.categoryType}
+        categories={provinceCategoryBatchDetail?.categories || []}
+        batches={provinceCategoryBatchDetail?.batches || []}
+        onCancel={() => setProvinceCategoryBatchDetail(null)}
+      />
+
+      <RuleDetailModal
+        title="省控线科类批次规则详情"
+        open={Boolean(controlLineDetail)}
+        year={controlLineDetail?.year}
+        province={controlLineDetail?.province}
+        categories={controlLineDetail?.categories || []}
+        batches={controlLineDetail?.batches || []}
+        onCancel={() => setControlLineDetail(null)}
+      />
 
       <Modal
         title="新增备注招生类型规则"
@@ -1256,7 +1480,6 @@ export default function RuleCenterPage() {
               }
             />
           </div>
-
           <div>
             <Text strong>输出招生类型</Text>
             <Input
@@ -1271,7 +1494,6 @@ export default function RuleCenterPage() {
               }
             />
           </div>
-
           <div>
             <Text strong>优先级</Text>
             <InputNumber
@@ -1286,7 +1508,6 @@ export default function RuleCenterPage() {
               }
             />
           </div>
-
           <Alert
             type="info"
             showIcon
@@ -1295,6 +1516,216 @@ export default function RuleCenterPage() {
         </Space>
       </Modal>
     </div>
+  )
+
+}
+
+
+
+function RuleMetricCard({
+  title,
+  value,
+  hint,
+}: {
+  title: string
+  value: number | string
+  hint?: string
+}) {
+  return (
+    <Card
+      size="small"
+      style={{
+        borderRadius: 14,
+        border: '1px solid #eef1f5',
+        boxShadow: '0 6px 18px rgba(15, 23, 42, 0.04)',
+      }}
+      bodyStyle={{ padding: '14px 16px' }}
+    >
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        {title}
+      </Text>
+      <div style={{ marginTop: 6, fontSize: 24, fontWeight: 700, lineHeight: 1.1 }}>
+        {value}
+      </div>
+      {hint ? (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {hint}
+        </Text>
+      ) : null}
+    </Card>
+  )
+}
+
+function RuleTypeCard({
+  active,
+  title,
+  description,
+  count,
+  source,
+  onClick,
+}: {
+  active: boolean
+  title: string
+  description: string
+  count: number
+  source: string
+  onClick: () => void
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') onClick()
+      }}
+      style={{
+        padding: 14,
+        borderRadius: 14,
+        cursor: 'pointer',
+        border: active ? '1px solid #1677ff' : '1px solid #edf0f5',
+        background: active ? '#f0f7ff' : '#fff',
+        boxShadow: active
+          ? '0 8px 20px rgba(22, 119, 255, 0.12)'
+          : '0 4px 12px rgba(15, 23, 42, 0.03)',
+      }}
+    >
+      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+        <Space style={{ justifyContent: 'space-between', width: '100%' }}>
+          <Text strong>{title}</Text>
+          <Tag color={active ? 'blue' : 'default'}>{count} 条</Tag>
+        </Space>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {description}
+        </Text>
+        <Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+          来源：{source || '内置默认规则'}
+        </Text>
+      </Space>
+    </div>
+  )
+}
+
+type RuleSummaryItem = {
+  key: string
+  year: string
+  count: number
+}
+
+function buildYearSummary<T extends { year: string }>(rules: T[]): RuleSummaryItem[] {
+  const map = new Map<string, number>()
+
+  rules.forEach((rule) => {
+    const year = rule.year || '未知年份'
+    map.set(year, (map.get(year) || 0) + 1)
+  })
+
+  return Array.from(map.entries())
+    .map(([year, count]) => ({
+      key: year,
+      year,
+      count,
+    }))
+    .sort((a, b) => Number(b.year) - Number(a.year))
+}
+
+function RuleYearSummary({
+  title,
+  data,
+}: {
+  title: string
+  data: RuleSummaryItem[]
+}) {
+  if (data.length === 0) {
+    return <Text type="secondary">暂无匹配规则</Text>
+  }
+
+  return (
+    <div>
+      <Text strong>{title}</Text>
+      <Space wrap style={{ marginTop: 8, display: 'flex' }}>
+        {data.map((item) => (
+          <Tag key={item.key} color="processing">
+            {item.year} 年：{item.count} 条
+          </Tag>
+        ))}
+      </Space>
+    </div>
+  )
+}
+
+function RuleTagList({ items, max = 8 }: { items: string[]; max?: number }) {
+  const visibleItems = items.slice(0, max)
+  const restCount = items.length - visibleItems.length
+
+  if (!items.length) {
+    return <Text type="secondary">空</Text>
+  }
+
+  return (
+    <Space size={[0, 4]} wrap>
+      {visibleItems.map((item) => (
+        <Tag key={item}>{item}</Tag>
+      ))}
+      {restCount > 0 ? <Tag color="default">+{restCount}</Tag> : null}
+    </Space>
+  )
+}
+
+type RuleDetailModalProps = {
+  title: string
+  open: boolean
+  year?: string
+  province?: string
+  categoryType?: string
+  categories: string[]
+  batches: string[]
+  onCancel: () => void
+}
+
+function RuleDetailModal({
+  title,
+  open,
+  year,
+  province,
+  categoryType,
+  categories,
+  batches,
+  onCancel,
+}: RuleDetailModalProps) {
+  return (
+    <Modal
+      title={title}
+      open={open}
+      onCancel={onCancel}
+      footer={null}
+      width={760}
+      destroyOnClose
+    >
+      <Space direction="vertical" style={{ width: '100%' }} size={12}>
+        <Descriptions size="small" bordered column={1}>
+          <Descriptions.Item label="年份">{year || '-'}</Descriptions.Item>
+          <Descriptions.Item label="省份">{province || '-'}</Descriptions.Item>
+          {categoryType ? (
+            <Descriptions.Item label="科类制度">{categoryType}</Descriptions.Item>
+          ) : null}
+        </Descriptions>
+
+        <div>
+          <Text strong>科类</Text>
+          <div style={{ marginTop: 8 }}>
+            <RuleTagList items={categories} max={999} />
+          </div>
+        </div>
+
+        <div>
+          <Text strong>批次</Text>
+          <div style={{ marginTop: 8 }}>
+            <RuleTagList items={batches} max={999} />
+          </div>
+        </div>
+      </Space>
+    </Modal>
   )
 }
 
