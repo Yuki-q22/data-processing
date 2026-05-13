@@ -4,11 +4,13 @@
  * 文件作用：
  * - 控制“招生计划数据比对”工具页面
  * - 负责文件上传、比对按钮、结果展示、导出按钮
+ * - 展示招生计划 vs 专业分、招生计划 vs 院校分、同组合键数量差异
  *
  * 常改位置：
  * - 上传区域
  * - 比对结果表格
  * - 未匹配数据展示
+ * - 数量差异标注
  * - 导出按钮
  * - 页面提示信息
  *
@@ -23,6 +25,7 @@ import {
   Button,
   Card,
   Empty,
+  Input,
   Select,
   Space,
   Statistic,
@@ -46,12 +49,14 @@ import {
   type PlanCollegeCompareRow,
   type PlanCompareResult,
   type PlanScoreCompareRow,
+  type PlanScoreCountDiffRow,
 } from '../../modules/planCompare'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 import { confirmToolReset } from '../../utils/toolReset'
 
 const { Dragger } = Upload
 const { Paragraph, Text } = Typography
+const { Search } = Input
 
 type LoadedWorkbook = {
   fileName: string
@@ -60,6 +65,12 @@ type LoadedWorkbook = {
 }
 
 type MatchFilter = 'all' | 'matched' | 'unmatched' | 'missing_code'
+type CountDiffStatusFilter =
+  | 'all'
+  | 'plan_more'
+  | 'score_more'
+  | 'plan_missing'
+  | 'score_missing'
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
   const buffer = await file.arrayBuffer()
@@ -83,6 +94,52 @@ function getFirstSheetName(loaded: LoadedWorkbook | null) {
   return loaded?.sheetNames?.[0] || ''
 }
 
+function includesKeyword(row: PlanScoreCountDiffRow, keyword: string) {
+  const text = keyword.trim().toLowerCase()
+  if (!text) return true
+
+  return [
+    row.school,
+    row.province,
+    row.category,
+    row.batch,
+    row.major,
+    row.level,
+    row.groupCode,
+    row.enrollmentCode,
+    row.majorCode,
+    row.matchKey,
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(text)
+}
+
+function matchCountDiffStatus(row: PlanScoreCountDiffRow, filter: CountDiffStatusFilter) {
+  if (filter === 'all') return true
+  if (filter === 'plan_more') return row.status === '招生计划多'
+  if (filter === 'score_more') return row.status === '专业分多'
+  if (filter === 'plan_missing') return row.status === '招生计划缺失'
+  if (filter === 'score_missing') return row.status === '专业分缺失'
+  return true
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+}
+
+function getDiffTagColor(tag: string) {
+  if (tag === '已匹配') return 'green'
+  if (tag === '数量不一致') return 'red'
+  return 'orange'
+}
+
+function getCountDiffStatusColor(status: PlanScoreCountDiffRow['status']) {
+  if (status === '招生计划多') return 'orange'
+  if (status === '专业分多') return 'purple'
+  return 'red'
+}
+
 export default function PlanCompareTool() {
   const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
 
@@ -97,11 +154,29 @@ export default function PlanCompareTool() {
   const [scoreFilter, setScoreFilter] = useState<MatchFilter>('all')
   const [collegeFilter, setCollegeFilter] = useState<MatchFilter>('all')
 
+  const [countDiffProvinceFilter, setCountDiffProvinceFilter] = useState<string>('全部')
+  const [countDiffCategoryFilter, setCountDiffCategoryFilter] = useState<string>('全部')
+  const [countDiffBatchFilter, setCountDiffBatchFilter] = useState<string>('全部')
+  const [countDiffStatusFilter, setCountDiffStatusFilter] = useState<CountDiffStatusFilter>('all')
+  const [countDiffKeyword, setCountDiffKeyword] = useState<string>('')
+
+  const resetFilters = () => {
+    setProvinceFilter('全部')
+    setScoreFilter('all')
+    setCollegeFilter('all')
+    setCountDiffProvinceFilter('全部')
+    setCountDiffCategoryFilter('全部')
+    setCountDiffBatchFilter('全部')
+    setCountDiffStatusFilter('all')
+    setCountDiffKeyword('')
+  }
+
   const handleUploadPlan = async (file: File) => {
     try {
       const loaded = await loadWorkbook(file)
       setPlanWorkbook(loaded)
       setResult(null)
+      resetFilters()
       message.success(`已上传招生计划文件：${file.name}`)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '招生计划文件读取失败')
@@ -114,6 +189,7 @@ export default function PlanCompareTool() {
       const loaded = await loadWorkbook(file)
       setScoreWorkbook(loaded)
       setResult(null)
+      resetFilters()
       message.success(`已上传专业分文件：${file.name}`)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '专业分文件读取失败')
@@ -126,6 +202,7 @@ export default function PlanCompareTool() {
       const loaded = await loadWorkbook(file)
       setCollegeWorkbook(loaded)
       setResult(null)
+      resetFilters()
       message.success(`已上传院校分文件：${file.name}`)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '院校分文件读取失败')
@@ -162,9 +239,7 @@ export default function PlanCompareTool() {
       })
 
       setResult(compareResult)
-      setProvinceFilter('全部')
-      setScoreFilter('all')
-      setCollegeFilter('all')
+      resetFilters()
       message.success('招生计划数据比对完成')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '比对失败')
@@ -178,8 +253,24 @@ export default function PlanCompareTool() {
     const all = [
       ...result.planScoreRows.map((item) => item.province),
       ...result.planCollegeRows.map((item) => item.province),
+      ...result.planScoreCountDiffRows.map((item) => item.province),
     ].filter(Boolean)
-    return ['全部', ...Array.from(new Set(all)).sort()]
+    return ['全部', ...uniqueSorted(all)]
+  }, [result])
+
+  const countDiffProvinceOptions = useMemo(() => {
+    if (!result) return ['全部']
+    return ['全部', ...uniqueSorted(result.planScoreCountDiffRows.map((item) => item.province))]
+  }, [result])
+
+  const countDiffCategoryOptions = useMemo(() => {
+    if (!result) return ['全部']
+    return ['全部', ...uniqueSorted(result.planScoreCountDiffRows.map((item) => item.category))]
+  }, [result])
+
+  const countDiffBatchOptions = useMemo(() => {
+    if (!result) return ['全部']
+    return ['全部', ...uniqueSorted(result.planScoreCountDiffRows.map((item) => item.batch))]
   }, [result])
 
   const filteredPlanScoreRows = useMemo(() => {
@@ -206,15 +297,26 @@ export default function PlanCompareTool() {
     })
   }, [result, provinceFilter, collegeFilter])
 
+  const filteredPlanScoreCountDiffRows = useMemo(() => {
+    if (!result) return []
+
+    return result.planScoreCountDiffRows.filter((row) => {
+      if (countDiffProvinceFilter !== '全部' && row.province !== countDiffProvinceFilter) return false
+      if (countDiffCategoryFilter !== '全部' && row.category !== countDiffCategoryFilter) return false
+      if (countDiffBatchFilter !== '全部' && row.batch !== countDiffBatchFilter) return false
+      if (!matchCountDiffStatus(row, countDiffStatusFilter)) return false
+      if (!includesKeyword(row, countDiffKeyword)) return false
+      return true
+    })
+  }, [result, countDiffProvinceFilter, countDiffCategoryFilter, countDiffBatchFilter, countDiffStatusFilter, countDiffKeyword])
+
   const professionalRows = useMemo(() => {
     return result ? buildProfessionalTemplateRows(result.planScoreRows) : []
   }, [result])
 
   const collegeRows = useMemo(() => {
-  return result
-    ? buildCollegeTemplateRows(result.planCollegeRows, result.yearValue)
-    : []
-}, [result])
+    return result ? buildCollegeTemplateRows(result.planCollegeRows, result.yearValue) : []
+  }, [result])
 
   const handleExportProfessional = async () => {
     if (!result) {
@@ -261,9 +363,7 @@ export default function PlanCompareTool() {
         setCollegeWorkbook(null)
         setProcessing(false)
         setResult(null)
-        setProvinceFilter('全部')
-        setScoreFilter('all')
-        setCollegeFilter('all')
+        resetFilters()
       },
     })
   }
@@ -277,6 +377,7 @@ export default function PlanCompareTool() {
     { title: '层次', dataIndex: 'level', key: 'level', width: 140 },
     { title: '专业组代码', dataIndex: 'groupCode', key: 'groupCode', width: 140 },
     { title: '招生代码', dataIndex: 'enrollmentCode', key: 'enrollmentCode', width: 140 },
+    { title: '专业代码', dataIndex: 'majorCode', key: 'majorCode', width: 140 },
     {
       title: '是否存在',
       dataIndex: 'exists',
@@ -288,16 +389,16 @@ export default function PlanCompareTool() {
       title: '差异原因',
       dataIndex: 'diffReasonTags',
       key: 'diffReasonTags',
-      width: 260,
+      width: 300,
       render: (tags: string[]) => (
         <Space wrap size={[4, 4]}>
           {tags.map((tag) => (
-            <Tag key={tag} color={tag === '已匹配' ? 'green' : 'orange'}>{tag}</Tag>
+            <Tag key={tag} color={getDiffTagColor(tag)}>{tag}</Tag>
           ))}
         </Space>
       ),
     },
-    { title: '说明', dataIndex: 'reason', key: 'reason', width: 260 },
+    { title: '说明', dataIndex: 'reason', key: 'reason', width: 320 },
   ]
 
   const planCollegeColumns = [
@@ -338,6 +439,49 @@ export default function PlanCompareTool() {
     { title: '说明', dataIndex: 'reason', key: 'reason', width: 280 },
   ]
 
+  const countDiffColumns = [
+    { title: '学校', dataIndex: 'school', key: 'school', width: 180, fixed: 'left' as const },
+    { title: '省份', dataIndex: 'province', key: 'province', width: 100 },
+    { title: '科类', dataIndex: 'category', key: 'category', width: 120 },
+    { title: '批次', dataIndex: 'batch', key: 'batch', width: 140 },
+    { title: '专业', dataIndex: 'major', key: 'major', width: 200 },
+    { title: '层次', dataIndex: 'level', key: 'level', width: 130 },
+    { title: '专业组代码', dataIndex: 'groupCode', key: 'groupCode', width: 140 },
+    { title: '招生代码', dataIndex: 'enrollmentCode', key: 'enrollmentCode', width: 140 },
+    { title: '专业代码', dataIndex: 'majorCode', key: 'majorCode', width: 140 },
+    {
+      title: '招生计划条数',
+      dataIndex: 'planCount',
+      key: 'planCount',
+      width: 130,
+      sorter: (a: PlanScoreCountDiffRow, b: PlanScoreCountDiffRow) => a.planCount - b.planCount,
+    },
+    {
+      title: '专业分条数',
+      dataIndex: 'scoreCount',
+      key: 'scoreCount',
+      width: 120,
+      sorter: (a: PlanScoreCountDiffRow, b: PlanScoreCountDiffRow) => a.scoreCount - b.scoreCount,
+    },
+    {
+      title: '差异条数',
+      dataIndex: 'diffCount',
+      key: 'diffCount',
+      width: 110,
+      sorter: (a: PlanScoreCountDiffRow, b: PlanScoreCountDiffRow) => a.diffCount - b.diffCount,
+    },
+    {
+      title: '差异类型',
+      dataIndex: 'status',
+      key: 'status',
+      width: 130,
+      render: (status: PlanScoreCountDiffRow['status']) => (
+        <Tag color={getCountDiffStatusColor(status)}>{status}</Tag>
+      ),
+    },
+    { title: '说明', dataIndex: 'reason', key: 'reason', width: 340 },
+  ]
+
   const differenceReasonColumns = [
     { title: '比对对象', dataIndex: 'target', key: 'target', width: 120 },
     { title: '差异原因', dataIndex: 'reason', key: 'reason', width: 260 },
@@ -360,8 +504,11 @@ export default function PlanCompareTool() {
         <Paragraph style={paragraphStyle}>
           已按规则文档更新：支持招生计划 vs 专业分、招生计划 vs 院校分两组比对；按文档指定组合键检查是否存在，并将招生计划中未匹配的数据导出为对应模板。专业组选科要求和新高考选科要求会先合并，`^` 符号会先去掉再参与匹配与导出。
         </Paragraph>
+        <Paragraph style={{ ...paragraphStyle, marginBottom: 0 }}>
+          新增“数量差异标注”：当招生计划文件和专业分文件在同一个组合键下条数不一致时，会在“招生计划 vs 专业分”结果中打上“数量不一致”标签，并在“数量差异标注”标签页按组合键汇总展示。
+        </Paragraph>
 
-        <Space direction="vertical" style={{ width: '100%' }} size={16}>
+        <Space direction="vertical" style={{ width: '100%', marginTop: 16 }} size={16}>
           <Dragger beforeUpload={handleUploadPlan} showUploadList={false} accept=".xlsx,.xls">
             <p className="ant-upload-drag-icon">
               <InboxOutlined />
@@ -411,6 +558,12 @@ export default function PlanCompareTool() {
             </Card>
             <Card>
               <Statistic
+                title="专业分数量不一致组合键"
+                value={result.planScoreCountDiffRows.length}
+              />
+            </Card>
+            <Card>
+              <Statistic
                 title="招生计划 vs 院校分未匹配"
                 value={result.planCollegeRows.filter((item) => !item.exists).length}
               />
@@ -422,21 +575,21 @@ export default function PlanCompareTool() {
               />
             </Card>
             {result.groupCodeWarnings.length > 0 ? (
-  <Card style={{ minWidth: 420, maxWidth: 620, borderRadius: 12 }}>
-    <Alert
-      type="error"
-      showIcon
-      message="专业组代码缺失提醒"
-      description={
-        <div>
-          {result.groupCodeWarnings.map((item) => (
-            <div key={item.province}>{item.message}</div>
-          ))}
-        </div>
-      }
-    />
-  </Card>
-) : null}
+              <Card style={{ minWidth: 420, maxWidth: 620, borderRadius: 12 }}>
+                <Alert
+                  type="error"
+                  showIcon
+                  message="专业组代码缺失提醒"
+                  description={
+                    <div>
+                      {result.groupCodeWarnings.map((item) => (
+                        <div key={item.province}>{item.message}</div>
+                      ))}
+                    </div>
+                  }
+                />
+              </Card>
+            ) : null}
           </Space>
 
           {(result.missingPlanHeaders.length > 0 ||
@@ -541,12 +694,96 @@ export default function PlanCompareTool() {
                       rowKey={(row) => row.rowId}
                       dataSource={filteredPlanScoreRows}
                       columns={planScoreColumns}
-                      scroll={{ x: 1800 }}
+                      scroll={{ x: 2000 }}
                       pagination={{ pageSize: 10 }}
                       style={tableFontStyle}
                     />
                   ) : (
                     <Empty description="暂无数据" />
+                  ),
+                },
+                {
+                  key: 'count-diff',
+                  label: `数量差异标注（${filteredPlanScoreCountDiffRows.length}）`,
+                  children: (
+                    <Space direction="vertical" style={{ width: '100%' }} size={16}>
+                      <Alert
+                        type={result.planScoreCountDiffRows.length ? 'warning' : 'success'}
+                        showIcon
+                        message={
+                          result.planScoreCountDiffRows.length
+                            ? `发现 ${result.planScoreCountDiffRows.length} 个组合键的招生计划条数与专业分条数不一致`
+                            : '未发现同组合键数量不一致'
+                        }
+                        description="组合键规则与招生计划 vs 专业分比对一致：年份-省份-学校-科类-批次-专业-层次-专业组代码-招生代码-专业代码；若没有专业组代码，则不纳入专业组代码。"
+                      />
+
+                      <Card size="small" title="数量差异筛选" style={{ borderRadius: 10 }}>
+                        <Space wrap>
+                          <Select
+                            value={countDiffProvinceFilter}
+                            onChange={setCountDiffProvinceFilter}
+                            style={{ width: 160 }}
+                            options={countDiffProvinceOptions.map((item) => ({ label: item, value: item }))}
+                          />
+                          <Select
+                            value={countDiffCategoryFilter}
+                            onChange={setCountDiffCategoryFilter}
+                            style={{ width: 160 }}
+                            options={countDiffCategoryOptions.map((item) => ({ label: item, value: item }))}
+                          />
+                          <Select
+                            value={countDiffBatchFilter}
+                            onChange={setCountDiffBatchFilter}
+                            style={{ width: 180 }}
+                            options={countDiffBatchOptions.map((item) => ({ label: item, value: item }))}
+                          />
+                          <Select<CountDiffStatusFilter>
+                            value={countDiffStatusFilter}
+                            onChange={setCountDiffStatusFilter}
+                            style={{ width: 180 }}
+                            options={[
+                              { label: '差异类型：全部', value: 'all' },
+                              { label: '招生计划多', value: 'plan_more' },
+                              { label: '专业分多', value: 'score_more' },
+                              { label: '招生计划缺失', value: 'plan_missing' },
+                              { label: '专业分缺失', value: 'score_missing' },
+                            ]}
+                          />
+                          <Search
+                            allowClear
+                            placeholder="搜索学校、专业、专业组代码、招生代码、专业代码"
+                            value={countDiffKeyword}
+                            onChange={(event) => setCountDiffKeyword(event.target.value)}
+                            style={{ width: 360 }}
+                          />
+                          <Button
+                            onClick={() => {
+                              setCountDiffProvinceFilter('全部')
+                              setCountDiffCategoryFilter('全部')
+                              setCountDiffBatchFilter('全部')
+                              setCountDiffStatusFilter('all')
+                              setCountDiffKeyword('')
+                            }}
+                          >
+                            清空数量差异筛选
+                          </Button>
+                        </Space>
+                      </Card>
+
+                      {filteredPlanScoreCountDiffRows.length ? (
+                        <Table<PlanScoreCountDiffRow>
+                          rowKey={(row) => row.rowId}
+                          dataSource={filteredPlanScoreCountDiffRows}
+                          columns={countDiffColumns}
+                          scroll={{ x: 2200 }}
+                          pagination={{ pageSize: 10, showSizeChanger: true }}
+                          style={tableFontStyle}
+                        />
+                      ) : (
+                        <Empty description="暂无数量差异数据" />
+                      )}
+                    </Space>
                   ),
                 },
                 {
@@ -573,6 +810,10 @@ export default function PlanCompareTool() {
             <Paragraph style={paragraphStyle}>
               <Text strong style={{ fontSize: 15 }}>专业分模板导出：</Text>
               从“招生计划 vs 专业分”中提取未匹配记录，并按文档映射填入专业分模板；其中 `^` 会被去掉，`专科` 会转为 `专科(高职)`，首选科目、选科要求、次选科目按文档规则转换。
+            </Paragraph>
+            <Paragraph style={paragraphStyle}>
+              <Text strong style={{ fontSize: 15 }}>数量差异标注：</Text>
+              只做页面标注和筛查，不会改变未匹配模板导出逻辑；如果同一组合键下招生计划 5 条、专业分 4 条，会在该标签页显示计划 5、专业分 4、差异 1。
             </Paragraph>
             <Paragraph style={{ ...paragraphStyle, marginBottom: 0 }}>
               <Text strong style={{ fontSize: 15 }}>院校分模板导出：</Text>
