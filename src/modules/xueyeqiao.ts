@@ -429,7 +429,7 @@ function applySafeReplacements(text: string) {
   return { text: current, issues }
 }
 
-function fixRemark(rawValue: string) {
+export function fixRemark(rawValue: string) {
   let text = t(rawValue)
   const issues: string[] = []
 
