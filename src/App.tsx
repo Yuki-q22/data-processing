@@ -44,12 +44,12 @@ const README_NAV_ITEMS = [
   { id: 'professional-score-platform', label: '2. 专业分模板智能填充', keyword: '2. 专业分模板智能填充' },
   { id: 'college-score-normal', label: '3. 院校分提取（普通类）', keyword: '3. 院校分提取（普通类）' },
   { id: 'college-score-art', label: '4. 院校分提取（艺体类）', keyword: '4. 院校分提取（艺体类）' },
-  { id: 'xueyeqiao', label: '5. 学业桥专业分处理', keyword: '5. 学业桥专业分处理' },
+  { id: 'xueyeqiao', label: '5. 模版转换工具', keyword: '5. 模版转换工具' },
   { id: 'segmentation-check', label: '6. 一分一段校验', keyword: '6. 一分一段校验' },
   { id: 'group-code-match', label: '7. 专业组代码匹配', keyword: '7. 专业组代码匹配' },
   { id: 'plan-compare', label: '8. 招生计划数据比对', keyword: '8. 招生计划数据比对' },
   { id: 'employment-report-image', label: '9. 就业质量报告图片提取', keyword: '9. 就业质量报告图片提取' },
-  { id: 'remark-type-extract', label: '10. 备注招生类型提取', keyword: '10. 备注招生类型提取' },
+  { id: 'remark-type-extract', label: '10. 备注处理', keyword: '10. 备注处理' },
   { id: 'local-dev', label: '本地运行', keyword: '本地运行' },
   { id: 'deploy', label: '部署说明', keyword: '部署说明' },
   { id: 'notice', label: '数据处理注意事项', keyword: '数据处理注意事项' },
@@ -243,7 +243,7 @@ export default function App() {
                     {
                       key: 'xueyeqiao',
                       icon: <AuditOutlined />,
-                      label: '学业桥专业分处理',
+                      label: '模版转换工具',
                     },
                     {
                       key: 'segmentation-check',
@@ -268,7 +268,7 @@ export default function App() {
                     {
                       key: 'remark-type-extract',
                       icon: <TagsOutlined />,
-                      label: '备注招生类型提取',
+                      label: '备注处理',
                     },
                   ],
                 },
@@ -324,7 +324,7 @@ function getPageTitle(key: MenuKey) {
     case 'college-score-art':
       return '院校分提取（艺体类）'
     case 'xueyeqiao':
-      return '学业桥专业分处理'
+      return '模版转换工具'
     case 'segmentation-check':
       return '一分一段校验'
     case 'group-code-match':
@@ -334,7 +334,7 @@ function getPageTitle(key: MenuKey) {
     case 'plan-compare':
       return '招生计划数据比对'
     case 'remark-type-extract':
-      return '备注招生类型提取'
+      return '备注处理'
     default:
       return '数据处理工具平台'
   }

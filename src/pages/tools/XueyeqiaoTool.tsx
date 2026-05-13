@@ -1,11 +1,10 @@
 /**
- * 文件名称：学业桥专业分处理页面
+ * 文件名称：模版转换工具页面
  *
  * 文件作用：
- * - 在同一个工具页面中提供三个相关功能：
+ * - 在同一个工具页面中提供两个专业分模板转换功能：
  *   1. 学业桥专业分转换
- *   2. 库中导出专业分模板转换
- *   3. 备注处理
+ *   2. 专业分导出专业分模板转换
  * - 负责文件上传、Sheet 选择、处理预览、导出入口等前端交互
  *
  * 常改位置：
@@ -17,8 +16,7 @@
  *
  * 注意：
  * - 学业桥转换核心逻辑在 src/modules/xueyeqiao.ts
- * - 库中导出模板转换核心逻辑在 src/modules/libraryProfessionalScoreTemplate.ts
- * - 备注处理复用 src/modules/xueyeqiao.ts 中的 fixRemark 逻辑
+ * - 专业分导出模板转换核心逻辑在 src/modules/libraryProfessionalScoreTemplate.ts
  */
 
 import { useMemo, useState } from 'react'
@@ -43,7 +41,6 @@ import { confirmToolReset } from '../../utils/toolReset'
 import {
   downloadBlob,
   exportXueyeqiaoWorkbook,
-  fixRemark,
   processXueyeqiaoData,
   type XueyeqiaoProcessResult,
 } from '../../modules/xueyeqiao'
@@ -55,7 +52,7 @@ import {
 } from '../../modules/libraryProfessionalScoreTemplate'
 
 const { Dragger } = Upload
-const { Paragraph, Text } = Typography
+const { Paragraph } = Typography
 
 type LoadedWorkbook = {
   fileName: string
@@ -93,22 +90,6 @@ type XueyeqiaoPreviewRow = {
   原始报考要求: string
   原始备注: string
   修改后的备注: string
-}
-
-type RemarkPreviewRow = {
-  rowId: string
-  原始备注: string
-  修改后的备注: string
-  处理结果: string
-}
-
-type RemarkProcessResult = {
-  inputRowCount: number
-  outputRowCount: number
-  detectedHeaders: string[]
-  remarkField: string
-  previewRows: RemarkPreviewRow[]
-  exportRows: Record<string, unknown>[]
 }
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
@@ -155,50 +136,6 @@ function buildLibraryRowKey(row: LibraryProfessionalScorePreviewRow) {
     row.专业组代码 || '',
     row.专业代码 || '',
   ].join('__')
-}
-
-function buildRemarkRows(rows: Record<string, unknown>[], remarkField: string): RemarkProcessResult {
-  const detectedHeaders = rows.length ? Object.keys(rows[0]) : []
-  const exportRows: Record<string, unknown>[] = []
-  const previewRows = rows.map((row, rowIndex) => {
-    const rawRemark = String(row[remarkField] ?? '').trim()
-    const fixed = fixRemark(rawRemark)
-    const issueText = fixed.issues.join('；')
-
-    exportRows.push({
-      ...row,
-      修改后的备注: fixed.fixedText,
-      备注处理结果: issueText,
-    })
-
-    return {
-      rowId: String(rowIndex + 1),
-      原始备注: rawRemark,
-      修改后的备注: fixed.fixedText,
-      处理结果: issueText,
-    }
-  })
-
-  return {
-    inputRowCount: rows.length,
-    outputRowCount: previewRows.length,
-    detectedHeaders,
-    remarkField,
-    previewRows,
-    exportRows,
-  }
-}
-
-function exportRemarkCleanWorkbook(result: RemarkProcessResult, fileName: string) {
-  const workbook = XLSX.utils.book_new()
-  const worksheet = XLSX.utils.json_to_sheet(result.exportRows)
-  XLSX.utils.book_append_sheet(workbook, worksheet, '备注处理结果')
-  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  })
-  const stem = fileName.replace(/\.(xlsx|xls)$/i, '') || '备注处理结果'
-  downloadBlob(blob, `${stem}_备注处理结果.xlsx`)
 }
 
 const XUEYEQIAO_TABLE_COLUMNS = [
@@ -257,13 +194,6 @@ const LIBRARY_TEMPLATE_TABLE_COLUMNS = [
   { title: '专业代码', dataIndex: '专业代码', key: '专业代码', width: 120 },
   { title: '招生代码', dataIndex: '招生代码', key: '招生代码', width: 120 },
   { title: '原始选科要求', dataIndex: '原始选科要求', key: '原始选科要求', width: 260 },
-]
-
-const REMARK_TABLE_COLUMNS = [
-  { title: '行号', dataIndex: 'rowId', key: 'rowId', width: 80 },
-  { title: '原始备注', dataIndex: '原始备注', key: '原始备注', width: 360 },
-  { title: '修改后的备注', dataIndex: '修改后的备注', key: '修改后的备注', width: 360 },
-  { title: '处理结果', dataIndex: '处理结果', key: '处理结果', width: 280 },
 ]
 
 function XueyeqiaoConvertPanel() {
@@ -470,7 +400,7 @@ function LibraryTemplateConvertPanel() {
       if (processed.missingColumns.length > 0) {
         message.warning(`缺少字段：${processed.missingColumns.join('、')}`)
       } else {
-        message.success('库中导出专业分模板转换完成')
+        message.success('专业分导出专业分模板转换完成')
       }
     } catch (error) {
       message.error(error instanceof Error ? error.message : '处理失败')
@@ -495,7 +425,7 @@ function LibraryTemplateConvertPanel() {
         exportRows: result.exportRows,
         yearValue: result.yearValue,
       })
-      downloadBlob(blob, `库中导出专业分模板转换_${result.yearValue || '未识别年份'}.xlsx`)
+      downloadBlob(blob, `专业分导出专业分模板转换_${result.yearValue || '未识别年份'}.xlsx`)
       message.success('导出成功')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '导出失败')
@@ -504,7 +434,7 @@ function LibraryTemplateConvertPanel() {
 
   const handleResetPage = () => {
     confirmToolReset({
-      title: '确认重置库中导出专业分模板转换？',
+      title: '确认重置专业分导出专业分模板转换？',
       onReset: () => {
         setLoadedWorkbook(null)
         setSheetName(undefined)
@@ -516,12 +446,12 @@ function LibraryTemplateConvertPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="库中导出专业分模板转换" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title="专业分导出专业分模板转换" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
         <Paragraph>
-          将库中导出的专业分模板转换为专业分导入模板：年份写入 B2，A1:U1 合并并保留红色说明，科类同步生成首选科目，专业组代码、招生代码、专业代码去掉 ^ 后按文本格式导出。
+          将专业分导出模板转换为专业分导入模板
         </Paragraph>
         <Paragraph type="secondary">
-          该功能放在“学业桥专业分处理”内，是因为它同样属于专业分模板转换类功能，不单独占用左侧工具入口。
+          该功能放在“模版转换工具”内，是因为它同样属于专业分模板转换类功能，不单独占用左侧工具入口。
         </Paragraph>
 
         <Space direction="vertical" style={{ width: '100%' }} size={16}>
@@ -529,7 +459,7 @@ function LibraryTemplateConvertPanel() {
             <p className="ant-upload-drag-icon">
               <InboxOutlined />
             </p>
-            <p className="ant-upload-text">点击或拖拽上传库中导出的专业分模板</p>
+            <p className="ant-upload-text">点击或拖拽上传专业分导出模板</p>
             <p className="ant-upload-hint">默认按第一行表头读取</p>
           </Dragger>
 
@@ -599,204 +529,6 @@ function LibraryTemplateConvertPanel() {
   )
 }
 
-function RemarkCleanPanel() {
-  const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
-  const [sheetName, setSheetName] = useState<string>()
-  const [remarkField, setRemarkField] = useState<string>()
-  const [processing, setProcessing] = useState(false)
-  const [result, setResult] = useState<RemarkProcessResult | null>(null)
-
-  const rowsForFieldOptions = useMemo(() => {
-    if (!loadedWorkbook || !sheetName) return []
-    return readRows(loadedWorkbook.workbook, sheetName)
-  }, [loadedWorkbook, sheetName])
-
-  const fieldOptions = useMemo(() => {
-    const headers = rowsForFieldOptions.length ? Object.keys(rowsForFieldOptions[0]) : []
-    return headers.map((header) => ({ label: header, value: header }))
-  }, [rowsForFieldOptions])
-
-  const handleUpload = async (file: File) => {
-    try {
-      const loaded = await loadWorkbook(file)
-      const firstSheet = loaded.sheetNames[0]
-      const rows = readRows(loaded.workbook, firstSheet)
-      const headers = rows.length ? Object.keys(rows[0]) : []
-      const autoRemarkField =
-        headers.find((header) => header === '专业备注') ||
-        headers.find((header) => header === '备注') ||
-        headers.find((header) => header.includes('备注')) ||
-        headers[0]
-
-      setLoadedWorkbook(loaded)
-      setSheetName(firstSheet)
-      setRemarkField(autoRemarkField)
-      setResult(null)
-      message.success(`已上传文件：${file.name}`)
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '文件上传失败')
-    }
-    return false
-  }
-
-  const handleSheetChange = (nextSheetName: string) => {
-    if (!loadedWorkbook) return
-    const rows = readRows(loadedWorkbook.workbook, nextSheetName)
-    const headers = rows.length ? Object.keys(rows[0]) : []
-    const autoRemarkField =
-      headers.find((header) => header === '专业备注') ||
-      headers.find((header) => header === '备注') ||
-      headers.find((header) => header.includes('备注')) ||
-      headers[0]
-
-    setSheetName(nextSheetName)
-    setRemarkField(autoRemarkField)
-    setResult(null)
-  }
-
-  const handleProcess = async () => {
-    if (!loadedWorkbook || !sheetName) {
-      message.warning('请先上传文件')
-      return
-    }
-
-    if (!remarkField) {
-      message.warning('请选择备注字段')
-      return
-    }
-
-    setProcessing(true)
-    try {
-      const rows = readRows(loadedWorkbook.workbook, sheetName)
-      const processed = buildRemarkRows(rows, remarkField)
-      setResult(processed)
-      message.success('备注处理完成')
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '处理失败')
-    } finally {
-      setProcessing(false)
-    }
-  }
-
-  const handleExport = () => {
-    if (!result || !loadedWorkbook) {
-      message.warning('请先处理数据')
-      return
-    }
-
-    try {
-      exportRemarkCleanWorkbook(result, loadedWorkbook.fileName)
-      message.success('导出成功')
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '导出失败')
-    }
-  }
-
-  const handleResetPage = () => {
-    confirmToolReset({
-      title: '确认重置备注处理？',
-      onReset: () => {
-        setLoadedWorkbook(null)
-        setSheetName(undefined)
-        setRemarkField(undefined)
-        setProcessing(false)
-        setResult(null)
-      },
-    })
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="备注处理" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
-        <Paragraph>
-          单独复用学业桥专业分中的备注处理逻辑，对所选备注字段进行括号修复、错字修正、空括号删除、重复括号内容去重、标点压缩等处理。
-        </Paragraph>
-        <Paragraph type="secondary">
-          导出时保留原始表格字段，并新增 <Text code>修改后的备注</Text>、<Text code>备注处理结果</Text> 两列。
-        </Paragraph>
-
-        <Space direction="vertical" style={{ width: '100%' }} size={16}>
-          <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx,.xls">
-            <p className="ant-upload-drag-icon">
-              <InboxOutlined />
-            </p>
-            <p className="ant-upload-text">点击或拖拽上传需要处理备注的 Excel 文件</p>
-            <p className="ant-upload-hint">可选择任意包含备注字段的 Sheet</p>
-          </Dragger>
-
-          <Space wrap>
-            {loadedWorkbook ? (
-              <Select
-                value={sheetName}
-                onChange={handleSheetChange}
-                style={{ width: 260 }}
-                options={loadedWorkbook.sheetNames.map((name) => ({ label: name, value: name }))}
-              />
-            ) : null}
-
-            {fieldOptions.length > 0 ? (
-              <Select
-                value={remarkField}
-                onChange={setRemarkField}
-                style={{ width: 260 }}
-                placeholder="选择备注字段"
-                options={fieldOptions}
-                showSearch
-              />
-            ) : null}
-
-            <Button type="primary" loading={processing} onClick={handleProcess}>
-              开始处理备注
-            </Button>
-
-            <Button onClick={handleExport} disabled={!result}>
-              导出备注处理结果
-            </Button>
-          </Space>
-        </Space>
-      </Card>
-
-      {result ? (
-        <>
-          <Space size={16} wrap>
-            <Card>
-              <Statistic title="原始记录数" value={result.inputRowCount} />
-            </Card>
-            <Card>
-              <Statistic title="输出记录数" value={result.outputRowCount} />
-            </Card>
-            <Card>
-              <Statistic title="备注字段" value={result.remarkField} />
-            </Card>
-          </Space>
-
-          <Card title="字段检查" style={{ borderRadius: 12 }}>
-            <Alert type="success" showIcon message="字段读取完成" description={`共识别 ${result.detectedHeaders.length} 个表头字段`} />
-          </Card>
-
-          <Card title="备注处理预览" style={{ borderRadius: 12 }}>
-            {result.previewRows.length > 0 ? (
-              <Table<RemarkPreviewRow>
-                rowKey="rowId"
-                dataSource={result.previewRows}
-                columns={REMARK_TABLE_COLUMNS}
-                scroll={{ x: 1100 }}
-                pagination={{ pageSize: 10 }}
-              />
-            ) : (
-              <Empty description="没有可输出的数据" />
-            )}
-          </Card>
-        </>
-      ) : (
-        <Card style={{ borderRadius: 12 }}>
-          <Empty description="上传并处理后，这里显示备注处理结果预览" />
-        </Card>
-      )}
-    </div>
-  )
-}
-
 export default function XueyeqiaoTool() {
   return (
     <Tabs
@@ -809,13 +541,8 @@ export default function XueyeqiaoTool() {
         },
         {
           key: 'library-template-convert',
-          label: '库中导出模板转换',
+          label: '专业分导出模板转换',
           children: <LibraryTemplateConvertPanel />,
-        },
-        {
-          key: 'remark-clean',
-          label: '备注处理',
-          children: <RemarkCleanPanel />,
         },
       ]}
     />
