@@ -59,8 +59,6 @@ export type DifferenceReasonSummaryItem = {
   count: number
 }
 
-export type PlanScoreCountDiffStatus = '招生计划多' | '专业分多' | '招生计划缺失' | '专业分缺失'
-
 export type PlanScoreCountDiffRow = {
   rowId: string
   matchKey: string
@@ -77,7 +75,24 @@ export type PlanScoreCountDiffRow = {
   planCount: number
   scoreCount: number
   diffCount: number
-  status: PlanScoreCountDiffStatus
+  reason: string
+}
+
+export type PlanScoreMissingKeyRow = {
+  rowId: string
+  matchKey: string
+  year: string
+  province: string
+  school: string
+  category: string
+  batch: string
+  major: string
+  level: string
+  groupCode: string
+  enrollmentCode: string
+  majorCode: string
+  planCount: number
+  missingKeyText: string
   reason: string
 }
 
@@ -90,6 +105,7 @@ export type PlanCompareResult = {
   groupCodeWarnings: GroupCodeWarning[]
   differenceReasonSummary: DifferenceReasonSummaryItem[]
   planScoreCountDiffRows: PlanScoreCountDiffRow[]
+  planScoreMissingKeyRows: PlanScoreMissingKeyRow[]
   planScoreRows: PlanScoreCompareRow[]
   planCollegeRows: PlanCollegeCompareRow[]
 }
@@ -654,7 +670,7 @@ function buildGroupCodeWarnings(
 
 type PlanScoreCountSource = {
   count: number
-  info: Omit<PlanScoreCountDiffRow, 'rowId' | 'planCount' | 'scoreCount' | 'diffCount' | 'status' | 'reason'>
+  info: Omit<PlanScoreCountDiffRow, 'rowId' | 'planCount' | 'scoreCount' | 'diffCount' | 'reason'>
 }
 
 function buildPlanScoreCountInfo(
@@ -716,15 +732,10 @@ function buildPlanScoreCountDiffRows(
       const scoreCount = score?.count ?? 0
 
       if (planCount === scoreCount) return null
+      if (planCount === 0 || scoreCount === 0) return null
 
       const info = plan?.info ?? score?.info
       if (!info) return null
-
-      let status: PlanScoreCountDiffStatus
-      if (planCount === 0) status = '招生计划缺失'
-      else if (scoreCount === 0) status = '专业分缺失'
-      else if (planCount > scoreCount) status = '招生计划多'
-      else status = '专业分多'
 
       return {
         rowId: `psc_${key}`,
@@ -732,8 +743,7 @@ function buildPlanScoreCountDiffRows(
         planCount,
         scoreCount,
         diffCount: Math.abs(planCount - scoreCount),
-        status,
-        reason: `同一组合键下，招生计划 ${planCount} 条，专业分 ${scoreCount} 条，差异 ${Math.abs(planCount - scoreCount)} 条`,
+        reason: '同组合键下招生计划与专业分条数不一致',
       }
     })
     .filter((item): item is PlanScoreCountDiffRow => item !== null)
@@ -756,6 +766,72 @@ function buildPlanScoreCountDiffRows(
       }
 
       return b.diffCount - a.diffCount
+    })
+}
+
+
+function formatPlanScoreMissingKeyText(info: PlanScoreCountSource['info']): string {
+  const parts = [
+    `年份=${info.year || '-'}`,
+    `省份=${info.province || '-'}`,
+    `学校=${info.school || '-'}`,
+    `科类=${info.category || '-'}`,
+    `批次=${info.batch || '-'}`,
+    `专业=${info.major || '-'}`,
+    `层次=${info.level || '-'}`,
+  ]
+
+  if (info.groupCode) {
+    parts.push(`专业组代码=${info.groupCode}`)
+  }
+
+  parts.push(`招生代码=${info.enrollmentCode || '-'}`)
+  parts.push(`专业代码=${info.majorCode || '-'}`)
+
+  return parts.join(' / ')
+}
+
+function buildPlanScoreMissingKeyRows(
+  planRows: Record<string, unknown>[],
+  scoreRows: Record<string, unknown>[]
+): PlanScoreMissingKeyRow[] {
+  if (!planRows.length) return []
+
+  const scoreKeySet = new Set(scoreRows.map((row) => buildScoreKey(row)))
+  const planMap = buildPlanScoreCountMap(planRows)
+
+  return Array.from(planMap.values())
+    .filter((item) => !scoreKeySet.has(item.info.matchKey))
+    .map((item) => {
+      const missingKeyText = formatPlanScoreMissingKeyText(item.info)
+
+      return {
+        rowId: `psmk_${item.info.matchKey}`,
+        ...item.info,
+        planCount: item.count,
+        missingKeyText,
+        reason: `${item.info.province || '未知省份'}：专业分文件缺失该组合键；招生计划中该组合键 ${item.count} 条`,
+      }
+    })
+    .sort((a, b) => {
+      const fields: Array<keyof PlanScoreMissingKeyRow> = [
+        'province',
+        'school',
+        'category',
+        'batch',
+        'major',
+        'level',
+        'groupCode',
+        'enrollmentCode',
+        'majorCode',
+      ]
+
+      for (const field of fields) {
+        const result = String(a[field] || '').localeCompare(String(b[field] || ''), 'zh-CN')
+        if (result !== 0) return result
+      }
+
+      return b.planCount - a.planCount
     })
 }
 
@@ -833,6 +909,7 @@ export function processPlanCompare(params: {
   const scoreKeySet = new Set(scoreRows.map((row) => buildScoreKey(row)))
   const collegeKeySet = new Set(collegeRows.map((row) => buildCollegeKey(row)))
   const planScoreCountDiffRows = buildPlanScoreCountDiffRows(planRows, scoreRows)
+  const planScoreMissingKeyRows = buildPlanScoreMissingKeyRows(planRows, scoreRows)
   const planScoreCountDiffKeySet = new Set(planScoreCountDiffRows.map((row) => row.matchKey))
   const enrollmentCodeWarnings = buildEnrollmentCodeWarnings(planRows, collegeRows)
   const groupCodeWarnings = buildGroupCodeWarnings(planRows, collegeRows)
@@ -953,6 +1030,7 @@ const planScoreRows: PlanScoreCompareRow[] = planRows.map((row, rowNo) => {
   groupCodeWarnings,
   differenceReasonSummary,
   planScoreCountDiffRows,
+  planScoreMissingKeyRows,
   planScoreRows,
   planCollegeRows,
 }
