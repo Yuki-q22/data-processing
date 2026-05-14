@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import * as XLSX from 'xlsx'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
 
@@ -165,8 +166,8 @@ function getRowNumbers(row: PdfRow) {
   }))
 }
 
-function isScoreLike(value: number) {
-  return value >= 100 && value <= 1000
+function isScoreInFullRange(value: number, fullScore: number) {
+  return value >= 0 && value <= fullScore
 }
 
 function isMostlyDescending(values: number[]) {
@@ -190,7 +191,7 @@ function findNearestByX<T extends { x: number }>(items: T[], x: number, maxDista
 }
 
 function filterRowsByFullScore(rows: ScoreCumulativeRow[], fullScore: number) {
-  return dedupeAndSortScoreRows(rows.filter((row) => row.score > 0 && row.score <= fullScore))
+  return dedupeAndSortScoreRows(rows.filter((row) => row.score >= 0 && row.score <= fullScore))
 }
 
 function inferProvinceFromRows(rows: PdfRow[]) {
@@ -232,8 +233,7 @@ function applyMetaToWorksheet(worksheet: ExcelJS.Worksheet, meta?: SegmentationM
   if (level) worksheet.getCell('B6').value = level
 }
 
-async function readPdfRows(file: File): Promise<PdfRow[]> {
-  const buffer = await file.arrayBuffer()
+async function readPdfRowsFromBuffer(buffer: ArrayBuffer): Promise<PdfRow[]> {
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) })
   const pdf = (await loadingTask.promise) as PdfDocumentProxy
   const rows: PdfRow[] = []
@@ -296,7 +296,7 @@ function extractJilinHeaderOffsets(row: PdfRow): JilinHeaderOffset[] {
   return offsets.sort((a, b) => a.x - b.x)
 }
 
-function parseJilinFromRows(rows: PdfRow[]) {
+function parseJilinFromRows(rows: PdfRow[], fullScore: number) {
   const result: ScoreCumulativeRow[] = []
   let headerOffsets: JilinHeaderOffset[] = []
 
@@ -321,7 +321,11 @@ function parseJilinFromRows(rows: PdfRow[]) {
 
     if (!headerOffsets.length) return
 
-    const baseItem = items.find((item) => isScoreLike(item.value) && item.x < headerOffsets[headerOffsets.length - 1].x)
+    const firstHeaderX = headerOffsets[0]?.x ?? 0
+    const baseCandidates = items
+      .filter((item) => isScoreInFullRange(item.value, fullScore) && item.x < firstHeaderX - 6)
+      .sort((a, b) => b.x - a.x)
+    const baseItem = baseCandidates[0]
     if (!baseItem) return
 
     items
@@ -339,19 +343,23 @@ function parseJilinFromRows(rows: PdfRow[]) {
   return dedupeAndSortScoreRows(result)
 }
 
-function getGuizhouScoreItems(row: PdfRow): NumberCell[] {
+function getGuizhouScoreItems(row: PdfRow, fullScore: number): NumberCell[] {
+  const hasScoreLabel = /分\s*数|成绩/.test(row.text)
+  const isTitleLike = /统计表|一分一段|普通类|普通高校|高考/.test(row.text) && !hasScoreLabel
+  if (isTitleLike) return []
+
+  // 贵州 PDF 的低分段会出现 99、98、...、0。原来按 >=100 判断会在 100 分后截断。
+  // 这里改为：只要该行明确是“分数”行，就按 0~满分识别分数。
+  // 非“分数”行不参与识别，避免把“本段人数”里的小人数误判为分数。
+  if (!hasScoreLabel) return []
+
   const items = getRowNumberItems(row)
-    .filter((item) => isScoreLike(item.value))
+    .filter((item) => isScoreInFullRange(item.value, fullScore))
     .sort((a, b) => a.x - b.x)
 
-  if (items.length < 3) return []
+  if (items.length < 2) return []
 
   const values = items.map((item) => item.value)
-  const hasScoreLabel = /分数|成绩/.test(row.text)
-  const isTitleLike = /统计表|一分一段|普通类|普通高校|高考/.test(row.text) && !hasScoreLabel
-
-  if (isTitleLike) return []
-  if (!hasScoreLabel && items.length < 5) return []
   if (!isMostlyDescending(values)) return []
 
   return items
@@ -411,18 +419,18 @@ function findBestGuizhouCumulativeRow(scoreItems: NumberCell[], candidateRows: P
   return best.values
 }
 
-function parseGuizhouFromRows(rows: PdfRow[]) {
+function parseGuizhouFromRows(rows: PdfRow[], fullScore: number) {
   const result: ScoreCumulativeRow[] = []
 
   rows.forEach((row, rowIndex) => {
-    const scoreItems = getGuizhouScoreItems(row)
+    const scoreItems = getGuizhouScoreItems(row, fullScore)
     if (!scoreItems.length) return
 
     const candidateRows: PdfRow[] = []
     for (let i = rowIndex + 1; i < rows.length && i <= rowIndex + 6; i += 1) {
       const candidate = rows[i]
       if (candidate.pageIndex !== row.pageIndex) break
-      if (getGuizhouScoreItems(candidate).length) break
+      if (getGuizhouScoreItems(candidate, fullScore).length) break
       candidateRows.push(candidate)
     }
 
@@ -451,7 +459,7 @@ function parseDirectFromRows(rows: PdfRow[]) {
 
     const score = numbers[0]
     const cumulative = numbers[1]
-    if (score >= 100 && score <= 1000 && cumulative >= 0) {
+    if (score >= 0 && score <= 1000 && cumulative >= 0) {
       result.push({ score, cumulative })
     }
   })
@@ -487,15 +495,15 @@ function calculateSegmentCounts(data: ScoreCumulativeRow[]): ScoreSegmentRow[] {
   })
 }
 
-async function buildWorkbookFromPdf(file: File, meta?: SegmentationMeta) {
-  const rows = await readPdfRows(file)
+async function buildWorkbookFromPdf(buffer: ArrayBuffer, meta?: SegmentationMeta) {
+  const rows = await readPdfRowsFromBuffer(buffer)
   const inputProvince = normalizeMetaValue(meta?.province)
   const inferredProvince = inferProvinceFromRows(rows)
   const province = inputProvince || inferredProvince
   const fullScore = getFullScoreByProvince(province)
 
-  const jilinRows = province === '贵州' ? [] : filterRowsByFullScore(parseJilinFromRows(rows), fullScore)
-  const guizhouRows = province === '吉林' ? [] : filterRowsByFullScore(parseGuizhouFromRows(rows), fullScore)
+  const jilinRows = province === '贵州' ? [] : filterRowsByFullScore(parseJilinFromRows(rows, fullScore), fullScore)
+  const guizhouRows = province === '吉林' ? [] : filterRowsByFullScore(parseGuizhouFromRows(rows, fullScore), fullScore)
   const directRows = province ? [] : filterRowsByFullScore(parseDirectFromRows(rows), fullScore)
 
   const candidates = [
@@ -533,18 +541,110 @@ async function buildWorkbookFromPdf(file: File, meta?: SegmentationMeta) {
   }
 }
 
-async function loadWorkbookFromExcel(file: File, meta?: SegmentationMeta) {
-  const buffer = await file.arrayBuffer()
+function isPdfBuffer(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer.slice(0, 5))
+  return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d
+}
+
+function isZipBuffer(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer.slice(0, 4))
+  return bytes[0] === 0x50 && bytes[1] === 0x4b
+}
+
+function isOleExcelBuffer(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer.slice(0, 8))
+  return (
+    bytes[0] === 0xd0 &&
+    bytes[1] === 0xcf &&
+    bytes[2] === 0x11 &&
+    bytes[3] === 0xe0 &&
+    bytes[4] === 0xa1 &&
+    bytes[5] === 0xb1 &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0xe1
+  )
+}
+
+function shouldTreatAsPdf(file: File, buffer: ArrayBuffer) {
+  return isPdfBuffer(buffer) || file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+}
+
+function sheetJsCellToExcelJsValue(value: unknown): ExcelJS.CellValue {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  if (value instanceof Date) return value
+  return String(value)
+}
+
+async function loadWorkbookByExcelJs(buffer: ArrayBuffer) {
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(buffer)
+  return workbook
+}
+
+function loadWorkbookBySheetJs(buffer: ArrayBuffer) {
+  const sourceWorkbook = XLSX.read(buffer, {
+    type: 'array',
+    cellDates: false,
+    raw: true,
+  })
+
+  const firstSheetName = sourceWorkbook.SheetNames[0]
+  if (!firstSheetName) {
+    throw new Error('Excel 文件中未识别到工作表')
+  }
+
+  const sourceSheet = sourceWorkbook.Sheets[firstSheetName]
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sourceSheet, {
+    header: 1,
+    raw: true,
+    blankrows: true,
+  })
+
+  const workbook = new ExcelJS.Workbook()
+  const worksheet = workbook.addWorksheet(firstSheetName || '一分一段')
+
+  rows.forEach((rowValues, rowIndex) => {
+    if (!Array.isArray(rowValues)) return
+    rowValues.forEach((value, colIndex) => {
+      worksheet.getCell(rowIndex + 1, colIndex + 1).value = sheetJsCellToExcelJsValue(value)
+    })
+  })
+
+  return workbook
+}
+
+async function loadWorkbookFromExcel(file: File, buffer: ArrayBuffer, meta?: SegmentationMeta) {
+  let workbook: ExcelJS.Workbook
+
+  if (isZipBuffer(buffer)) {
+    try {
+      workbook = await loadWorkbookByExcelJs(buffer)
+    } catch (error) {
+      // 部分文件扩展名是 xlsx，但实际内容不是标准 xlsx zip 包。此时退回 SheetJS 读取。
+      workbook = loadWorkbookBySheetJs(buffer)
+    }
+  } else if (isOleExcelBuffer(buffer) || /\.(xls|csv)$/i.test(file.name)) {
+    workbook = loadWorkbookBySheetJs(buffer)
+  } else {
+    try {
+      workbook = loadWorkbookBySheetJs(buffer)
+    } catch {
+      throw new Error('文件格式无法识别：请上传 .xlsx、.xls 或文本型 .pdf 文件。当前文件不是有效的 Excel 压缩包，也不是可识别的 PDF。')
+    }
+  }
+
   const worksheet = workbook.worksheets[0]
+  if (!worksheet) {
+    throw new Error('Excel 文件中未识别到可处理的工作表')
+  }
 
   applyTemplateHeaders(worksheet)
   applyMetaToWorksheet(worksheet, meta)
 
   return {
     workbook,
-    detectedFormat: 'excel',
+    detectedFormat: isZipBuffer(buffer) ? 'excel-xlsx' : isOleExcelBuffer(buffer) ? 'excel-xls' : 'excel',
     extractedRows: Math.max(0, worksheet.rowCount - 7),
   }
 }
@@ -714,8 +814,9 @@ export async function processSegmentationWorkbook(
   file: File,
   meta?: SegmentationMeta,
 ): Promise<SegmentationProcessResult> {
-  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
-  const loaded = isPdf ? await buildWorkbookFromPdf(file, meta) : await loadWorkbookFromExcel(file, meta)
+  const buffer = await file.arrayBuffer()
+  const isPdf = shouldTreatAsPdf(file, buffer)
+  const loaded = isPdf ? await buildWorkbookFromPdf(buffer, meta) : await loadWorkbookFromExcel(file, buffer, meta)
 
   const summary = processLoadedWorkbook(
     loaded.workbook,
