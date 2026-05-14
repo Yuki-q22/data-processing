@@ -10,6 +10,7 @@ import {
   TagsOutlined,
   SettingOutlined,
   PictureOutlined,
+  ScissorOutlined,
 } from '@ant-design/icons'
 import readmeText from '../README.md?raw'
 
@@ -23,6 +24,7 @@ import GroupCodeMatchTool from './pages/tools/GroupCodeMatchTool'
 import PlanCompareTool from './pages/tools/PlanCompareTool'
 import EmploymentReportImageTool from './pages/tools/EmploymentReportImageTool'
 import RemarkTypeExtractTool from './pages/tools/RemarkTypeExtractTool'
+import QuestionScreenshotTool from './pages/tools/QuestionScreenshotTool'
 
 const { Header, Content, Sider } = Layout
 const { Title, Text } = Typography
@@ -38,6 +40,7 @@ type MenuKey =
   | 'employment-report-image'
   | 'plan-compare'
   | 'remark-type-extract'
+  | 'question-screenshot'
 
 const README_NAV_ITEMS = [
   { id: 'rule-center', label: '1. 规则中心', keyword: '1. 规则中心' },
@@ -50,6 +53,7 @@ const README_NAV_ITEMS = [
   { id: 'plan-compare', label: '8. 招生计划数据比对', keyword: '8. 招生计划数据比对' },
   { id: 'employment-report-image', label: '9. 就业质量报告图片提取', keyword: '9. 就业质量报告图片提取' },
   { id: 'remark-type-extract', label: '10. 备注处理', keyword: '10. 备注处理' },
+  { id: 'question-screenshot', label: '11. 高考真题题目截图', keyword: '11. 高考真题题目截图' },
   { id: 'local-dev', label: '本地运行', keyword: '本地运行' },
   { id: 'deploy', label: '部署说明', keyword: '部署说明' },
   { id: 'notice', label: '数据处理注意事项', keyword: '数据处理注意事项' },
@@ -81,6 +85,8 @@ export default function App() {
         return <PlanCompareTool />
       case 'remark-type-extract':
         return <RemarkTypeExtractTool />
+      case 'question-screenshot':
+        return <QuestionScreenshotTool />
       default:
         return <RuleCenterPage />
     }
@@ -270,6 +276,11 @@ export default function App() {
                       icon: <TagsOutlined />,
                       label: '备注处理',
                     },
+                    {
+                      key: 'question-screenshot',
+                      icon: <ScissorOutlined />,
+                      label: '高考真题题目截图',
+                    },
                   ],
                 },
               ]}
@@ -335,6 +346,8 @@ function getPageTitle(key: MenuKey) {
       return '招生计划数据比对'
     case 'remark-type-extract':
       return '备注处理'
+    case 'question-screenshot':
+      return '高考真题题目处理'
     default:
       return '数据处理工具平台'
   }
