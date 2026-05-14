@@ -318,7 +318,7 @@ export default function QuestionScreenshotTool() {
           <Alert
             type="info"
             showIcon
-            message="使用前请先把 Word / WPS / DOCX 手动另存为 PDF"
+            message="使用前请先把 Word 删除页面页脚，手动另存为 PDF"
             description="本工具按顶层题号 1. / 1． / 1、自动截图，不识别（1）（2）这类小题号。会尽量排除一、选择题、注意事项、试卷头部、单独科目名等公共内容。"
           />
 
