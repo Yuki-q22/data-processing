@@ -433,3 +433,211 @@ body {
 .ant-card.candidate-best .ant-card-body {
   background: transparent !important;
 }
+
+/* === 空状态优化 === */
+.ant-empty {
+  padding: var(--space-10) 0;
+}
+
+.ant-empty-description {
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+/* === 表单标签优化 === */
+.ant-form-item-label > label {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* === 表格分页优化 === */
+.ant-pagination-item-active {
+  border-color: var(--color-primary) !important;
+  background: var(--color-primary) !important;
+}
+
+.ant-pagination-item-active a {
+  color: #fff !important;
+}
+
+.ant-pagination-item:hover {
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+}
+
+/* === 抽屉优化 === */
+.ant-drawer-header {
+  border-bottom: 1px solid var(--divider-color) !important;
+}
+
+.ant-drawer-body {
+  background: var(--bg-base) !important;
+}
+
+/* === 开关优化 === */
+.ant-switch-checked {
+  background: var(--color-primary) !important;
+}
+
+/* === 骨架屏优化 === */
+.ant-skeleton {
+  background: var(--bg-sunken) !important;
+}
+
+/* === 徽章优化 === */
+.ant-badge-status-dot {
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+
+/* === 下拉菜单优化 === */
+.ant-dropdown-menu-item:hover {
+  background: var(--bg-surface-hover) !important;
+}
+
+/* === 时间轴优化 === */
+.ant-timeline-item-tail {
+  border-color: var(--divider-color) !important;
+}
+
+/* === 树形控件优化 === */
+.ant-tree-node-content-wrapper:hover {
+  background: var(--bg-surface-hover) !important;
+}
+
+.ant-tree-node-selected {
+  background: var(--color-primary-light) !important;
+  color: var(--color-primary) !important;
+}
+
+/* === 标签页优化 === */
+.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--color-primary) !important;
+  font-weight: 600;
+}
+
+.ant-tabs-ink-bar {
+  background: var(--color-primary) !important;
+}
+
+.ant-tabs-tab:hover {
+  color: var(--color-primary) !important;
+}
+
+/* === 消息通知优化 === */
+.ant-message-notice-content {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+  font-weight: 500;
+}
+
+.ant-message-success .anticon {
+  color: var(--color-success) !important;
+}
+
+.ant-message-error .anticon {
+  color: var(--color-error) !important;
+}
+
+.ant-message-warning .anticon {
+  color: var(--color-warning) !important;
+}
+
+.ant-message-info .anticon {
+  color: var(--color-info) !important;
+}
+
+/* === 通知栏优化 === */
+.ant-notification-notice {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* === 进度条优化 === */
+.ant-progress-bg {
+  background: var(--color-primary) !important;
+  border-radius: var(--radius-full) !important;
+}
+
+/* === 滑块优化 === */
+.ant-slider-track {
+  background: var(--color-primary) !important;
+}
+
+.ant-slider-handle::after {
+  box-shadow: 0 0 0 2px var(--color-primary) !important;
+}
+
+/* === 日期选择器优化 === */
+.ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner {
+  background: var(--color-primary) !important;
+}
+
+.ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner::before {
+  border-color: var(--color-primary) !important;
+}
+
+/* === 穿梭框优化 === */
+.ant-transfer-list-header {
+  background: var(--bg-sunken) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* === 折叠面板优化 === */
+.ant-collapse-header {
+  font-weight: 500 !important;
+}
+
+.ant-collapse-content-box {
+  background: var(--bg-surface) !important;
+}
+
+/* === 气泡卡片优化 === */
+.ant-popover-inner {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* === 工具提示优化 === */
+.ant-tooltip-inner {
+  border-radius: var(--radius-md) !important;
+}
+
+/* === 回到顶部优化 === */
+.ant-back-top {
+  border-radius: var(--radius-md) !important;
+}
+
+/* === 结果（Result 组件）优化 === */
+.ant-result-title {
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-result-subtitle {
+  color: var(--text-secondary) !important;
+}
+
+/* === 表格行 stagger 进入动画 === */
+@keyframes tableRowEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.table-row-animate {
+  animation: tableRowEnter 0.25s var(--ease-out) both;
+}
+
+.table-row-delay-0 { animation-delay: 0ms; }
+.table-row-delay-1 { animation-delay: 30ms; }
+.table-row-delay-2 { animation-delay: 60ms; }
+.table-row-delay-3 { animation-delay: 90ms; }
+.table-row-delay-4 { animation-delay: 120ms; }
+.table-row-delay-5 { animation-delay: 150ms; }
+.table-row-delay-6 { animation-delay: 180ms; }
+.table-row-delay-7 { animation-delay: 210ms; }

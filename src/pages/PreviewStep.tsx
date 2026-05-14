@@ -312,6 +312,7 @@ export default function PreviewStep() {
             dataSource={filteredRecords}
             scroll={{ x: 2800 }}
             pagination={{ pageSize: 10 }}
+            rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
           />
         )}
       </Card>

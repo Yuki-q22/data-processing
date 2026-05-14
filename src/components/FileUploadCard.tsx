@@ -1,5 +1,6 @@
 import { Alert, Card, Descriptions, Select, Space, Typography, Upload, message } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
+import { useEffect, useRef } from 'react'
 import type { UploadedWorkbook } from '../types/workbook'
 import type { UploadValidationResult } from '../modules/uploadValidation'
 
@@ -17,6 +18,22 @@ type Props = {
 
 export default function FileUploadCard(props: Props) {
   const { title, workbook, selectedSheet, validation, onSheetChange, onUpload } = props
+  const prevWorkbookRef = useRef<UploadedWorkbook | undefined>(undefined)
+  const alertRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (workbook && workbook !== prevWorkbookRef.current) {
+      // 新上传文件时给 Alert 区域添加进入动画
+      if (alertRef.current) {
+        alertRef.current.classList.add('animate-pop-in')
+        const timer = setTimeout(() => {
+          alertRef.current?.classList.remove('animate-pop-in')
+        }, 400)
+        return () => clearTimeout(timer)
+      }
+    }
+    prevWorkbookRef.current = workbook
+  }, [workbook])
 
   const handleBeforeUpload = async (file: File) => {
     try {
@@ -28,7 +45,7 @@ export default function FileUploadCard(props: Props) {
   }
 
   return (
-    <Card title={title}>
+    <Card title={title} className={workbook ? 'flash-success' : undefined}>
       <Space direction="vertical" style={{ width: '100%' }} size={12}>
         <Dragger
           beforeUpload={handleBeforeUpload}
@@ -37,14 +54,18 @@ export default function FileUploadCard(props: Props) {
           multiple={false}
         >
           <p className="ant-upload-drag-icon">
-            <InboxOutlined />
+            <InboxOutlined style={{ fontSize: 48, color: 'var(--color-primary)', transition: 'transform 0.3s var(--ease-spring)' }} />
           </p>
-          <p className="ant-upload-text">点击或拖拽上传 Excel 文件</p>
-          <p className="ant-upload-hint">支持拖动上传，也支持点击选择文件</p>
+          <p className="ant-upload-text" style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+            点击或拖拽上传 Excel 文件
+          </p>
+          <p className="ant-upload-hint" style={{ color: 'var(--text-tertiary)' }}>
+            支持拖动上传，也支持点击选择文件
+          </p>
         </Dragger>
 
         {workbook && (
-          <>
+          <div ref={alertRef}>
             <Descriptions size="small" column={1}>
               <Descriptions.Item label="文件名">
                 {workbook.fileName}
@@ -85,7 +106,7 @@ export default function FileUploadCard(props: Props) {
                 />
               )
             ) : null}
-          </>
+          </div>
         )}
       </Space>
     </Card>

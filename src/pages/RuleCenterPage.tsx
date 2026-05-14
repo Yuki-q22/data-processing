@@ -757,13 +757,13 @@ export default function RuleCenterPage() {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 16,
-        background: '#f5f7fb',
+        gap: 24,
+        background: 'var(--bg-base)',
         padding: 4,
       }}
     >
       <Card
-        style={{ borderRadius: 16, border: '1px solid #eef1f5' }}
+        style={{ border: '1px solid var(--border-color)' }}
         bodyStyle={{ padding: 20 }}
       >
         <Row gutter={[16, 16]} align="middle" justify="space-between">
@@ -817,7 +817,7 @@ export default function RuleCenterPage() {
         {!currentUserEmail ? (
           <Card
             size="small"
-            style={{ marginTop: 16, borderRadius: 14, background: '#fbfcff' }}
+            style={{ marginTop: 16, background: 'var(--color-info-bg)' }}
           >
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <Alert type="info" showIcon message="请登录后查看和管理云端共享规则" />
@@ -870,7 +870,7 @@ export default function RuleCenterPage() {
           </Row>
 
           <Card
-            style={{ borderRadius: 18, border: '1px solid #e8edf5' }}
+            style={{ border: '1px solid var(--border-color)' }}
             bodyStyle={{ padding: 0 }}
           >
             <Row gutter={0} align="stretch">
@@ -879,8 +879,8 @@ export default function RuleCenterPage() {
                   style={{
                     height: '100%',
                     padding: 16,
-                    borderRight: '1px solid #eef1f5',
-                    background: '#fbfcff',
+                    borderRight: '1px solid var(--border-color)',
+                    background: 'var(--color-info-bg)',
                     borderRadius: '18px 0 0 18px',
                   }}
                 >
@@ -1014,7 +1014,7 @@ export default function RuleCenterPage() {
 
                       <Card
                         size="small"
-                        style={{ borderRadius: 14, background: '#f8fafc' }}
+                        style={{ background: 'var(--bg-sunken)' }}
                         bodyStyle={{ padding: 12 }}
                       >
                         {rulePanelTab === 'provinceBatch' ? (
@@ -1128,6 +1128,7 @@ export default function RuleCenterPage() {
                             size="small"
                             pagination={{ pageSize: 12, showSizeChanger: true }}
                             dataSource={provinceCategoryBatchFiltered}
+                            rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
                             columns={[
                               { title: '年份', dataIndex: 'year', key: 'year', width: 78 },
                               { title: '省份', dataIndex: 'province', key: 'province', width: 90 },
@@ -1170,6 +1171,7 @@ export default function RuleCenterPage() {
                             size="small"
                             pagination={{ pageSize: 12, showSizeChanger: true }}
                             dataSource={controlLineFiltered}
+                            rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
                             columns={[
                               { title: '年份', dataIndex: 'year', key: 'year', width: 78 },
                               { title: '省份', dataIndex: 'province', key: 'province', width: 90 },
@@ -1243,6 +1245,7 @@ export default function RuleCenterPage() {
                                 pagination={{ pageSize: 10 }}
                                 columns={schoolColumns}
                                 dataSource={schoolPreview}
+                                rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
                               />
                             </Space>
                           </Card>
@@ -1278,6 +1281,7 @@ export default function RuleCenterPage() {
                                 pagination={{ pageSize: 10 }}
                                 columns={majorColumns}
                                 dataSource={majorPreview}
+                                rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
                               />
                             </Space>
                           </Card>
@@ -1539,9 +1543,8 @@ function RuleMetricCard({
     <Card
       size="small"
       style={{
-        borderRadius: 14,
-        border: '1px solid #eef1f5',
-        boxShadow: '0 6px 18px rgba(15, 23, 42, 0.04)',
+        border: '1px solid var(--border-color)',
+        boxShadow: 'var(--shadow-sm)',
       }}
       bodyStyle={{ padding: '14px 16px' }}
     >
@@ -1583,15 +1586,14 @@ function RuleTypeCard({
       onKeyDown={(event) => {
         if (event.key === 'Enter') onClick()
       }}
+      className={active ? 'rule-type-card rule-type-card-active' : 'rule-type-card'}
       style={{
         padding: 14,
-        borderRadius: 14,
         cursor: 'pointer',
-        border: active ? '1px solid #1677ff' : '1px solid #edf0f5',
-        background: active ? '#f0f7ff' : '#fff',
-        boxShadow: active
-          ? '0 8px 20px rgba(22, 119, 255, 0.12)'
-          : '0 4px 12px rgba(15, 23, 42, 0.03)',
+        border: active ? '1px solid var(--color-primary)' : '1px solid var(--border-color)',
+        background: active ? 'var(--color-primary-light)' : 'var(--bg-surface)',
+        boxShadow: active ? 'var(--shadow-md)' : 'var(--shadow-sm)',
+        transition: 'all 0.25s var(--ease-out)',
       }}
     >
       <Space direction="vertical" size={4} style={{ width: '100%' }}>

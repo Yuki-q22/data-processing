@@ -502,10 +502,10 @@ export default function QuestionScreenshotTool() {
                 <div
                   style={{
                     overflowX: 'auto',
-                    background: '#fafafa',
+                    background: 'var(--bg-sunken)',
                     padding: 16,
-                    border: '1px solid #f0f0f0',
-                    borderRadius: 12,
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-lg)',
                   }}
                 >
                   <img src={previewUrl} alt="题目截图预览" style={{ maxWidth: '100%', display: 'block' }} />

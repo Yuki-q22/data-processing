@@ -722,6 +722,7 @@ const goNextRecord = () => {
             dataSource={filteredRecords}
             scroll={{ x: 2400 }}
             pagination={{ pageSize: 10 }}
+            rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
           />
         )}
       </Card>

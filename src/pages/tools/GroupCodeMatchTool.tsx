@@ -602,10 +602,10 @@ const saveManualSelection = () => {
           size="small"
           hoverable
           onClick={() => chooseCandidate(candidate.candidateId)}
+          className={selected ? 'candidate-card candidate-selected' : 'candidate-card'}
           style={{
             cursor: 'pointer',
-            borderColor: selected ? '#1677ff' : undefined,
-            background: selected ? '#f0f7ff' : undefined,
+            transition: 'all 0.25s var(--ease-out)',
           }}
         >
           <Radio value={candidate.candidateId}>选择该招生计划记录</Radio>

@@ -94,7 +94,7 @@ export default function ProfessionalScorePlatform() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 400 }}>
           <Steps current={current} onChange={changeStep} items={stepItems} />
         </div>
@@ -115,7 +115,7 @@ export default function ProfessionalScorePlatform() {
         </Space>
       </div>
 
-      <div className="animate-enter">
+      <div key={current} className="animate-enter">
         {current === 0 && <UploadStep />}
         {current === 1 && <MappingStep />}
         {current === 2 && <RuleStep />}

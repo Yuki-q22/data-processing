@@ -114,3 +114,77 @@
 .flash-warning {
   animation: highlightFlashWarning 0.8s var(--ease-out);
 }
+
+/* === 横向滑入动画（用于抽屉、侧边栏） === */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slideInRight 0.3s var(--ease-out) forwards;
+}
+
+/* === 弹性缩放（用于弹窗、重要提示） === */
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  70% {
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-pop-in {
+  animation: popIn 0.35s var(--ease-out) forwards;
+}
+
+/* === 脉冲呼吸（用于 loading、等待中） === */
+@keyframes breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.animate-breathe {
+  animation: breathe 2s ease-in-out infinite;
+}
+
+/* === 摇晃（用于表单校验错误） === */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+.animate-shake {
+  animation: shake 0.4s var(--ease-out);
+}
+
+/* === 进度条填充动画 === */
+@keyframes fillProgress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+/* === 旋转加载 === */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}

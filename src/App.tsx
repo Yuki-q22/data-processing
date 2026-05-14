@@ -42,13 +42,29 @@ type MenuKey =
   | 'remark-type-extract'
   | 'question-screenshot'
 
+type MenuGroupKey = 'group-core' | 'group-tools' | 'group-peak'
+
+const MENU_KEYS: MenuKey[] = [
+  'rule-center',
+  'professional-score-platform',
+  'college-score-normal',
+  'college-score-art',
+  'xueyeqiao',
+  'segmentation-check',
+  'group-code-match',
+  'employment-report-image',
+  'plan-compare',
+  'remark-type-extract',
+  'question-screenshot',
+]
+
 const README_NAV_ITEMS = [
   { id: 'rule-center', label: '1. 规则中心', keyword: '1. 规则中心' },
   { id: 'professional-score-platform', label: '2. 专业分模板智能填充', keyword: '2. 专业分模板智能填充' },
   { id: 'college-score-normal', label: '3. 院校分提取（普通类）', keyword: '3. 院校分提取（普通类）' },
   { id: 'college-score-art', label: '4. 院校分提取（艺体类）', keyword: '4. 院校分提取（艺体类）' },
   { id: 'xueyeqiao', label: '5. 模版转换工具', keyword: '5. 模版转换工具' },
-  { id: 'segmentation-check', label: '6. 一分一段校验', keyword: '6. 一分一段校验' },
+  { id: 'segmentation-check', label: '6. 一分一段处理', keyword: '一分一段' },
   { id: 'group-code-match', label: '7. 专业组代码匹配', keyword: '7. 专业组代码匹配' },
   { id: 'plan-compare', label: '8. 招生计划数据比对', keyword: '8. 招生计划数据比对' },
   { id: 'employment-report-image', label: '9. 就业质量报告图片提取', keyword: '9. 就业质量报告图片提取' },
@@ -61,6 +77,7 @@ const README_NAV_ITEMS = [
 
 export default function App() {
   const [activeKey, setActiveKey] = useState<MenuKey>('rule-center')
+  const [openKeys, setOpenKeys] = useState<MenuGroupKey[]>(['group-core', 'group-tools', 'group-peak'])
   const readmeContentRef = useRef<HTMLDivElement | null>(null)
 
   const content = useMemo(() => {
@@ -93,94 +110,94 @@ export default function App() {
   }, [activeKey])
 
   const showReadme = () => {
-  const scrollToReadmeSection = (keyword: string) => {
-    const container = readmeContentRef.current
-    if (!container) return
+    const scrollToReadmeSection = (keyword: string) => {
+      const container = readmeContentRef.current
+      if (!container) return
 
-    const headings = Array.from(
-      container.querySelectorAll('h1, h2, h3, h4, h5, h6')
-    )
+      const headings = Array.from(
+        container.querySelectorAll('h1, h2, h3, h4, h5, h6')
+      )
 
-    const target = headings.find((heading) =>
-      String(heading.textContent || '').includes(keyword)
-    )
+      const target = headings.find((heading) =>
+        String(heading.textContent || '').includes(keyword)
+      )
 
-    if (target) {
-      target.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      })
+      if (target) {
+        target.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        })
+      }
     }
-  }
 
-  Modal.info({
-    title: '使用规则 / README',
-    width: 1100,
-    icon: null,
-    content: (
-      <div
-        style={{
-          display: 'flex',
-          gap: 16,
-          height: '72vh',
-        }}
-      >
+    Modal.info({
+      title: '使用规则 / README',
+      width: 1100,
+      icon: null,
+      content: (
         <div
           style={{
-            width: 230,
-            borderRight: '1px solid var(--divider-color)',
-            paddingRight: 12,
-            overflowY: 'auto',
+            display: 'flex',
+            gap: 16,
+            height: '72vh',
           }}
         >
           <div
             style={{
-              fontWeight: 600,
-              marginBottom: 12,
-              color: 'var(--text-primary)',
-              fontSize: 14,
+              width: 230,
+              borderRight: '1px solid var(--divider-color)',
+              paddingRight: 12,
+              overflowY: 'auto',
             }}
           >
-            目录
+            <div
+              style={{
+                fontWeight: 600,
+                marginBottom: 12,
+                color: 'var(--text-primary)',
+                fontSize: 14,
+              }}
+            >
+              目录
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {README_NAV_ITEMS.map((item) => (
+                <Button
+                  key={item.id}
+                  type="link"
+                  size="small"
+                  style={{
+                    justifyContent: 'flex-start',
+                    padding: 0,
+                    height: 'auto',
+                    whiteSpace: 'normal',
+                    textAlign: 'left',
+                  }}
+                  onClick={() => scrollToReadmeSection(item.keyword)}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {README_NAV_ITEMS.map((item) => (
-              <Button
-                key={item.id}
-                type="link"
-                size="small"
-                style={{
-                  justifyContent: 'flex-start',
-                  padding: 0,
-                  height: 'auto',
-                  whiteSpace: 'normal',
-                  textAlign: 'left',
-                }}
-                onClick={() => scrollToReadmeSection(item.keyword)}
-              >
-                {item.label}
-              </Button>
-            ))}
+          <div
+            ref={readmeContentRef}
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              paddingRight: 12,
+              lineHeight: 1.75,
+              fontSize: 13,
+            }}
+          >
+            <ReactMarkdown>{readmeText}</ReactMarkdown>
           </div>
         </div>
-
-        <div
-          ref={readmeContentRef}
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            paddingRight: 12,
-            lineHeight: 1.75,
-            fontSize: 13,
-          }}
-        >
-          <ReactMarkdown>{readmeText}</ReactMarkdown>
-        </div>
-      </div>
-    ),
-  })
-}
+      ),
+    })
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -213,11 +230,17 @@ export default function App() {
             <Menu
               mode="inline"
               selectedKeys={[activeKey]}
-              onClick={(e) => setActiveKey(e.key as MenuKey)}
+              openKeys={openKeys}
+              onOpenChange={(keys) => setOpenKeys(keys as MenuGroupKey[])}
+              onClick={(e) => {
+                if (MENU_KEYS.includes(e.key as MenuKey)) {
+                  setActiveKey(e.key as MenuKey)
+                }
+              }}
               style={{ borderRight: 'none', paddingTop: 8 }}
               items={[
                 {
-                  type: 'group',
+                  key: 'group-core',
                   label: '核心配置',
                   children: [
                     {
@@ -228,10 +251,7 @@ export default function App() {
                   ],
                 },
                 {
-                  type: 'divider',
-                },
-                {
-                  type: 'group',
+                  key: 'group-tools',
                   label: '独立工具',
                   children: [
                     {
@@ -253,11 +273,6 @@ export default function App() {
                       key: 'xueyeqiao',
                       icon: <AuditOutlined />,
                       label: '模版转换工具',
-                    },
-                    {
-                      key: 'segmentation-check',
-                      icon: <PartitionOutlined />,
-                      label: '一分一段校验',
                     },
                     {
                       key: 'group-code-match',
@@ -283,6 +298,17 @@ export default function App() {
                       key: 'question-screenshot',
                       icon: <ScissorOutlined />,
                       label: '高考真题题目截图',
+                    },
+                  ],
+                },
+                {
+                  key: 'group-peak',
+                  label: '高峰期数据处理',
+                  children: [
+                    {
+                      key: 'segmentation-check',
+                      icon: <PartitionOutlined />,
+                      label: '一分一段处理',
                     },
                   ],
                 },
@@ -331,7 +357,7 @@ function getPageTitle(key: MenuKey) {
     case 'xueyeqiao':
       return '模版转换工具'
     case 'segmentation-check':
-      return '一分一段校验'
+      return '一分一段处理'
     case 'group-code-match':
       return '专业组代码匹配'
     case 'employment-report-image':
