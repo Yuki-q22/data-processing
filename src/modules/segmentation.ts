@@ -178,12 +178,12 @@ function isMostlyDescending(values: number[]) {
 function findNearestByX<T extends { x: number }>(items: T[], x: number, maxDistance = 28): T | null {
   let best: { item: T; distance: number } | null = null
 
-  items.forEach((item) => {
+  for (const item of items) {
     const distance = Math.abs(item.x - x)
     if (!best || distance < best.distance) {
       best = { item, distance }
     }
-  })
+  }
 
   if (!best || best.distance > maxDistance) return null
   return best.item
@@ -395,16 +395,17 @@ function scoreGuizhouCandidateRow(row: PdfRow, values: Array<number | null>) {
 function findBestGuizhouCumulativeRow(scoreItems: NumberCell[], candidateRows: PdfRow[]) {
   let best: { values: number[]; score: number } | null = null
 
-  candidateRows.forEach((row, index) => {
+  for (let index = 0; index < candidateRows.length; index += 1) {
+    const row = candidateRows[index]
     const values = readGuizhouCandidateValues(row, scoreItems)
     const score = scoreGuizhouCandidateRow(row, values) - index * 0.2
-    if (!Number.isFinite(score)) return
+    if (!Number.isFinite(score)) continue
 
     const normalizedValues = values.map((value) => (value === null ? NaN : value))
     if (!best || score > best.score) {
       best = { values: normalizedValues, score }
     }
-  })
+  }
 
   if (!best || best.score < 0) return null
   return best.values
