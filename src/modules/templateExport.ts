@@ -21,7 +21,7 @@
  */
 
 import ExcelJS from 'exceljs'
-import type { ProcessedRecord } from '../types/record'
+import type { ProcessedRecord, ValidationIssue } from '../types/record'
 import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
 
 const NOTE_TEXT = `备注：请删除示例后再填写；
@@ -88,8 +88,14 @@ function downloadBuffer(buffer: ArrayBuffer, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+function isBlockingExportIssue(issue: ValidationIssue) {
+  // 分数顺序逻辑错误只标注，不拦截导出。
+  if (issue.code === 'score_order_invalid') return false
+  return issue.level === 'error'
+}
+
 export function getExportableRecords(records: ProcessedRecord[]) {
-  return records.filter((record) => !record.issues.some((issue) => issue.level === 'error'))
+  return records.filter((record) => !record.issues.some(isBlockingExportIssue))
 }
 
 export async function exportProfessionalScoreTemplate(

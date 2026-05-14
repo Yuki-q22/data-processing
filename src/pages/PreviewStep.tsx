@@ -282,7 +282,7 @@ export default function PreviewStep() {
         <Card><Statistic title="当前筛选结果" value={filteredRecords.length} /></Card>
       </Space>
 
-      <Card title="预览筛选" style={{ borderRadius: 12 }}>
+      <Card title="预览筛选">
         <Space wrap size={12}>
           <Input
             allowClear
@@ -298,7 +298,7 @@ export default function PreviewStep() {
         </Space>
       </Card>
 
-      <Card title={`处理结果预览（共 ${filteredRecords.length} 条）`} style={{ borderRadius: 12 }}>
+      <Card title={`处理结果预览（共 ${filteredRecords.length} 条）`}>
         {processedRecords.length === 0 ? (
           <Empty description="暂无处理结果，请先在上传页生成预览数据" />
         ) : filteredRecords.length === 0 ? (

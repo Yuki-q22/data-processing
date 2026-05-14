@@ -741,7 +741,7 @@ export default function RuleCenterPage() {
 
   if (!authReady) {
     return (
-      <Card style={{ borderRadius: 12 }}>
+      <Card>
         <Title level={3} style={{ marginTop: 0, marginBottom: 8 }}>
           规则中心
         </Title>
@@ -1214,7 +1214,7 @@ export default function RuleCenterPage() {
 
                       <Row gutter={[14, 14]}>
                         <Col xs={24} lg={12}>
-                          <Card title="学校名称规则" style={{ borderRadius: 14 }}>
+                          <Card title="学校名称规则">
                             <Space direction="vertical" style={{ width: '100%' }} size={12}>
                               <Upload
                                 disabled={!isAdminUser}
@@ -1249,7 +1249,7 @@ export default function RuleCenterPage() {
                         </Col>
 
                         <Col xs={24} lg={12}>
-                          <Card title="招生专业组合规则" style={{ borderRadius: 14 }}>
+                          <Card title="招生专业组合规则">
                             <Space direction="vertical" style={{ width: '100%' }} size={12}>
                               <Upload
                                 disabled={!isAdminUser}
@@ -1317,7 +1317,7 @@ export default function RuleCenterPage() {
                         </Col>
                       </Row>
 
-                      <Card size="small" style={{ borderRadius: 14, background: '#f8fafc' }}>
+                      <Card size="small" style={{ background: 'var(--bg-sunken)' }}>
                         <Descriptions size="small" column={{ xs: 1, md: 3 }}>
                           <Descriptions.Item label="当前来源">
                             {remarkRuleFileName || '未加载'}
@@ -1332,12 +1332,14 @@ export default function RuleCenterPage() {
                       </Card>
 
                       <div
+                        className="rule-list-container"
                         style={{
-                          border: '1px solid #f0f0f0',
-                          borderRadius: 12,
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-lg)',
                           overflow: 'hidden',
                           opacity: reorderingRemarkRules ? 0.7 : 1,
-                          background: '#fff',
+                          background: 'var(--bg-surface)',
+                          transition: 'opacity 0.25s var(--ease-out)',
                         }}
                       >
                         <Row
@@ -1345,9 +1347,11 @@ export default function RuleCenterPage() {
                           align="middle"
                           style={{
                             padding: '10px 12px',
-                            background: '#fafafa',
-                            borderBottom: '1px solid #f0f0f0',
+                            background: 'var(--bg-sunken)',
+                            borderBottom: '1px solid var(--divider-color)',
                             fontWeight: 600,
+                            fontSize: 13,
+                            color: 'var(--text-secondary)',
                           }}
                         >
                           <Col flex="40px">拖动</Col>
@@ -1393,13 +1397,13 @@ export default function RuleCenterPage() {
                         </DndContext>
 
                         {remarkRuleDrafts.length === 0 ? (
-                          <div style={{ padding: 16, color: '#8c8c8c' }}>
+                          <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-tertiary)' }}>
                             暂无备注招生类型规则
                           </div>
                         ) : null}
                       </div>
 
-                      <Card title="需要核查关键词" size="small" style={{ borderRadius: 14 }}>
+                      <Card title="需要核查关键词" size="small">
                         <Paragraph type="secondary" style={{ marginTop: 0 }}>
                           {exclusionKeywords.length === 0 ? (
                             <Tag>无</Tag>
@@ -1769,12 +1773,12 @@ function SortableRemarkRuleRow({
   const rowStyle: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.55 : 1,
-    background: isDirty ? '#fffbe6' : '#fff',
+    opacity: isDragging ? 0.6 : 1,
+    background: isDirty ? 'var(--color-warning-bg)' : 'var(--bg-surface)',
     zIndex: isDragging ? 10 : undefined,
     position: 'relative',
-    padding: '8px 12px',
-    borderBottom: '1px solid #f5f5f5',
+    padding: '10px 12px',
+    borderBottom: '1px solid var(--divider-color)',
   }
 
   return (
@@ -1822,11 +1826,16 @@ function SortableRemarkRuleRow({
       <Col span={5}>
         <Space size={8}>
           <Button
-            type="primary"
             size="small"
             loading={isSaving}
             disabled={!isAdminUser || !isDirty || isReordering}
             onClick={onSave}
+            style={{
+              background: isDirty ? 'var(--color-success)' : 'var(--bg-sunken)',
+              borderColor: isDirty ? 'var(--color-success)' : 'var(--border-color-strong)',
+              color: isDirty ? '#fff' : 'var(--text-tertiary)',
+              fontWeight: 500,
+            }}
           >
             保存
           </Button>
@@ -1836,6 +1845,7 @@ function SortableRemarkRuleRow({
             size="small"
             disabled={!isAdminUser || isSaving || isReordering}
             onClick={onDelete}
+            ghost={!isAdminUser}
           >
             删除
           </Button>

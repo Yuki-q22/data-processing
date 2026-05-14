@@ -158,7 +158,17 @@ export function mergeSubjectRequirements(
 export function normalizeLevel1(level1?: string): string | undefined {
   const raw = (level1 || '').trim()
   if (!raw) return undefined
-  if (raw === '专科') return '专科（高职）'
+
+  const compact = raw.replace(/\s+/g, '')
+
+  if (
+    compact === '专科' ||
+    compact === '专科（高职）' ||
+    compact === '专科(高职)'
+  ) {
+    return '专科(高职)'
+  }
+
   return raw
 }
 

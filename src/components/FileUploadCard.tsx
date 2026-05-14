@@ -28,7 +28,7 @@ export default function FileUploadCard(props: Props) {
   }
 
   return (
-    <Card title={title} style={{ borderRadius: 12 }}>
+    <Card title={title}>
       <Space direction="vertical" style={{ width: '100%' }} size={12}>
         <Dragger
           beforeUpload={handleBeforeUpload}

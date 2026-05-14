@@ -382,7 +382,7 @@ const saveManualSelection = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="专业组代码匹配" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title="专业组代码匹配" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           已按最新规则更新：按“学校名称 + 省份 + 一级层次 + 招生科类 + 招生批次 + 招生专业”构造组合键进行匹配；任一文件存在重复项则进入手动补充；2025 年及以后仅对河北、辽宁、山东、浙江、重庆、贵州、青海这些新高考但无专业组代码的省份同步转换选科要求与次选科目。
         </Paragraph>
@@ -470,7 +470,7 @@ const saveManualSelection = () => {
             </Card>
           </Space>
 
-          <Card title="筛选" style={{ borderRadius: 12 }}>
+          <Card title="筛选">
             <Space wrap>
               <Select
                 value={provinceFilter}
@@ -485,7 +485,7 @@ const saveManualSelection = () => {
             </Space>
           </Card>
 
-          <Card title="匹配结果预览" style={{ borderRadius: 12 }}>
+          <Card title="匹配结果预览">
             <Table<GroupCodeMatchRow>
               rowKey={(row) => row.rowId}
               dataSource={filteredRows}
@@ -535,7 +535,7 @@ const saveManualSelection = () => {
           </Card>
         </>
       ) : (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传并处理后，这里显示匹配结果" />
         </Card>
       )}

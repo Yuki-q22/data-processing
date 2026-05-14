@@ -1,0 +1,109 @@
+/*
+ * 数据处理工具平台 — 设计令牌 (Design Tokens)
+ * 风格定位：学术档案室 — 暖灰浅色主题
+ * 特点：纸质档案的秩序感、阅读温度、可信赖感
+ */
+
+:root {
+  /* === 字体系统 === */
+  --font-display: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-body: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+
+  /* === 背景色层级 === */
+  --bg-base: #f7f5f2;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #faf8f5;
+  --bg-sunken: #f0ece6;
+  --bg-overlay: rgba(26, 26, 26, 0.45);
+
+  /* === 文字色层级 === */
+  --text-primary: #1a1a1a;
+  --text-secondary: #595959;
+  --text-tertiary: #8c8c8c;
+  --text-disabled: #bfbfbf;
+  --text-inverse: #ffffff;
+  --text-link: #2c5282;
+  --text-link-hover: #1a365d;
+
+  /* === 品牌色 === */
+  --color-primary: #2c5282;
+  --color-primary-light: #e8f0f8;
+  --color-primary-hover: #1e3f6b;
+  --color-primary-active: #152d4f;
+
+  /* === 强调色 === */
+  --color-accent: #b87333;
+  --color-accent-light: #fdf3e8;
+  --color-accent-hover: #9c5f28;
+
+  /* === 功能色 === */
+  --color-success: #2f855a;
+  --color-success-bg: #f0fdf4;
+  --color-warning: #c05621;
+  --color-warning-bg: #fff7ed;
+  --color-error: #c53030;
+  --color-error-bg: #fef2f2;
+  --color-info: #2c5282;
+  --color-info-bg: #eff6ff;
+
+  /* === 边框与分割线 === */
+  --border-color: #e5e2dd;
+  --border-color-strong: #d6d3ce;
+  --divider-color: #eae7e2;
+
+  /* === 阴影系统 === */
+  --shadow-sm: 0 1px 2px rgba(26, 26, 26, 0.04);
+  --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.06);
+  --shadow-lg: 0 8px 24px rgba(26, 26, 26, 0.08);
+  --shadow-xl: 0 16px 48px rgba(26, 26, 26, 0.10);
+
+  /* === 圆角系统 === */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* === 间距系统（基础单位 4px） === */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* === 过渡曲线 === */
+  --ease-out: cubic-bezier(0.25, 0.1, 0.25, 1.0);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* === 深色模式（预留） === */
+[data-theme='dark'] {
+  --bg-base: #0f1729;
+  --bg-surface: #1a2035;
+  --bg-surface-hover: #222a42;
+  --bg-sunken: #131a2e;
+  --bg-overlay: rgba(0, 0, 0, 0.55);
+
+  --text-primary: #f0f0f0;
+  --text-secondary: #a3a3a3;
+  --text-tertiary: #737373;
+  --text-disabled: #525252;
+  --text-inverse: #1a1a1a;
+  --text-link: #6ba3d6;
+  --text-link-hover: #93c5e6;
+
+  --border-color: #2a3047;
+  --border-color-strong: #3a405c;
+  --divider-color: #222a42;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.35);
+}

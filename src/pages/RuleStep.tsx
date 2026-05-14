@@ -19,7 +19,7 @@ export default function RuleStep() {
   ]
 
   return (
-    <Card style={{ borderRadius: 12 }}>
+    <Card>
       <Tabs
         items={[
           {

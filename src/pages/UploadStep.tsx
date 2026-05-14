@@ -32,7 +32,7 @@ const DATA_SOURCE_OPTIONS = [
   '学业桥非普通',
 ]
 
-const YEAR_OPTIONS = ['2025', '2026', '2027']
+const YEAR_OPTIONS = ['2023', '2024', '2025', '2026', '2027']
 
 const REQUIRED_PLAN_FIELDS = [
   '年份',
@@ -225,7 +225,7 @@ export default function UploadStep() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <Card
         title="基础信息"
         extra={
@@ -233,7 +233,6 @@ export default function UploadStep() {
             重置
           </Button>
         }
-        style={{ borderRadius: 12 }}
       >
         <Row gutter={16}>
           <Col span={7}>
@@ -324,7 +323,7 @@ export default function UploadStep() {
         </Col>
       </Row>
 
-      <Card title="上传结果检查" style={{ borderRadius: 12 }}>
+      <Card title="上传结果检查">
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
           {scoreWorkbook ? (
             <Alert

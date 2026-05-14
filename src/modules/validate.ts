@@ -72,7 +72,7 @@ export function attachValidationIssues(
     ) {
       issues.push({
         code: 'score_order_invalid',
-        level: 'error',
+        level: 'warning',
         message: `最高分(${result.highestScore}) < 最低分(${result.lowestScore})`,
       })
     }
@@ -86,7 +86,7 @@ export function attachValidationIssues(
     ) {
       issues.push({
         code: 'score_order_invalid',
-        level: 'error',
+        level: 'warning',
         message: `平均分(${result.averageScore}) < 最低分(${result.lowestScore})`,
       })
     }
@@ -100,7 +100,7 @@ export function attachValidationIssues(
     ) {
       issues.push({
         code: 'score_order_invalid',
-        level: 'error',
+        level: 'warning',
         message: `最高分(${result.highestScore}) < 平均分(${result.averageScore})`,
       })
     }

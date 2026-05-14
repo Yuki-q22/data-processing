@@ -19,7 +19,7 @@ import { useRuleCenterStore } from '../stores/ruleCenterStore'
 import type { PlanRecord, ProcessedRecord, ValidationIssue } from '../types/record'
 import { buildProcessedRecords } from '../modules/match'
 import { attachValidationIssues } from '../modules/validate'
-import { getBestRemarkMatchedCandidate } from '../modules/manualMatchHint'
+import { getBestRemarkMatchedCandidate, getManualMatchRemarkScore } from '../modules/manualMatchHint'
 import {
   getIssueCodeLabel,
   getIssueLevelLabel,
@@ -42,7 +42,7 @@ const IMPORTANT_COMPARE_FIELDS: Array<{
   { label: '科类', current: 'subjectCategory', candidate: 'subjectCategory' },
   { label: '批次', current: 'batch', candidate: 'batch' },
   { label: '层次', current: 'level1', candidate: 'level1' },
-  { label: '类型', current: 'enrollmentType', candidate: 'enrollmentType' },
+  { label: '招生类型', current: 'enrollmentType', candidate: 'enrollmentType' },
   { label: '专业', current: 'majorName', candidate: 'majorName' },
   { label: '专业组代码', current: 'groupCode', candidate: 'groupCode' },
 ]
@@ -73,7 +73,7 @@ function buildCandidateRecommendReasons(
   })
 
   if (remarkBestMatch.bestScore >= 45 && remarkBestMatch.bestKey === String(candidate.rowId)) {
-    reasons.unshift({ label: `备注最相近 ${remarkBestMatch.bestScore}`, color: 'gold' })
+    reasons.unshift({ label: `备注/招生类型最相近 ${remarkBestMatch.bestScore}`, color: 'gold' })
   }
 
   if (activeRecord?.matchStatus === 'matched_multiple') {
@@ -217,24 +217,69 @@ export default function ExceptionStep() {
       activeRecord.result.majorRemark ??
       activeRecord.source.majorRemark ??
       ''
+    const currentEnrollmentType =
+      activeRecord.result.enrollmentType ??
+      activeRecord.source.enrollmentType ??
+      ''
 
     return getBestRemarkMatchedCandidate(
       {
         rowId: activeRecord.rowId,
         remark: currentRemark,
         majorRemark: currentRemark,
+        enrollmentType: currentEnrollmentType,
       },
       activeRecord.matchCandidates.map((candidate: PlanRecord) => {
         const candidateRemark = candidate.majorRemark ?? ''
+        const candidateEnrollmentType = candidate.enrollmentType ?? ''
 
         return {
           rowId: candidate.rowId,
           id: candidate.rowId,
           remark: candidateRemark,
           majorRemark: candidateRemark,
+          enrollmentType: candidateEnrollmentType,
         }
       })
     )
+  }, [activeRecord])
+
+  const activeCandidateRows = useMemo(() => {
+    if (!activeRecord?.matchCandidates?.length) return []
+
+    const currentRemark =
+      activeRecord.result.majorRemark ??
+      activeRecord.source.majorRemark ??
+      ''
+    const currentEnrollmentType =
+      activeRecord.result.enrollmentType ??
+      activeRecord.source.enrollmentType ??
+      ''
+
+    return [...activeRecord.matchCandidates]
+      .map((candidate) => {
+        const score = getManualMatchRemarkScore(
+          {
+            rowId: activeRecord.rowId,
+            remark: currentRemark,
+            majorRemark: currentRemark,
+            enrollmentType: currentEnrollmentType,
+          },
+          {
+            rowId: candidate.rowId,
+            id: candidate.rowId,
+            remark: candidate.majorRemark ?? '',
+            majorRemark: candidate.majorRemark ?? '',
+            enrollmentType: candidate.enrollmentType ?? '',
+          }
+        )
+
+        return {
+          candidate,
+          score,
+        }
+      })
+      .sort((a, b) => b.score - a.score)
   }, [activeRecord])
 
   const nextActionableRecord = useMemo(() => {
@@ -277,42 +322,42 @@ export default function ExceptionStep() {
     )
   }, [activeRowId, filteredRecords, exceptionRecords])
 
-const prevActionableRecord = useMemo(() => {
-  if (!activeRowId) return null
+  const prevActionableRecord = useMemo(() => {
+    if (!activeRowId) return null
 
-  const records = filteredRecords.length ? filteredRecords : exceptionRecords
-  const currentIndex = records.findIndex((item) => item.rowId === activeRowId)
+    const records = filteredRecords.length ? filteredRecords : exceptionRecords
+    const currentIndex = records.findIndex((item) => item.rowId === activeRowId)
 
-  const hasCandidates = (record: any) => !!record.matchCandidates?.length
+    const hasCandidates = (record: ProcessedRecord) => !!record.matchCandidates?.length
 
-  if (currentIndex >= 0) {
-    for (let i = currentIndex - 1; i >= 0; i -= 1) {
-      if (hasCandidates(records[i])) {
-        return records[i]
+    if (currentIndex >= 0) {
+      for (let i = currentIndex - 1; i >= 0; i -= 1) {
+        if (hasCandidates(records[i])) {
+          return records[i]
+        }
       }
     }
-  }
 
-  const currentRowNumber = Number(activeRowId)
+    const currentRowNumber = Number(activeRowId)
 
-  if (!Number.isNaN(currentRowNumber)) {
-    const prevByRowId = records
-      .filter((item) => {
-        const rowNumber = Number(item.rowId)
+    if (!Number.isNaN(currentRowNumber)) {
+      const prevByRowId = records
+        .filter((item) => {
+          const rowNumber = Number(item.rowId)
 
-        return (
-          !Number.isNaN(rowNumber) &&
-          rowNumber < currentRowNumber &&
-          hasCandidates(item)
-        )
-      })
-      .sort((a, b) => Number(b.rowId) - Number(a.rowId))[0]
+          return (
+            !Number.isNaN(rowNumber) &&
+            rowNumber < currentRowNumber &&
+            hasCandidates(item)
+          )
+        })
+        .sort((a, b) => Number(b.rowId) - Number(a.rowId))[0]
 
-    if (prevByRowId) return prevByRowId
-  }
+      if (prevByRowId) return prevByRowId
+    }
 
-  return null
-}, [activeRowId, filteredRecords, exceptionRecords])
+    return null
+  }, [activeRowId, filteredRecords, exceptionRecords])
 
   const rebuildWithManualSelections = (
     nextManualSelections: Record<string, string>
@@ -605,7 +650,7 @@ const goNextRecord = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="异常筛选" style={{ borderRadius: 12 }}>
+      <Card title="异常筛选">
         <Space wrap size={12}>
           <Input
             allowClear
@@ -665,7 +710,6 @@ const goNextRecord = () => {
 
       <Card
         title={`异常处理（共 ${filteredRecords.length} 条）`}
-        style={{ borderRadius: 12 }}
       >
         {filteredRecords.length === 0 ? (
           <Empty description="暂无符合条件的异常数据" />
@@ -750,7 +794,7 @@ const goNextRecord = () => {
               extra={
                 <Space>
                   {remarkBestMatch.bestScore >= 45 ? (
-                    <Tag color="gold">已按备注高亮最相近候选</Tag>
+                    <Tag color="gold">已按备注/招生类型高亮最相近候选</Tag>
                   ) : null}
 
                   {activeSelectedId ? (
@@ -763,21 +807,21 @@ const goNextRecord = () => {
                   ) : null}
 
                   <Button
-  size="small"
-  onClick={goPrevRecord}
-  disabled={!prevActionableRecord}
->
-  上一条
-</Button>
+                    size="small"
+                    onClick={goPrevRecord}
+                    disabled={!prevActionableRecord}
+                  >
+                    上一条
+                  </Button>
 
-<Button
-  size="small"
-  type="primary"
-  onClick={goNextRecord}
-  disabled={!nextActionableRecord}
->
-  下一条
-</Button>
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={goNextRecord}
+                    disabled={!nextActionableRecord}
+                  >
+                    下一条
+                  </Button>
                 </Space>
               }
             >
@@ -792,7 +836,7 @@ const goNextRecord = () => {
                   }
                 >
                   <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                    {activeRecord.matchCandidates.map((candidate: PlanRecord) => {
+                    {activeCandidateRows.map(({ candidate, score }) => {
                       const selected = activeSelectedId === candidate.rowId
 
                       const isBestRemarkMatch =
@@ -810,6 +854,13 @@ const goNextRecord = () => {
                           key={candidate.rowId}
                           size="small"
                           hoverable
+                          className={
+                            selected
+                              ? 'candidate-card candidate-selected'
+                              : isBestRemarkMatch
+                                ? 'candidate-card candidate-best'
+                                : 'candidate-card'
+                          }
                           onClick={() =>
                             handleApplyManual(
                               activeRecord.rowId,
@@ -818,14 +869,7 @@ const goNextRecord = () => {
                           }
                           style={{
                             cursor: 'pointer',
-                            border: selected
-                              ? '1px solid #1677ff'
-                              : isBestRemarkMatch
-                                ? '1px solid #faad14'
-                                : undefined,
-                            background: isBestRemarkMatch
-                              ? '#fffbe6'
-                              : undefined,
+                            transition: 'all 0.25s var(--ease-out)',
                           }}
                         >
                           <Radio
@@ -844,9 +888,17 @@ const goNextRecord = () => {
                                 {candidate.majorName || '-'}
                               </span>
 
+                              <Tag color={candidate.groupCode ? 'purple' : 'default'}>
+                                专业组代码：{candidate.groupCode || '-'}
+                              </Tag>
+
+                              {score > 0 ? (
+                                <Tag>相似度 {score}</Tag>
+                              ) : null}
+
                               {isBestRemarkMatch ? (
                                 <Tag color="gold">
-                                  备注最相近 {remarkBestMatch.bestScore}
+                                  备注/招生类型最相近 {remarkBestMatch.bestScore}
                                 </Tag>
                               ) : null}
 
@@ -880,6 +932,7 @@ const goNextRecord = () => {
                             </div>
                             <div>省份：{candidate.province || '-'}</div>
                             <div>科类：{candidate.subjectCategory || '-'}</div>
+                            <div>专业组代码：{candidate.groupCode || '-'}</div>
                             <div>备注：{candidate.majorRemark || '-'}</div>
                             <div>批次：{candidate.batch || '-'}</div>
                             <div>层次：{candidate.level1 || '-'}</div>

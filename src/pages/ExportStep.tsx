@@ -137,10 +137,10 @@ export default function ExportStep() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Card title="导出结果" style={{ borderRadius: 12 }}>
+      <Card title="导出结果">
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Paragraph style={{ marginBottom: 0 }}>
-            导出时仅导出通过基础校验的数据（不包含 error 级别问题的数据）。规则中心的学校/专业规则校验结果会写入导出模板最后两列，并在下方提前预览。
+            导出时仅拦截必要字段缺失、数据来源非法等阻断性错误；最高分/最低分/平均分顺序错误只做标注，仍可导出。规则中心的学校/专业规则校验结果会写入导出模板最后两列，并在下方提前预览。
           </Paragraph>
 
           <Space wrap size={16}>
@@ -177,7 +177,7 @@ export default function ExportStep() {
         </Space>
       </Card>
 
-      <Card title={`导出前学校/专业规则校验预览（异常 ${ruleSummary.issueRows} 条）`} style={{ borderRadius: 12 }}>
+      <Card title={`导出前学校/专业规则校验预览（异常 ${ruleSummary.issueRows} 条）`}>
         {!exportable.length ? (
           <Empty description="暂无可导出记录" />
         ) : issuePreviewRows.length === 0 ? (

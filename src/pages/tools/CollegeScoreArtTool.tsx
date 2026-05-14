@@ -171,7 +171,7 @@ export default function CollegeScoreArtTool() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="院校分提取（艺体类）" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title="院校分提取（艺体类）" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           已按最新规则更新：从 B2 读取年份、从第 3 行读取正文、校验固定列、按分组规则取最低分代表行，并导出成院校分模板。
         </Paragraph>
@@ -226,7 +226,7 @@ export default function CollegeScoreArtTool() {
             </Card>
           </Space>
 
-          <Card title="字段检查" style={{ borderRadius: 12 }}>
+          <Card title="字段检查">
             {result.missingColumns.length > 0 ? (
               <Alert
                 type="warning"
@@ -244,7 +244,7 @@ export default function CollegeScoreArtTool() {
             )}
           </Card>
 
-          <Card title="处理结果预览" style={{ borderRadius: 12 }}>
+          <Card title="处理结果预览">
             {previewRows.length > 0 ? (
               <Table<PreviewRow>
                 rowKey={buildRowKey}
@@ -259,7 +259,7 @@ export default function CollegeScoreArtTool() {
           </Card>
         </>
       ) : (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传并处理后，这里显示提取结果预览" />
         </Card>
       )}

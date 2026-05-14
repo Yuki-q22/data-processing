@@ -102,7 +102,7 @@ export default function EmploymentReportImageTool() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="就业质量报告图片提取" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title="就业质量报告图片提取" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           输入就业质量报告网页链接，提取静态页面中的图片，预览后合成 PDF 下载。
         </Paragraph>
@@ -147,7 +147,7 @@ export default function EmploymentReportImageTool() {
         </Space>
       )}
 
-      <Card title="图片预览" style={{ borderRadius: 12 }}>
+      <Card title="图片预览">
         {loading ? (
           <div style={{ padding: '40px 0', textAlign: 'center' }}>
             <Spin tip="正在抓取图片..." />

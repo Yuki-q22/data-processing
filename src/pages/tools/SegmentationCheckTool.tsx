@@ -56,7 +56,7 @@ export default function SegmentationCheckTool() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="一分一段校验" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title="一分一段校验" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           这个页面会做年份校验、自动补断点、自动补人数，并在表中写入累计人数校验结果与分数校验结果。
         </Paragraph>
@@ -91,7 +91,7 @@ export default function SegmentationCheckTool() {
             </Card>
           </Space>
 
-          <Card title="处理摘要" style={{ borderRadius: 12 }}>
+          <Card title="处理摘要">
             <Descriptions column={1}>
               <Descriptions.Item label="年份校验结果">
                 {result.summary.yearCheck}
@@ -100,7 +100,7 @@ export default function SegmentationCheckTool() {
           </Card>
         </>
       ) : (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传并处理后，这里显示一分一段校验摘要" />
         </Card>
       )}

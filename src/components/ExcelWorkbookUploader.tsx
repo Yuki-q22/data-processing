@@ -25,7 +25,7 @@ export function ExcelWorkbookUploader({
   onSheetChange,
 }: ExcelWorkbookUploaderProps) {
   return (
-    <Card title={title} style={{ borderRadius: 12 }}>
+    <Card title={title}>
       <Space direction="vertical" style={{ width: '100%' }} size={12}>
         {description ? <Text type="secondary">{description}</Text> : null}
 

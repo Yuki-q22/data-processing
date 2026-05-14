@@ -39,6 +39,35 @@ function mapRowByMappings(
   return result
 }
 
+function normalizeRemarkWithChineseBrackets(value?: string): string | undefined {
+  const text = sanitizeText(value)?.replace(/\(/g, '（').replace(/\)/g, '）').trim()
+  if (!text) return undefined
+
+  const startsWithBracket = text.startsWith('（')
+  const endsWithBracket = text.endsWith('）')
+
+  if (startsWithBracket && endsWithBracket) return text
+  return `（${text.replace(/^（+/, '').replace(/）+$/, '')}）`
+}
+
+function mergeMajorRemarks(...values: Array<string | undefined>): string | undefined {
+  const seen = new Set<string>()
+  const parts: string[] = []
+
+  values.forEach((value) => {
+    const text = sanitizeText(value)?.replace(/\(/g, '（').replace(/\)/g, '）').trim()
+    if (!text) return
+
+    const key = text.replace(/[（）\s]/g, '')
+    if (seen.has(key)) return
+
+    seen.add(key)
+    parts.push(text)
+  })
+
+  return parts.join('') || undefined
+}
+
 type StandardizeOptions = {
   provinceRules: Record<string, string>
   categoryRules: Record<string, string>
@@ -69,8 +98,8 @@ export function buildScoreRecords(
     )
 
     const splitMajor = splitMajorNameAndRemark(toText(mapped['招生专业']))
-    const explicitRemark = sanitizeText(toText(mapped['专业备注']))
-    const finalRemark = explicitRemark || splitMajor.majorRemark
+    const explicitRemark = normalizeRemarkWithChineseBrackets(toText(mapped['专业备注']))
+    const finalRemark = mergeMajorRemarks(splitMajor.majorRemark, explicitRemark)
     const extractedType = extractEnrollmentTypeFromRemark(finalRemark, options.remarkTypeRules)
 
     const schoolName =
@@ -153,7 +182,7 @@ export function buildPlanRecords(
 
     const splitMajor = splitMajorNameAndRemark(toText(mapped['招生专业']))
     const explicitRemark = sanitizeText(toText(mapped['专业备注']))
-    const finalRemark = explicitRemark || splitMajor.majorRemark
+    const finalRemark = mergeMajorRemarks(splitMajor.majorRemark, explicitRemark)
     const extractedType = extractEnrollmentTypeFromRemark(finalRemark, options.remarkTypeRules)
 
     const schoolName =

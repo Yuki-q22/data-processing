@@ -287,7 +287,7 @@ export default function MappingStep() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="字段映射说明" style={{ borderRadius: 12 }}>
+      <Card title="字段映射说明">
         <Paragraph style={{ marginBottom: 12 }}>
           上传文件或切换 Sheet 后会自动生成字段映射。这里可以手工调整字段映射，修改后点击“应用当前映射”，第四步预览会重新生成。
         </Paragraph>
@@ -300,7 +300,7 @@ export default function MappingStep() {
         </Space>
       </Card>
 
-      <Card title="原始专业分字段映射" style={{ borderRadius: 12 }}>
+      <Card title="原始专业分字段映射">
         <Table
           rowKey="sourceField"
           columns={commonColumns('score')}
@@ -310,7 +310,7 @@ export default function MappingStep() {
         />
       </Card>
 
-      <Card title="招生计划字段映射" style={{ borderRadius: 12 }}>
+      <Card title="招生计划字段映射">
         <Table
           rowKey="sourceField"
           columns={commonColumns('plan')}

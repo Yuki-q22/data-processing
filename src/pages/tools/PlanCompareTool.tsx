@@ -454,7 +454,7 @@ export default function PlanCompareTool() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontSize: 15 }}>
-      <Card title={<span style={cardTitleStyle}>招生计划数据比对与转换</span>} extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title={<span style={cardTitleStyle}>招生计划数据比对与转换</span>} extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph style={paragraphStyle}>
           已按规则文档更新：支持招生计划 vs 专业分、招生计划 vs 院校分两组比对；按文档指定组合键检查是否存在，并将招生计划中未匹配的数据导出为对应模板。专业组选科要求和新高考选科要求会先合并，`^` 符号会先去掉再参与匹配与导出。
         </Paragraph>
@@ -550,7 +550,7 @@ export default function PlanCompareTool() {
             result.missingScoreHeaders.length > 0 ||
             result.missingCollegeHeaders.length > 0 ||
             result.enrollmentCodeWarnings.length > 0) && (
-            <Card title={<span style={cardTitleStyle}>字段校验</span>} style={{ borderRadius: 12 }}>
+            <Card title={<span style={cardTitleStyle}>字段校验</span>}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 {result.missingPlanHeaders.length > 0 ? (
                   <Alert
@@ -591,7 +591,7 @@ export default function PlanCompareTool() {
             </Card>
           )}
 
-          <Card title={<span style={cardTitleStyle}>差异原因统计</span>} style={{ borderRadius: 12 }}>
+          <Card title={<span style={cardTitleStyle}>差异原因统计</span>}>
             {result.differenceReasonSummary.length ? (
               <Table<DifferenceReasonSummaryItem>
                 rowKey={(row) => `${row.target}_${row.reason}`}
@@ -605,7 +605,7 @@ export default function PlanCompareTool() {
             )}
           </Card>
 
-          <Card title={<span style={cardTitleStyle}>筛选</span>} style={{ borderRadius: 12 }}>
+          <Card title={<span style={cardTitleStyle}>筛选</span>}>
             <Space wrap>
               <Select
                 value={provinceFilter}
@@ -637,7 +637,7 @@ export default function PlanCompareTool() {
             </Space>
           </Card>
 
-          <Card title={<span style={cardTitleStyle}>比对结果</span>} style={{ borderRadius: 12 }}>
+          <Card title={<span style={cardTitleStyle}>比对结果</span>}>
             <Tabs
               items={[
                 {
@@ -747,7 +747,7 @@ export default function PlanCompareTool() {
             />
           </Card>
 
-          <Card title={<span style={cardTitleStyle}>导出说明</span>} style={{ borderRadius: 12 }}>
+          <Card title={<span style={cardTitleStyle}>导出说明</span>}>
             <Paragraph style={paragraphStyle}>
               <Text strong style={{ fontSize: 15 }}>专业分模板导出：</Text>
               从“招生计划 vs 专业分”中提取未匹配记录，并按文档映射填入专业分模板；其中 `^` 会被去掉，`专科` 会转为 `专科(高职)`，首选科目、选科要求、次选科目按文档规则转换。
@@ -763,7 +763,7 @@ export default function PlanCompareTool() {
           </Card>
         </>
       ) : (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传文件并开始比对后，这里显示结果" />
         </Card>
       )}

@@ -205,7 +205,7 @@ export default function CollegeScoreNormalTool() {
             重置
           </Button>
         )}
-        style={{ borderRadius: 12 }}
+       
       >
         <Paragraph>
           支持两种导入模板：专业分原始模板、专业分库中导出模板。导出结果仍保持院校分模板格式不变，省控线科类和省控线批次继续按现有规则自动填充。
@@ -296,7 +296,7 @@ export default function CollegeScoreNormalTool() {
             </Card>
           </Space>
 
-          <Card title="字段检查" style={{ borderRadius: 12 }}>
+          <Card title="字段检查">
             {result.missingColumns.length > 0 ? (
               <Alert
                 type="warning"
@@ -314,7 +314,7 @@ export default function CollegeScoreNormalTool() {
             )}
           </Card>
 
-          <Card title="处理结果预览" style={{ borderRadius: 12 }}>
+          <Card title="处理结果预览">
             {previewRows.length > 0 ? (
               <Table<PreviewRow>
                 rowKey={buildRowKey}
@@ -329,7 +329,7 @@ export default function CollegeScoreNormalTool() {
           </Card>
         </>
       ) : (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传并处理后，这里显示提取结果预览" />
         </Card>
       )}

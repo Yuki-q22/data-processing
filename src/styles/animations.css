@@ -1,0 +1,116 @@
+/*
+ * 全局过渡动画与微交互
+ */
+
+/* === 页面/步骤切换进入动画 === */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* === 内容进入动画类 === */
+.animate-enter {
+  animation: fadeSlideUp 0.35s var(--ease-out) forwards;
+}
+
+.animate-enter-delay-1 {
+  animation: fadeSlideUp 0.35s var(--ease-out) 0.05s both;
+}
+
+.animate-enter-delay-2 {
+  animation: fadeSlideUp 0.35s var(--ease-out) 0.1s both;
+}
+
+.animate-enter-delay-3 {
+  animation: fadeSlideUp 0.35s var(--ease-out) 0.15s both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s var(--ease-out) forwards;
+}
+
+/* === 卡片/区域悬停提升 === */
+.hover-lift {
+  transition: transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out);
+}
+
+.hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* === 按钮微交互 === */
+.btn-interactive {
+  transition: transform 0.15s var(--ease-out), background-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+}
+
+.btn-interactive:active {
+  transform: scale(0.97);
+}
+
+/* === 菜单项悬停 === */
+.menu-item-interactive {
+  transition: background-color 0.2s var(--ease-out), color 0.2s var(--ease-out), padding-left 0.2s var(--ease-out);
+}
+
+.menu-item-interactive:hover {
+  padding-left: 4px;
+}
+
+/* === 表格行动画 === */
+.table-row-enter {
+  animation: fadeSlideUp 0.2s var(--ease-out) forwards;
+}
+
+/* === 骨架屏脉冲 === */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.skeleton-pulse {
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+/* === 状态闪烁（用于上传成功等提示） === */
+@keyframes highlightFlash {
+  0% { box-shadow: 0 0 0 0 rgba(47, 133, 90, 0.35); }
+  70% { box-shadow: 0 0 0 8px rgba(47, 133, 90, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(47, 133, 90, 0); }
+}
+
+.flash-success {
+  animation: highlightFlash 0.8s var(--ease-out);
+}
+
+@keyframes highlightFlashWarning {
+  0% { box-shadow: 0 0 0 0 rgba(192, 86, 33, 0.35); }
+  70% { box-shadow: 0 0 0 8px rgba(192, 86, 33, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(192, 86, 33, 0); }
+}
+
+.flash-warning {
+  animation: highlightFlashWarning 0.8s var(--ease-out);
+}

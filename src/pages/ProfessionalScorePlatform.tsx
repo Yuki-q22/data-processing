@@ -1,4 +1,4 @@
-import { Button, Card, Space, Steps, message } from 'antd'
+import { Button, Space, Steps, message } from 'antd'
 import { useState } from 'react'
 
 import UploadStep from './UploadStep'
@@ -93,36 +93,36 @@ export default function ProfessionalScorePlatform() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card
-        style={{ borderRadius: 12 }}
-        extra={
-          <Space>
-            <Button disabled={current === 0} onClick={handlePrev}>
-              上一步
-            </Button>
-            <Button
-              type="primary"
-              disabled={current === stepItems.length - 1}
-              onClick={handleNext}
-            >
-              下一步
-            </Button>
-            <Button danger onClick={handleResetPlatform}>
-              重置
-            </Button>
-          </Space>
-        }
-      >
-        <Steps current={current} onChange={changeStep} items={stepItems} />
-      </Card>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 400 }}>
+          <Steps current={current} onChange={changeStep} items={stepItems} />
+        </div>
+        <Space>
+          <Button disabled={current === 0} onClick={handlePrev}>
+            上一步
+          </Button>
+          <Button
+            type="primary"
+            disabled={current === stepItems.length - 1}
+            onClick={handleNext}
+          >
+            下一步
+          </Button>
+          <Button danger onClick={handleResetPlatform}>
+            重置
+          </Button>
+        </Space>
+      </div>
 
-      {current === 0 && <UploadStep />}
-      {current === 1 && <MappingStep />}
-      {current === 2 && <RuleStep />}
-      {current === 3 && <PreviewStep />}
-      {current === 4 && <ExceptionStep />}
-      {current === 5 && <ExportStep />}
+      <div className="animate-enter">
+        {current === 0 && <UploadStep />}
+        {current === 1 && <MappingStep />}
+        {current === 2 && <RuleStep />}
+        {current === 3 && <PreviewStep />}
+        {current === 4 && <ExceptionStep />}
+        {current === 5 && <ExportStep />}
+      </div>
     </div>
   )
 }

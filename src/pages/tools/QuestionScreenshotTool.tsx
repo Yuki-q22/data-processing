@@ -312,7 +312,7 @@ export default function QuestionScreenshotTool() {
       <Card
         title="高考真题题目截图"
         extra={<Button danger onClick={handleResetPage}>重置</Button>}
-        style={{ borderRadius: 12 }}
+       
       >
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Alert
@@ -330,7 +330,7 @@ export default function QuestionScreenshotTool() {
             <p className="ant-upload-hint">适合由 Word/WPS 转换出来的文档版 PDF；纯扫描 PDF 可能无法识别题号。</p>
           </Dragger>
 
-          <Card size="small" title="裁剪参数" style={{ borderRadius: 12 }}>
+          <Card size="small" title="裁剪参数">
             <Space wrap align="end" size={16}>
               <OptionNumberInput
                 label="清晰度"
@@ -402,7 +402,7 @@ export default function QuestionScreenshotTool() {
       </Card>
 
       {loading ? (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Progress percent={60} status="active" showInfo={false} />
           <Paragraph style={{ marginTop: 12, marginBottom: 0 }}>正在解析 PDF 和识别题号...</Paragraph>
         </Card>
@@ -441,7 +441,7 @@ export default function QuestionScreenshotTool() {
                 导出全部题目截图 ZIP
               </Button>
             }
-            style={{ borderRadius: 12 }}
+           
           >
             <Descriptions size="small" column={2}>
               <Descriptions.Item label="文件名">{project.fileName}</Descriptions.Item>
@@ -463,7 +463,7 @@ export default function QuestionScreenshotTool() {
             ) : null}
           </Card>
 
-          <Card title="题目截图计划" style={{ borderRadius: 12 }}>
+          <Card title="题目截图计划">
             <Table<QuestionCropPlan>
               rowKey="id"
               dataSource={project.questions}
@@ -492,7 +492,7 @@ export default function QuestionScreenshotTool() {
             />
           </Card>
 
-          <Card title="单题预览" style={{ borderRadius: 12 }}>
+          <Card title="单题预览">
             {previewQuestion && previewUrl ? (
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 <Descriptions size="small" column={2}>
@@ -516,7 +516,7 @@ export default function QuestionScreenshotTool() {
             )}
           </Card>
 
-          <Card title="识别详情" style={{ borderRadius: 12 }}>
+          <Card title="识别详情">
             <Tabs
               destroyOnHidden
               items={[
@@ -553,7 +553,7 @@ export default function QuestionScreenshotTool() {
           </Card>
         </>
       ) : !loading ? (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传 PDF 后，这里显示题号识别结果和导出计划" />
         </Card>
       ) : null}

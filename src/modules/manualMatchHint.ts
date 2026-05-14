@@ -6,6 +6,8 @@ type RemarkLikeInput = {
   备注?: unknown
   majorRemark?: unknown
   planRemark?: unknown
+  enrollmentType?: unknown
+  招生类型?: unknown
 }
 
 function toText(value: unknown) {
@@ -21,13 +23,26 @@ function normalizeText(value: unknown) {
     .toLowerCase()
 }
 
-/**
- * 只收集备注字段。
- * 不使用专业名称、层次、招生类型、方向、批次，避免干扰备注相似度。
- */
 function collectRemarkText(record: RemarkLikeInput) {
   return [record.remark, record.备注, record.majorRemark, record.planRemark]
     .map(toText)
+    .filter(Boolean)
+    .join(' ')
+}
+
+function collectEnrollmentTypeText(record: RemarkLikeInput) {
+  return [record.enrollmentType, record.招生类型]
+    .map(toText)
+    .filter(Boolean)
+    .join(' ')
+}
+
+/**
+ * 人工匹配候选相似度使用：备注 + 招生类型。
+ * 不使用专业名称、层次、方向、批次，避免专业名称过强导致备注相近项被压低。
+ */
+function collectCompareText(record: RemarkLikeInput) {
+  return [collectRemarkText(record), collectEnrollmentTypeText(record)]
     .filter(Boolean)
     .join(' ')
 }
@@ -156,6 +171,9 @@ function splitUsefulTokens(value: unknown) {
     '学费待定',
     '学费',
     '待定',
+    '普通类',
+    '特殊类型',
+    '提前批',
   ]
 
   keywordList.forEach((keyword) => {
@@ -248,6 +266,17 @@ function getStrongKeywordScore(recordText: string, candidateText: string) {
   return score
 }
 
+function getEnrollmentTypeScore(currentRecord: RemarkLikeInput, candidate: RemarkLikeInput) {
+  const currentType = normalizeText(collectEnrollmentTypeText(currentRecord))
+  const candidateType = normalizeText(collectEnrollmentTypeText(candidate))
+
+  if (!currentType || !candidateType) return 0
+  if (currentType === candidateType) return 130
+  if (currentType.includes(candidateType) || candidateType.includes(currentType)) return 80
+
+  return getTextSimilarityScore(currentType, candidateType)
+}
+
 function getTokenCoverageScore(recordTokens: string[], candidateTokens: string[], candidateText: string) {
   let score = 0
 
@@ -276,8 +305,10 @@ export function getManualMatchRemarkScore(
   currentRecord: RemarkLikeInput,
   candidate: RemarkLikeInput
 ) {
-  const recordRawText = collectRemarkText(currentRecord)
-  const candidateRawText = collectRemarkText(candidate)
+  const recordRemarkText = collectRemarkText(currentRecord)
+  const candidateRemarkText = collectRemarkText(candidate)
+  const recordRawText = collectCompareText(currentRecord)
+  const candidateRawText = collectCompareText(candidate)
 
   const recordText = normalizeText(recordRawText)
   const candidateText = normalizeText(candidateRawText)
@@ -308,12 +339,27 @@ export function getManualMatchRemarkScore(
 
   score += getTokenCoverageScore(recordTokens, candidateTokens, candidateText)
   score += getStrongKeywordScore(recordText, candidateText)
+  score += getEnrollmentTypeScore(currentRecord, candidate)
 
   /**
    * 长备注兜底：即使没有完整关键词命中，也按中文连续片段相似度给分。
    * 解决“备注很长但核心内容相近时无法高亮”的问题。
    */
   score += getTextSimilarityScore(recordText, candidateText)
+
+  /**
+   * 只在双方都有备注时，额外计算备注本身的相似度。
+   * 这样招生类型一致不会被长空备注稀释，备注一致也能优先高亮。
+   */
+  const normalizedRecordRemark = normalizeText(recordRemarkText)
+  const normalizedCandidateRemark = normalizeText(candidateRemarkText)
+
+  if (normalizedRecordRemark && normalizedCandidateRemark) {
+    if (normalizedRecordRemark === normalizedCandidateRemark) score += 160
+    if (normalizedCandidateRemark.includes(normalizedRecordRemark)) score += 120
+    if (normalizedRecordRemark.includes(normalizedCandidateRemark)) score += 80
+    score += getTextSimilarityScore(normalizedRecordRemark, normalizedCandidateRemark)
+  }
 
   /**
    * 明确业务词额外加权。

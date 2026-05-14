@@ -285,7 +285,7 @@ function RemarkTypeExtractPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="备注招生类型提取" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title="备注招生类型提取" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           这个功能按规则中心里的“备注招生类型规则”和“需要核查关键词”处理备注列。若备注命中“需要核查关键词”，系统只标记需要核查，不再提取招生类型，避免把“不含、除外、没有、除”等否定语境误判为招生类型。
         </Paragraph>
@@ -338,7 +338,7 @@ function RemarkTypeExtractPanel() {
             <Card><Statistic title="需要核查" value={result.summary.needReview} /></Card>
           </Space>
 
-          <Card title="结果预览" style={{ borderRadius: 12 }}>
+          <Card title="结果预览">
             <Table
               rowKey="rowId"
               dataSource={result.rows}
@@ -349,7 +349,7 @@ function RemarkTypeExtractPanel() {
           </Card>
         </>
       ) : (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传并处理后，这里显示备注招生类型提取结果" />
         </Card>
       )}
@@ -457,7 +457,7 @@ function RemarkCleanPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="备注处理" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title="备注处理" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           单独复用学业桥专业分中的备注处理逻辑，对所选备注字段进行括号修复、错字修正、空括号删除、重复括号内容去重、标点压缩等处理。
         </Paragraph>
@@ -520,14 +520,14 @@ function RemarkCleanPanel() {
             </Card>
           </Space>
 
-          <Card title="字段检查" style={{ borderRadius: 12 }}>
+          <Card title="字段检查">
             <Descriptions size="small" column={2}>
               <Descriptions.Item label="识别字段数">{result.detectedHeaders.length}</Descriptions.Item>
               <Descriptions.Item label="当前备注字段">{result.remarkField}</Descriptions.Item>
             </Descriptions>
           </Card>
 
-          <Card title="备注处理预览" style={{ borderRadius: 12 }}>
+          <Card title="备注处理预览">
             {result.previewRows.length > 0 ? (
               <Table<RemarkPreviewRow>
                 rowKey="rowId"
@@ -542,7 +542,7 @@ function RemarkCleanPanel() {
           </Card>
         </>
       ) : (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传并处理后，这里显示备注处理结果预览" />
         </Card>
       )}

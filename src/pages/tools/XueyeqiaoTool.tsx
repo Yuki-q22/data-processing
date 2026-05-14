@@ -286,7 +286,7 @@ function XueyeqiaoConvertPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="学业桥专业分转换" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title="学业桥专业分转换" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           按第一行表头读取学业桥数据，校验字段、处理学校名称规则、按批次和学校名称推断一级层次、解析报考要求、生成专业组代码、处理备注，并导出成专业分模板。
         </Paragraph>
@@ -335,7 +335,7 @@ function XueyeqiaoConvertPanel() {
             </Card>
           </Space>
 
-          <Card title="字段检查" style={{ borderRadius: 12 }}>
+          <Card title="字段检查">
             {result.missingColumns.length > 0 ? (
               <Alert type="warning" showIcon message="字段不完整" description={`缺少字段：${result.missingColumns.join('、')}`} />
             ) : (
@@ -343,7 +343,7 @@ function XueyeqiaoConvertPanel() {
             )}
           </Card>
 
-          <Card title="处理结果预览" style={{ borderRadius: 12 }}>
+          <Card title="处理结果预览">
             {previewRows.length > 0 ? (
               <Table<XueyeqiaoPreviewRow>
                 rowKey={buildXueyeqiaoRowKey}
@@ -358,7 +358,7 @@ function XueyeqiaoConvertPanel() {
           </Card>
         </>
       ) : (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传并处理后，这里显示转换结果预览" />
         </Card>
       )}
@@ -446,7 +446,7 @@ function LibraryTemplateConvertPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="专业分导出专业分模板转换" extra={<Button danger onClick={handleResetPage}>重置</Button>} style={{ borderRadius: 12 }}>
+      <Card title="专业分导出专业分模板转换" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           将专业分导出模板转换为专业分导入模板
         </Paragraph>
@@ -498,7 +498,7 @@ function LibraryTemplateConvertPanel() {
             </Card>
           </Space>
 
-          <Card title="字段检查" style={{ borderRadius: 12 }}>
+          <Card title="字段检查">
             {result.missingColumns.length > 0 ? (
               <Alert type="warning" showIcon message="字段不完整" description={`缺少字段：${result.missingColumns.join('、')}`} />
             ) : (
@@ -506,7 +506,7 @@ function LibraryTemplateConvertPanel() {
             )}
           </Card>
 
-          <Card title="转换结果预览" style={{ borderRadius: 12 }}>
+          <Card title="转换结果预览">
             {result.previewRows.length > 0 ? (
               <Table<LibraryProfessionalScorePreviewRow>
                 rowKey={buildLibraryRowKey}
@@ -521,7 +521,7 @@ function LibraryTemplateConvertPanel() {
           </Card>
         </>
       ) : (
-        <Card style={{ borderRadius: 12 }}>
+        <Card>
           <Empty description="上传并转换后，这里显示结果预览" />
         </Card>
       )}
