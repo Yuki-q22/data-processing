@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
 import * as XLSX from 'xlsx'
 import * as pdfjsLib from 'pdfjs-dist'
+import { parseSegmentationTableRows, parseSegmentationText as parseSegmentationPlainText, type SegmentationParsedRow } from './segmentationParsers'
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc
@@ -20,7 +21,7 @@ type SegmentationProcessResult = {
     insertedGapRows: number
     autoFilledCountRows: number
     extractedRows: number
-    sourceType: 'excel' | 'pdf'
+    sourceType: 'excel' | 'pdf' | 'paste'
     detectedFormat?: string
   }
 }
@@ -513,31 +514,20 @@ async function buildWorkbookFromPdf(buffer: ArrayBuffer, meta?: SegmentationMeta
   ].filter((item) => item.rows.length)
 
   if (!candidates.length) {
-    throw new Error('PDF 未识别到有效的一分一段数据。当前前端 PDF 识别主要支持吉林、贵州这类文本型 PDF；扫描件或复杂表格建议先转换为 Excel 后上传。')
+    throw new Error('PDF 未识别到有效的一分一段数据。当前仅保留原有文本型 PDF 识别能力；图片型 PDF、扫描件或复杂表格请先用外部 OCR 识别为表格文本，再粘贴到本页面处理。')
   }
 
   const selected = candidates.sort((a, b) => (b.priority + b.rows.length) - (a.priority + a.rows.length))[0]
-  const convertedRows = calculateSegmentCounts(selected.rows)
+  const built = buildWorkbookFromCumulativeRows(selected.rows, meta)
 
-  const workbook = new ExcelJS.Workbook()
-  const worksheet = workbook.addWorksheet('一分一段')
-  applyTemplateHeaders(worksheet)
-  applyMetaToWorksheet(worksheet, meta)
   if (!inputProvince && inferredProvince) {
-    worksheet.getCell('B3').value = inferredProvince
+    built.workbook.worksheets[0].getCell('B3').value = inferredProvince
   }
 
-  convertedRows.forEach((item, index) => {
-    const row = index + 8
-    worksheet.getCell(`A${row}`).value = item.score
-    worksheet.getCell(`B${row}`).value = item.segment
-    worksheet.getCell(`C${row}`).value = item.cumulative
-  })
-
   return {
-    workbook,
+    workbook: built.workbook,
     detectedFormat: selected.format,
-    extractedRows: convertedRows.length,
+    extractedRows: built.extractedRows,
   }
 }
 
@@ -614,6 +604,70 @@ function loadWorkbookBySheetJs(buffer: ArrayBuffer) {
   return workbook
 }
 
+
+function worksheetToGrid(worksheet: ExcelJS.Worksheet) {
+  const rows: unknown[][] = []
+  worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    const values: unknown[] = []
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      values[colNumber - 1] = getPlainCellValue(cell.value)
+    })
+    rows[rowNumber - 1] = values
+  })
+  return rows
+}
+
+function isTemplateLikeWorksheet(worksheet: ExcelJS.Worksheet) {
+  const scoreHeader = normalizeText(getPlainCellValue(worksheet.getCell('A7').value)).replace(/\s+/g, '')
+  const countHeader = normalizeText(getPlainCellValue(worksheet.getCell('B7').value)).replace(/\s+/g, '')
+  const cumulativeHeader = normalizeText(getPlainCellValue(worksheet.getCell('C7').value)).replace(/\s+/g, '')
+
+  if (/分数|总分|成绩/.test(scoreHeader) && /人数/.test(countHeader) && /累计/.test(cumulativeHeader)) {
+    return true
+  }
+
+  const firstScore = parseScoreNumber(worksheet.getCell('A8').value)
+  const firstCumulative = parseNumber(worksheet.getCell('C8').value)
+  return firstScore !== null && firstCumulative !== null
+}
+
+function buildWorkbookFromParsedRows(rows: SegmentationParsedRow[], meta?: SegmentationMeta, sheetName = '一分一段') {
+  const workbook = new ExcelJS.Workbook()
+  const worksheet = workbook.addWorksheet(sheetName)
+
+  applyTemplateHeaders(worksheet)
+  applyMetaToWorksheet(worksheet, meta)
+
+  rows.forEach((item, index) => {
+    const row = index + 8
+    worksheet.getCell(`A${row}`).value = item.score
+    if (item.count !== null && item.count !== undefined) {
+      worksheet.getCell(`B${row}`).value = item.count
+    }
+    worksheet.getCell(`C${row}`).value = item.cumulative
+  })
+
+  return workbook
+}
+
+function buildWorkbookFromCumulativeRows(rows: ScoreCumulativeRow[], meta?: SegmentationMeta, sheetName = '一分一段') {
+  const convertedRows = calculateSegmentCounts(rows)
+  const workbook = new ExcelJS.Workbook()
+  const worksheet = workbook.addWorksheet(sheetName)
+
+  applyTemplateHeaders(worksheet)
+  applyMetaToWorksheet(worksheet, meta)
+
+  convertedRows.forEach((item, index) => {
+    const row = index + 8
+    worksheet.getCell(`A${row}`).value = item.score
+    worksheet.getCell(`B${row}`).value = item.segment
+    worksheet.getCell(`C${row}`).value = item.cumulative
+  })
+
+  return { workbook, extractedRows: convertedRows.length }
+}
+
 async function loadWorkbookFromExcel(file: File, buffer: ArrayBuffer, meta?: SegmentationMeta) {
   let workbook: ExcelJS.Workbook
 
@@ -630,7 +684,7 @@ async function loadWorkbookFromExcel(file: File, buffer: ArrayBuffer, meta?: Seg
     try {
       workbook = loadWorkbookBySheetJs(buffer)
     } catch {
-      throw new Error('文件格式无法识别：请上传 .xlsx、.xls 或文本型 .pdf 文件。当前文件不是有效的 Excel 压缩包，也不是可识别的 PDF。')
+      throw new Error('文件格式无法识别：请上传 .xlsx、.xls、.csv 或文本型 .pdf 文件。图片型 PDF、扫描件请先用外部 OCR 识别为表格文本，再粘贴到本页面处理。')
     }
   }
 
@@ -639,20 +693,33 @@ async function loadWorkbookFromExcel(file: File, buffer: ArrayBuffer, meta?: Seg
     throw new Error('Excel 文件中未识别到可处理的工作表')
   }
 
-  applyTemplateHeaders(worksheet)
-  applyMetaToWorksheet(worksheet, meta)
+  if (isTemplateLikeWorksheet(worksheet)) {
+    applyTemplateHeaders(worksheet)
+    applyMetaToWorksheet(worksheet, meta)
+
+    return {
+      workbook,
+      detectedFormat: isZipBuffer(buffer) ? 'excel-template-xlsx' : isOleExcelBuffer(buffer) ? 'excel-template-xls' : 'excel-template',
+      extractedRows: Math.max(0, worksheet.rowCount - 7),
+    }
+  }
+
+  const parsed = parseSegmentationTableRows(worksheetToGrid(worksheet), { level: meta?.level })
+  if (!parsed.rows.length) {
+    throw new Error(`Excel 未识别到有效的一分一段数据。${parsed.warnings.join('；') || '请检查是否包含分数、人数、累计人数。'}`)
+  }
 
   return {
-    workbook,
-    detectedFormat: isZipBuffer(buffer) ? 'excel-xlsx' : isOleExcelBuffer(buffer) ? 'excel-xls' : 'excel',
-    extractedRows: Math.max(0, worksheet.rowCount - 7),
+    workbook: buildWorkbookFromParsedRows(parsed.rows, meta, worksheet.name || '一分一段'),
+    detectedFormat: `excel-${parsed.detectedFormat}`,
+    extractedRows: parsed.rows.length,
   }
 }
 
 function processLoadedWorkbook(
   workbook: ExcelJS.Workbook,
   meta: SegmentationMeta | undefined,
-  sourceType: 'excel' | 'pdf',
+  sourceType: 'excel' | 'pdf' | 'paste',
   detectedFormat: string,
   extractedRows: number,
 ): SegmentationProcessResult['summary'] {
@@ -807,6 +874,34 @@ function processLoadedWorkbook(
     extractedRows,
     sourceType,
     detectedFormat,
+  }
+}
+
+
+export async function processSegmentationText(
+  text: string,
+  meta?: SegmentationMeta,
+): Promise<SegmentationProcessResult> {
+  const parsed = parseSegmentationPlainText(text, { level: meta?.level })
+  if (!parsed.rows.length) {
+    throw new Error(parsed.warnings.join('；') || '未识别到有效的一分一段数据。请粘贴包含“分数 / 人数 / 累计人数”的表格文本或 OCR 结果。')
+  }
+
+  const workbook = buildWorkbookFromParsedRows(parsed.rows, meta)
+  const summary = processLoadedWorkbook(
+    workbook,
+    meta,
+    'paste',
+    parsed.detectedFormat,
+    parsed.rows.length,
+  )
+
+  const outBuffer = await workbook.xlsx.writeBuffer()
+  return {
+    blob: new Blob([outBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    summary,
   }
 }
 
