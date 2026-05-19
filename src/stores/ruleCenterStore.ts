@@ -1351,7 +1351,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       updates['rule_center/meta/version'] = now
       updates['rule_center/meta/updatedAt'] = now
 
-      await dbUpdate(ref(db), updates)
+      await dbUpdate(ref(getFirebaseDb()), updates)
     } catch (error) {
       setState({
         remarkTypeRules: previousRules,
