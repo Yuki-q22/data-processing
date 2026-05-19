@@ -1,120 +1,53 @@
 import { Button, Layout, Menu, Modal, Typography } from 'antd'
 import { useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import {
-  FileTextOutlined,
-  FileSearchOutlined,
-  AuditOutlined,
-  PartitionOutlined,
-  ApartmentOutlined,
-  TagsOutlined,
-  SettingOutlined,
-  PictureOutlined,
-  ScissorOutlined,
-} from '@ant-design/icons'
 import readmeText from '../README.md?raw'
-
-import ProfessionalScorePlatform from './pages/ProfessionalScorePlatform'
-import RuleCenterPage from './pages/RuleCenterPage'
-import CollegeScoreTool from './pages/tools/CollegeScoreTool'
-import XueyeqiaoTool from './pages/tools/XueyeqiaoTool'
-import SegmentationCheckTool from './pages/tools/SegmentationCheckTool'
-import GroupCodeMatchTool from './pages/tools/GroupCodeMatchTool'
-import PlanCompareTool from './pages/tools/PlanCompareTool'
-import EmploymentReportImageTool from './pages/tools/EmploymentReportImageTool'
-import RemarkTypeExtractTool from './pages/tools/RemarkTypeExtractTool'
-import QuestionScreenshotTool from './pages/tools/QuestionScreenshotTool'
+import {
+  DEFAULT_MENU_KEY,
+  MENU_GROUPS,
+  MENU_KEYS,
+  README_NAV_ITEMS,
+  TOOL_BY_KEY,
+  TOOL_DEFINITIONS,
+  type MenuGroupKey,
+  type MenuKey,
+} from './config/toolRegistry'
 
 const { Header, Content, Sider } = Layout
 const { Title, Text } = Typography
 
-type MenuKey =
-  | 'rule-center'
-  | 'professional-score-platform'
-  | 'college-score'
-  | 'xueyeqiao'
-  | 'segmentation-check'
-  | 'group-code-match'
-  | 'employment-report-image'
-  | 'plan-compare'
-  | 'remark-type-extract'
-  | 'question-screenshot'
-
-type MenuGroupKey = 'group-core' | 'group-tools' | 'group-peak'
-
-const MENU_KEYS: MenuKey[] = [
-  'rule-center',
-  'professional-score-platform',
-  'college-score',
-  'xueyeqiao',
-  'segmentation-check',
-  'group-code-match',
-  'employment-report-image',
-  'plan-compare',
-  'remark-type-extract',
-  'question-screenshot',
-]
-
-const README_NAV_ITEMS = [
-  { id: 'rule-center', label: '1. 规则中心', keyword: '1. 规则中心' },
-  { id: 'professional-score-platform', label: '2. 专业分模板智能填充', keyword: '2. 专业分模板智能填充' },
-  { id: 'college-score', label: '3. 院校分提取', keyword: '3. 院校分提取' },
-  { id: 'xueyeqiao', label: '4. 模版转换工具', keyword: '4. 模版转换工具' },
-  { id: 'group-code-match', label: '5. 专业组代码匹配', keyword: '5. 专业组代码匹配' },
-  { id: 'employment-report-image', label: '6. 就业质量报告图片提取', keyword: '6. 就业质量报告图片提取' },
-  { id: 'plan-compare', label: '7. 招生计划数据比对', keyword: '7. 招生计划数据比对' },
-  { id: 'remark-type-extract', label: '8. 备注处理', keyword: '8. 备注处理' },
-  { id: 'question-screenshot', label: '9. 高考真题题目截图', keyword: '9. 高考真题题目截图' },
-  { id: 'segmentation-check', label: '10. 一分一段处理', keyword: '10. 一分一段处理' },
-  { id: 'local-dev', label: '本地运行', keyword: '本地运行' },
-  { id: 'deploy', label: '部署说明', keyword: '部署说明' },
-  { id: 'notice', label: '数据处理注意事项', keyword: '数据处理注意事项' },
-]
-
 export default function App() {
-  const [activeKey, setActiveKey] = useState<MenuKey>('rule-center')
+  const [activeKey, setActiveKey] = useState<MenuKey>(DEFAULT_MENU_KEY)
   const [openKeys, setOpenKeys] = useState<MenuGroupKey[]>(['group-core', 'group-tools', 'group-peak'])
   const readmeContentRef = useRef<HTMLDivElement | null>(null)
 
   const content = useMemo(() => {
-    switch (activeKey) {
-      case 'rule-center':
-        return <RuleCenterPage />
-      case 'professional-score-platform':
-        return <ProfessionalScorePlatform />
-      case 'college-score':
-        return <CollegeScoreTool />
-      case 'xueyeqiao':
-        return <XueyeqiaoTool />
-      case 'segmentation-check':
-        return <SegmentationCheckTool />
-      case 'group-code-match':
-        return <GroupCodeMatchTool />
-      case 'employment-report-image':
-        return <EmploymentReportImageTool />
-      case 'plan-compare':
-        return <PlanCompareTool />
-      case 'remark-type-extract':
-        return <RemarkTypeExtractTool />
-      case 'question-screenshot':
-        return <QuestionScreenshotTool />
-      default:
-        return <RuleCenterPage />
-    }
+    const ActiveComponent = TOOL_BY_KEY[activeKey]?.Component ?? TOOL_BY_KEY[DEFAULT_MENU_KEY].Component
+    return <ActiveComponent />
   }, [activeKey])
+
+  const menuItems = useMemo(
+    () =>
+      MENU_GROUPS.map((group) => ({
+        key: group.key,
+        label: group.label,
+        children: TOOL_DEFINITIONS.filter((tool) => tool.menuGroup === group.key).map((tool) => ({
+          key: tool.key,
+          icon: tool.icon,
+          label: tool.title,
+        })),
+      })),
+    []
+  )
 
   const showReadme = () => {
     const scrollToReadmeSection = (keyword: string) => {
       const container = readmeContentRef.current
       if (!container) return
 
-      const headings = Array.from(
-        container.querySelectorAll('h1, h2, h3, h4, h5, h6')
-      )
+      const headings = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6'))
 
-      const target = headings.find((heading) =>
-        String(heading.textContent || '').includes(keyword)
-      )
+      const target = headings.find((heading) => String(heading.textContent || '').includes(keyword))
 
       if (target) {
         target.scrollIntoView({
@@ -232,76 +165,7 @@ export default function App() {
                 }
               }}
               style={{ borderRight: 'none', paddingTop: 8 }}
-              items={[
-                {
-                  key: 'group-core',
-                  label: '核心配置',
-                  children: [
-                    {
-                      key: 'rule-center',
-                      icon: <SettingOutlined />,
-                      label: '规则中心',
-                    },
-                  ],
-                },
-                {
-                  key: 'group-tools',
-                  label: '独立工具',
-                  children: [
-                    {
-                      key: 'professional-score-platform',
-                      icon: <FileTextOutlined />,
-                      label: '专业分模板智能填充',
-                    },
-                    {
-                      key: 'college-score',
-                      icon: <FileSearchOutlined />,
-                      label: '院校分提取',
-                    },
-                    {
-                      key: 'xueyeqiao',
-                      icon: <AuditOutlined />,
-                      label: '模版转换工具',
-                    },
-                    {
-                      key: 'group-code-match',
-                      icon: <ApartmentOutlined />,
-                      label: '专业组代码匹配',
-                    },
-                    {
-                      key: 'employment-report-image',
-                      icon: <PictureOutlined />,
-                      label: '就业质量报告图片提取',
-                    },
-                    {
-                      key: 'plan-compare',
-                      icon: <ApartmentOutlined />,
-                      label: '招生计划数据比对',
-                    },
-                    {
-                      key: 'remark-type-extract',
-                      icon: <TagsOutlined />,
-                      label: '备注处理',
-                    },
-                    {
-                      key: 'question-screenshot',
-                      icon: <ScissorOutlined />,
-                      label: '高考真题题目截图',
-                    },
-                  ],
-                },
-                {
-                  key: 'group-peak',
-                  label: '高峰期数据处理',
-                  children: [
-                    {
-                      key: 'segmentation-check',
-                      icon: <PartitionOutlined />,
-                      label: '一分一段处理',
-                    },
-                  ],
-                },
-              ]}
+              items={menuItems}
             />
           </div>
 
@@ -321,41 +185,12 @@ export default function App() {
       <Layout>
         <Header>
           <Title level={4} style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--text-primary)' }}>
-            {getPageTitle(activeKey)}
+            {TOOL_BY_KEY[activeKey]?.title ?? '数据处理工具平台'}
           </Title>
         </Header>
 
-        <Content style={{ padding: 'var(--space-6) var(--space-8)' }}>
-          {content}
-        </Content>
+        <Content style={{ padding: 'var(--space-6) var(--space-8)' }}>{content}</Content>
       </Layout>
     </Layout>
   )
-}
-
-function getPageTitle(key: MenuKey) {
-  switch (key) {
-    case 'rule-center':
-      return '规则中心'
-    case 'professional-score-platform':
-      return '专业分模板智能填充'
-    case 'college-score':
-      return '院校分提取'
-    case 'xueyeqiao':
-      return '模版转换工具'
-    case 'segmentation-check':
-      return '一分一段处理'
-    case 'group-code-match':
-      return '专业组代码匹配'
-    case 'employment-report-image':
-      return '就业质量报告图片提取'
-    case 'plan-compare':
-      return '招生计划数据比对'
-    case 'remark-type-extract':
-      return '备注处理'
-    case 'question-screenshot':
-      return '高考真题题目处理'
-    default:
-      return '数据处理工具平台'
-  }
 }

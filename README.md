@@ -483,7 +483,7 @@ data-processing/
 │  ├─ icons.svg
 │  └─ _redirects
 ├─ src/
-│  ├─ App.tsx                         # 应用入口、左侧菜单、README 弹窗目录
+│  ├─ App.tsx                         # 应用入口，读取工具注册配置渲染菜单和页面
 │  ├─ main.tsx                        # React 挂载入口
 │  ├─ index.css                       # 全局样式
 │  ├─ components/                     # 通用组件
@@ -491,6 +491,8 @@ data-processing/
 │  │  ├─ FileUploadCard.tsx
 │  │  ├─ StatCards.tsx
 │  │  └─ ToolActionBar.tsx
+│  ├─ config/                         # 工具入口、菜单、标题、README 目录统一配置
+│  │  └─ toolRegistry.tsx
 │  ├─ constants/                      # 展示字段、目标模板字段、内置规则
 │  │  ├─ display.ts
 │  │  ├─ provinceRuleData.ts
@@ -550,10 +552,23 @@ data-processing/
 │  ├─ utils/                          # Excel、字段映射、工具重置等工具函数
 │  └─ workers/
 │     └─ excelWorker.ts
+├─ .env.example                      # 环境变量示例，复制为 .env.local 后填写
 ├─ package.json
 ├─ vite.config.ts
 └─ tsconfig.json
 ```
+
+---
+
+## 工具入口配置
+
+左侧菜单、页面标题、工具组件和 README 弹窗目录集中维护在：
+
+```text
+src/config/toolRegistry.tsx
+```
+
+后续新增、删除、合并工具时，优先修改 `TOOL_DEFINITIONS`，避免同时改 `App.tsx` 中的菜单、标题、页面渲染和 README 目录。
 
 ---
 
@@ -567,7 +582,19 @@ npm install
 
 ### 2. 配置环境变量
 
-在项目根目录新建 `.env.local`：
+项目根目录已提供 `.env.example`。本地开发时复制一份并改名为 `.env.local`，然后填写 Firebase 配置：
+
+```bash
+cp .env.example .env.local
+```
+
+Windows PowerShell 可使用：
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+`.env.local` 内容示例：
 
 ```env
 VITE_FIREBASE_API_KEY=你的 Firebase API Key
@@ -577,7 +604,7 @@ VITE_FIREBASE_PROJECT_ID=你的 Firebase Project ID
 VITE_FIREBASE_APP_ID=你的 Firebase App ID
 ```
 
-注意：`.env.local` 已被 `.gitignore` 忽略，不要提交到仓库。
+注意：`.env.local` 已被 `.gitignore` 忽略，不要提交到仓库。压缩包中只保留 `.env.example`。
 
 ### 3. 启动开发服务
 

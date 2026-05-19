@@ -35,7 +35,7 @@ import {
   set as dbSet,
   update as dbUpdate,
 } from 'firebase/database'
-import { auth, db } from '../lib/firebase'
+import { auth, db, firebaseConfigErrorMessage } from '../lib/firebase'
 import {
   DEFAULT_EXCLUSION_KEYWORDS,
   DEFAULT_REMARK_TYPE_RULES,
@@ -538,8 +538,24 @@ function clearDataUnsubscribers() {
   dataUnsubscribers = []
 }
 
+function getFirebaseAuth() {
+  if (!auth) {
+    throw new Error(firebaseConfigErrorMessage || 'Firebase 未初始化，请检查环境变量配置')
+  }
+
+  return auth
+}
+
+function getFirebaseDb() {
+  if (!db) {
+    throw new Error(firebaseConfigErrorMessage || 'Firebase 未初始化，请检查环境变量配置')
+  }
+
+  return db
+}
+
 async function updateMetaVersion() {
-  await dbUpdate(ref(db, 'rule_center/meta'), {
+  await dbUpdate(ref(getFirebaseDb(), 'rule_center/meta'), {
     version: Date.now(),
     updatedAt: Date.now(),
   })
@@ -582,6 +598,18 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     if (hasBootstrapped) return
     hasBootstrapped = true
 
+    if (!auth || !db) {
+      setState({
+        authReady: true,
+        syncing: false,
+        authError: firebaseConfigErrorMessage || 'Firebase 未初始化，请检查环境变量配置',
+        currentUserEmail: undefined,
+        currentUid: undefined,
+        isAdminUser: false,
+      })
+      return
+    }
+
     onAuthStateChanged(
       auth,
       async (user) => {
@@ -621,13 +649,13 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
           authError: undefined,
         })
 
-        const adminRef = ref(db, `admins/${user.uid}`)
-        const schoolRef = ref(db, 'rule_center/school_name')
-        const majorRef = ref(db, 'rule_center/major_combo')
-        const remarkRef = ref(db, 'rule_center/remark_enrollment_type')
-        const exclusionRef = ref(db, 'rule_center/exclusion_keywords')
-        const provinceCategoryBatchRef = ref(db, 'rule_center/province_category_batch')
-        const controlLineRef = ref(db, 'rule_center/control_line')
+        const adminRef = ref(getFirebaseDb(), `admins/${user.uid}`)
+        const schoolRef = ref(getFirebaseDb(), 'rule_center/school_name')
+        const majorRef = ref(getFirebaseDb(), 'rule_center/major_combo')
+        const remarkRef = ref(getFirebaseDb(), 'rule_center/remark_enrollment_type')
+        const exclusionRef = ref(getFirebaseDb(), 'rule_center/exclusion_keywords')
+        const provinceCategoryBatchRef = ref(getFirebaseDb(), 'rule_center/province_category_batch')
+        const controlLineRef = ref(getFirebaseDb(), 'rule_center/control_line')
 
         const offAdmin = onValue(
           adminRef,
@@ -788,7 +816,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   },
 
   login: async (email, password) => {
-    await signInWithEmailAndPassword(auth, email.trim(), password)
+    await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password)
   },
 
   loginWithGoogle: async () => {
@@ -798,11 +826,11 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       prompt: 'select_account',
     })
 
-    await signInWithPopup(auth, provider)
+    await signInWithPopup(getFirebaseAuth(), provider)
   },
 
   logout: async () => {
-    await signOut(auth)
+    await signOut(getFirebaseAuth())
   },
 
   importSchoolRuleFile: async (file: File) => {
@@ -835,7 +863,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     }
 
     await dbSet(
-      ref(db, 'rule_center/school_name'),
+      ref(getFirebaseDb(), 'rule_center/school_name'),
       toCloudPayloadFromSimpleValues(values, currentUid!)
     )
 
@@ -887,7 +915,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     }
 
     await dbSet(
-      ref(db, 'rule_center/major_combo'),
+      ref(getFirebaseDb(), 'rule_center/major_combo'),
       toCloudPayloadFromSimpleValues(values, currentUid!)
     )
 
@@ -934,7 +962,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     }
 
     await dbSet(
-      ref(db, 'rule_center/remark_enrollment_type'),
+      ref(getFirebaseDb(), 'rule_center/remark_enrollment_type'),
       toCloudPayloadFromRemarkRules(rules, currentUid!)
     )
 
@@ -997,7 +1025,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     )
 
     await dbSet(
-      ref(db, 'rule_center/province_category_batch'),
+      ref(getFirebaseDb(), 'rule_center/province_category_batch'),
       toCloudPayloadFromProvinceCategoryBatchRules(mergedRules, currentUid!),
     )
 
@@ -1064,7 +1092,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     )
 
     await dbSet(
-      ref(db, 'rule_center/control_line'),
+      ref(getFirebaseDb(), 'rule_center/control_line'),
       toCloudPayloadFromControlLineRules(mergedRules, currentUid!),
     )
 
@@ -1080,7 +1108,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
-    await dbRemove(ref(db, 'rule_center/school_name'))
+    await dbRemove(ref(getFirebaseDb(), 'rule_center/school_name'))
     await updateMetaVersion()
   },
 
@@ -1088,7 +1116,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
-    await dbRemove(ref(db, 'rule_center/major_combo'))
+    await dbRemove(ref(getFirebaseDb(), 'rule_center/major_combo'))
     await updateMetaVersion()
   },
 
@@ -1098,7 +1126,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     await ensureAdmin(currentUid, isAdminUser)
 
     await dbSet(
-      ref(db, 'rule_center/province_category_batch'),
+      ref(getFirebaseDb(), 'rule_center/province_category_batch'),
       toCloudPayloadFromProvinceCategoryBatchRules(
         DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
         currentUid!,
@@ -1119,7 +1147,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     await ensureAdmin(currentUid, isAdminUser)
 
     await dbSet(
-      ref(db, 'rule_center/control_line'),
+      ref(getFirebaseDb(), 'rule_center/control_line'),
       toCloudPayloadFromControlLineRules(DEFAULT_CONTROL_LINE_RULES, currentUid!),
     )
 
@@ -1162,7 +1190,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       priority: nextPriority,
     }
 
-    await dbSet(ref(db, `rule_center/remark_enrollment_type/${newId}`), {
+    await dbSet(ref(getFirebaseDb(), `rule_center/remark_enrollment_type/${newId}`), {
       rule_name: `${keyword} → ${outputType}`,
       source_text: keyword,
       target_text: outputType,
@@ -1225,7 +1253,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     })
 
     try {
-      await dbUpdate(ref(db, `rule_center/remark_enrollment_type/${id}`), {
+      await dbUpdate(ref(getFirebaseDb(), `rule_center/remark_enrollment_type/${id}`), {
         rule_name: `${nextKeyword} → ${nextOutputType}`,
         source_text: nextKeyword,
         target_text: nextOutputType,
@@ -1257,7 +1285,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     })
 
     try {
-      await dbRemove(ref(db, `rule_center/remark_enrollment_type/${id}`))
+      await dbRemove(ref(getFirebaseDb(), `rule_center/remark_enrollment_type/${id}`))
       await updateMetaVersion()
     } catch (error) {
       setState({
@@ -1280,7 +1308,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     })
 
     await dbSet(
-      ref(db, 'rule_center/remark_enrollment_type'),
+      ref(getFirebaseDb(), 'rule_center/remark_enrollment_type'),
       toCloudPayloadFromRemarkRules(defaultRules, currentUid!)
     )
 
@@ -1345,7 +1373,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       exclusionKeywords: cleaned,
     })
 
-    await dbSet(ref(db, 'rule_center/exclusion_keywords'), cleaned)
+    await dbSet(ref(getFirebaseDb(), 'rule_center/exclusion_keywords'), cleaned)
     await updateMetaVersion()
   },
 }))

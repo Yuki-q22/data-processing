@@ -7,7 +7,16 @@ import {
   push,
   get,
 } from 'firebase/database'
-import { db } from '../lib/firebase'
+import { db, firebaseConfigErrorMessage } from '../lib/firebase'
+
+
+function getFirebaseDb() {
+  if (!db) {
+    throw new Error(firebaseConfigErrorMessage || 'Firebase 未初始化，请检查环境变量配置')
+  }
+
+  return db
+}
 
 export type RuleType = 'school_name' | 'major_combo' | 'remark_enrollment_type'
 
@@ -30,7 +39,7 @@ export function subscribeRulesByType(
   ruleType: RuleType,
   callback: (rules: RuleItem[]) => void
 ) {
-  const rulesRef = ref(db, rulesPath(ruleType))
+  const rulesRef = ref(getFirebaseDb(), rulesPath(ruleType))
 
   return onValue(rulesRef, (snapshot) => {
     const value = snapshot.val() || {}
@@ -54,7 +63,7 @@ export async function createRule(
   payload: Omit<RuleItem, 'id' | 'updated_at'>,
   uid: string
 ) {
-  const parentRef = ref(db, rulesPath(ruleType))
+  const parentRef = ref(getFirebaseDb(), rulesPath(ruleType))
   const newRef = push(parentRef)
 
   await set(newRef, {
@@ -63,7 +72,7 @@ export async function createRule(
     updated_by: uid,
   })
 
-  await update(ref(db, 'rule_center/meta'), {
+  await update(ref(getFirebaseDb(), 'rule_center/meta'), {
     version: Date.now(),
     updatedAt: Date.now(),
   })
@@ -75,31 +84,31 @@ export async function updateRuleItem(
   patch: Partial<Omit<RuleItem, 'id'>>,
   uid: string
 ) {
-  const itemRef = ref(db, `${rulesPath(ruleType)}/${id}`)
+  const itemRef = ref(getFirebaseDb(), `${rulesPath(ruleType)}/${id}`)
   await update(itemRef, {
     ...patch,
     updated_at: Date.now(),
     updated_by: uid,
   })
 
-  await update(ref(db, 'rule_center/meta'), {
+  await update(ref(getFirebaseDb(), 'rule_center/meta'), {
     version: Date.now(),
     updatedAt: Date.now(),
   })
 }
 
 export async function deleteRuleItem(ruleType: RuleType, id: string) {
-  const itemRef = ref(db, `${rulesPath(ruleType)}/${id}`)
+  const itemRef = ref(getFirebaseDb(), `${rulesPath(ruleType)}/${id}`)
   await remove(itemRef)
 
-  await update(ref(db, 'rule_center/meta'), {
+  await update(ref(getFirebaseDb(), 'rule_center/meta'), {
     version: Date.now(),
     updatedAt: Date.now(),
   })
 }
 
 export async function isAdmin(uid: string) {
-  const adminRef = ref(db, `admins/${uid}`)
+  const adminRef = ref(getFirebaseDb(), `admins/${uid}`)
   const snapshot = await get(adminRef)
   return snapshot.val() === true
 }
