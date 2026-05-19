@@ -25,7 +25,7 @@ import type {
   ProcessedRecord,
   ScoreRecord,
 } from '../types/record'
-import { deriveSubjectRequirementFields } from './standardize'
+import { deriveSubjectRequirementFields, normalizeAdmissionYearKey } from './standardize'
 
 function normalizeText(value?: string) {
   return (value || '').replace(/\s/g, '').replace(/[（）()]/g, '').trim()
@@ -64,7 +64,7 @@ function isBatchInProvinceRules(
 ) {
   if (!score.batch) return true
 
-  const year = score.year || ''
+  const year = normalizeAdmissionYearKey(score.year) || ''
   const province = score.province || ''
   const currentBatches = provinceCurrentBatchDictByYear[year]?.[province] || []
 
@@ -142,7 +142,7 @@ function scorePlanCandidate(
   if (score.subjectCategory && plan.subjectCategory && score.subjectCategory === plan.subjectCategory) scoreValue += 3
   if (score.enrollmentType && plan.enrollmentType && score.enrollmentType === plan.enrollmentType) scoreValue += 2
 
-  const year = score.year || ''
+  const year = normalizeAdmissionYearKey(score.year) || ''
   const province = score.province || ''
   const currentBatches = provinceCurrentBatchDictByYear[year]?.[province] || []
 

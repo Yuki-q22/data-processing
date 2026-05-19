@@ -1,4 +1,5 @@
 import type { ProcessedRecord, ValidationIssue } from '../types/record'
+import { normalizeAdmissionYearKey } from './standardize'
 
 function isValidDataSource(value?: string) {
   const allowed = [
@@ -135,8 +136,10 @@ export function attachValidationIssues(
      */
 
     if (result.year && result.province && result.batch) {
-      const validBatches =
-        provinceCurrentBatchDictByYear[result.year]?.[result.province] || []
+      const normalizedYear = normalizeAdmissionYearKey(result.year)
+      const validBatches = normalizedYear
+        ? provinceCurrentBatchDictByYear[normalizedYear]?.[result.province] || []
+        : []
 
       if (validBatches.length > 0 && !validBatches.includes(result.batch)) {
         issues.push({

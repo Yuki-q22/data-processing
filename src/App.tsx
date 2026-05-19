@@ -16,8 +16,7 @@ import readmeText from '../README.md?raw'
 
 import ProfessionalScorePlatform from './pages/ProfessionalScorePlatform'
 import RuleCenterPage from './pages/RuleCenterPage'
-import CollegeScoreNormalTool from './pages/tools/CollegeScoreNormalTool'
-import CollegeScoreArtTool from './pages/tools/CollegeScoreArtTool'
+import CollegeScoreTool from './pages/tools/CollegeScoreTool'
 import XueyeqiaoTool from './pages/tools/XueyeqiaoTool'
 import SegmentationCheckTool from './pages/tools/SegmentationCheckTool'
 import GroupCodeMatchTool from './pages/tools/GroupCodeMatchTool'
@@ -32,8 +31,7 @@ const { Title, Text } = Typography
 type MenuKey =
   | 'rule-center'
   | 'professional-score-platform'
-  | 'college-score-normal'
-  | 'college-score-art'
+  | 'college-score'
   | 'xueyeqiao'
   | 'segmentation-check'
   | 'group-code-match'
@@ -47,8 +45,7 @@ type MenuGroupKey = 'group-core' | 'group-tools' | 'group-peak'
 const MENU_KEYS: MenuKey[] = [
   'rule-center',
   'professional-score-platform',
-  'college-score-normal',
-  'college-score-art',
+  'college-score',
   'xueyeqiao',
   'segmentation-check',
   'group-code-match',
@@ -61,15 +58,14 @@ const MENU_KEYS: MenuKey[] = [
 const README_NAV_ITEMS = [
   { id: 'rule-center', label: '1. 规则中心', keyword: '1. 规则中心' },
   { id: 'professional-score-platform', label: '2. 专业分模板智能填充', keyword: '2. 专业分模板智能填充' },
-  { id: 'college-score-normal', label: '3. 院校分提取（普通类）', keyword: '3. 院校分提取（普通类）' },
-  { id: 'college-score-art', label: '4. 院校分提取（艺体类）', keyword: '4. 院校分提取（艺体类）' },
-  { id: 'xueyeqiao', label: '5. 模版转换工具', keyword: '5. 模版转换工具' },
-  { id: 'segmentation-check', label: '6. 一分一段处理', keyword: '一分一段' },
-  { id: 'group-code-match', label: '7. 专业组代码匹配', keyword: '7. 专业组代码匹配' },
-  { id: 'plan-compare', label: '8. 招生计划数据比对', keyword: '8. 招生计划数据比对' },
-  { id: 'employment-report-image', label: '9. 就业质量报告图片提取', keyword: '9. 就业质量报告图片提取' },
-  { id: 'remark-type-extract', label: '10. 备注处理', keyword: '10. 备注处理' },
-  { id: 'question-screenshot', label: '11. 高考真题题目截图', keyword: '11. 高考真题题目截图' },
+  { id: 'college-score', label: '3. 院校分提取', keyword: '3. 院校分提取' },
+  { id: 'xueyeqiao', label: '4. 模版转换工具', keyword: '4. 模版转换工具' },
+  { id: 'group-code-match', label: '5. 专业组代码匹配', keyword: '5. 专业组代码匹配' },
+  { id: 'employment-report-image', label: '6. 就业质量报告图片提取', keyword: '6. 就业质量报告图片提取' },
+  { id: 'plan-compare', label: '7. 招生计划数据比对', keyword: '7. 招生计划数据比对' },
+  { id: 'remark-type-extract', label: '8. 备注处理', keyword: '8. 备注处理' },
+  { id: 'question-screenshot', label: '9. 高考真题题目截图', keyword: '9. 高考真题题目截图' },
+  { id: 'segmentation-check', label: '10. 一分一段处理', keyword: '10. 一分一段处理' },
   { id: 'local-dev', label: '本地运行', keyword: '本地运行' },
   { id: 'deploy', label: '部署说明', keyword: '部署说明' },
   { id: 'notice', label: '数据处理注意事项', keyword: '数据处理注意事项' },
@@ -86,10 +82,8 @@ export default function App() {
         return <RuleCenterPage />
       case 'professional-score-platform':
         return <ProfessionalScorePlatform />
-      case 'college-score-normal':
-        return <CollegeScoreNormalTool />
-      case 'college-score-art':
-        return <CollegeScoreArtTool />
+      case 'college-score':
+        return <CollegeScoreTool />
       case 'xueyeqiao':
         return <XueyeqiaoTool />
       case 'segmentation-check':
@@ -260,14 +254,9 @@ export default function App() {
                       label: '专业分模板智能填充',
                     },
                     {
-                      key: 'college-score-normal',
+                      key: 'college-score',
                       icon: <FileSearchOutlined />,
-                      label: '院校分提取（普通类）',
-                    },
-                    {
-                      key: 'college-score-art',
-                      icon: <FileSearchOutlined />,
-                      label: '院校分提取（艺体类）',
+                      label: '院校分提取',
                     },
                     {
                       key: 'xueyeqiao',
@@ -350,10 +339,8 @@ function getPageTitle(key: MenuKey) {
       return '规则中心'
     case 'professional-score-platform':
       return '专业分模板智能填充'
-    case 'college-score-normal':
-      return '院校分提取（普通类）'
-    case 'college-score-art':
-      return '院校分提取（艺体类）'
+    case 'college-score':
+      return '院校分提取'
     case 'xueyeqiao':
       return '模版转换工具'
     case 'segmentation-check':

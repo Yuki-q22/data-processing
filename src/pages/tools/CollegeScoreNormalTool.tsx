@@ -107,7 +107,11 @@ function buildRowKey(row: PreviewRow) {
   ].join('__')
 }
 
-export default function CollegeScoreNormalTool() {
+type CollegeScoreNormalToolProps = {
+  embedded?: boolean
+}
+
+export default function CollegeScoreNormalTool({ embedded = false }: CollegeScoreNormalToolProps = {}) {
   const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
 
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
@@ -196,88 +200,105 @@ export default function CollegeScoreNormalTool() {
     })
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card
-        title="院校分提取（普通类）"
-        extra={(
+  const uploadPanel = (
+    <>
+      {embedded ? (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button danger onClick={handleResetPage}>
             重置
           </Button>
-        )}
-       
-      >
-        <Paragraph>
-          支持两种导入模板：专业分原始模板、专业分库中导出模板。导出结果仍保持院校分模板格式不变，省控线科类和省控线批次继续按现有规则自动填充。
-        </Paragraph>
+        </div>
+      ) : null}
 
-        <Space direction="vertical" style={{ width: '100%' }} size={16}>
-          <Space direction="vertical" style={{ width: '100%' }} size={8}>
-            <span>导入模板类型</span>
-            <Radio.Group
-              value={templateType}
-              onChange={(event) => {
-                setTemplateType(event.target.value)
+      <Paragraph>
+        支持两种导入模板：专业分原始模板、专业分库中导出模板。导出结果仍保持院校分模板格式不变，省控线科类和省控线批次继续按现有规则自动填充。
+      </Paragraph>
+
+      <Space direction="vertical" style={{ width: '100%' }} size={16}>
+        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+          <span>导入模板类型</span>
+          <Radio.Group
+            value={templateType}
+            onChange={(event) => {
+              setTemplateType(event.target.value)
+              setResult(null)
+            }}
+            optionType="button"
+            buttonStyle="solid"
+            options={[
+              {
+                label: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS.rawMajorScore,
+                value: 'rawMajorScore',
+              },
+              {
+                label: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS.libraryMajorScore,
+                value: 'libraryMajorScore',
+              },
+            ]}
+          />
+        </Space>
+
+        <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx,.xls">
+          <p className="ant-upload-drag-icon">
+            <InboxOutlined />
+          </p>
+          <p className="ant-upload-text">
+            点击或拖拽上传{NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS[templateType]}
+          </p>
+          <p className="ant-upload-hint">
+            {templateType === 'rawMajorScore'
+              ? '专业分原始模板：从 B2 读取年份，第 3 行为表头'
+              : '专业分库中导出模板：第 1 行为表头，从 A 列年份字段读取年份'}
+          </p>
+        </Dragger>
+
+        <Space wrap>
+          {loadedWorkbook ? (
+            <Select
+              value={sheetName}
+              onChange={(value) => {
+                setSheetName(value)
                 setResult(null)
               }}
-              optionType="button"
-              buttonStyle="solid"
-              options={[
-                {
-                  label: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS.rawMajorScore,
-                  value: 'rawMajorScore',
-                },
-                {
-                  label: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS.libraryMajorScore,
-                  value: 'libraryMajorScore',
-                },
-              ]}
+              style={{ width: 260 }}
+              options={loadedWorkbook.sheetNames.map((name) => ({
+                label: name,
+                value: name,
+              }))}
             />
-          </Space>
+          ) : null}
 
-          <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx,.xls">
-            <p className="ant-upload-drag-icon">
-              <InboxOutlined />
-            </p>
-            <p className="ant-upload-text">
-              点击或拖拽上传{NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS[templateType]}
-            </p>
-            <p className="ant-upload-hint">
-              {templateType === 'rawMajorScore'
-                ? '专业分原始模板：从 B2 读取年份，第 3 行为表头'
-                : '专业分库中导出模板：第 1 行为表头，从 A 列年份字段读取年份'}
-            </p>
-          </Dragger>
+          <Button type="primary" loading={processing} onClick={handleProcess}>
+            开始处理
+          </Button>
 
-          <Space wrap>
-            {loadedWorkbook ? (
-              <Select
-                value={sheetName}
-                onChange={(value) => {
-                  setSheetName(value)
-                  setResult(null)
-                }}
-                style={{ width: 260 }}
-                options={loadedWorkbook.sheetNames.map((name) => ({
-                  label: name,
-                  value: name,
-                }))}
-              />
-            ) : null}
-
-            <Button type="primary" loading={processing} onClick={handleProcess}>
-              开始处理
-            </Button>
-
-            <Button
-              onClick={handleExport}
-              disabled={!result || result.missingColumns.length > 0}
-            >
-              导出结果
-            </Button>
-          </Space>
+          <Button
+            onClick={handleExport}
+            disabled={!result || result.missingColumns.length > 0}
+          >
+            导出结果
+          </Button>
         </Space>
-      </Card>
+      </Space>
+    </>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {embedded ? (
+        uploadPanel
+      ) : (
+        <Card
+          title="院校分提取（普通类）"
+          extra={(
+            <Button danger onClick={handleResetPage}>
+              重置
+            </Button>
+          )}
+        >
+          {uploadPanel}
+        </Card>
+      )}
 
       {result ? (
         <>

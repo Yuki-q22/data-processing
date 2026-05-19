@@ -62,13 +62,36 @@ export function normalizeProvince(
   return cleaned || undefined
 }
 
+export function normalizeAdmissionYearKey(
+  year: string | number | undefined | null
+): string | undefined {
+  if (year === null || year === undefined) return undefined
+
+  const raw = String(year)
+    .trim()
+    .replace(/[\s年年度届级]+/g, '')
+
+  if (!raw) return undefined
+
+  const fullYearMatch = raw.match(/20\d{2}/)
+  if (fullYearMatch) return fullYearMatch[0]
+
+  const shortYearMatch = raw.match(/^(\d{2})$/)
+  if (shortYearMatch) return `20${shortYearMatch[1]}`
+
+  return raw
+}
+
 export function getCategoryTypeByYearProvince(
   year: string | undefined,
   province: string | undefined,
   provinceYearCategoryType: Record<string, Record<string, string>>
 ): string | undefined {
-  if (!year || !province) return undefined
-  return provinceYearCategoryType[year]?.[province]
+  const normalizedYear = normalizeAdmissionYearKey(year)
+
+  if (!normalizedYear || !province) return undefined
+
+  return provinceYearCategoryType[normalizedYear]?.[province]
 }
 
 function normalizeRawCategoryToken(rawCategory: string | undefined): string {

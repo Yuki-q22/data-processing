@@ -88,7 +88,11 @@ function buildRowKey(row: PreviewRow) {
   ].join('__')
 }
 
-export default function CollegeScoreArtTool() {
+type CollegeScoreArtToolProps = {
+  embedded?: boolean
+}
+
+export default function CollegeScoreArtTool({ embedded = false }: CollegeScoreArtToolProps = {}) {
   const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
 
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
@@ -169,48 +173,67 @@ export default function CollegeScoreArtTool() {
     })
   }
 
+  const uploadPanel = (
+    <>
+      {embedded ? (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button danger onClick={handleResetPage}>重置</Button>
+        </div>
+      ) : null}
+
+      <Paragraph>
+        已按最新规则更新：从 B2 读取年份、从第 3 行读取正文、校验固定列、按分组规则取最低分代表行，并导出成院校分模板。
+      </Paragraph>
+
+      <Space direction="vertical" style={{ width: '100%' }} size={16}>
+        <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx,.xls">
+          <p className="ant-upload-drag-icon">
+            <InboxOutlined />
+          </p>
+          <p className="ant-upload-text">点击或拖拽上传艺体类专业分模板</p>
+          <p className="ant-upload-hint">默认按第 3 行表头读取，年份从 B2 读取</p>
+        </Dragger>
+
+        <Space wrap>
+          {loadedWorkbook ? (
+            <Select
+              value={sheetName}
+              onChange={setSheetName}
+              style={{ width: 260 }}
+              options={loadedWorkbook.sheetNames.map((name) => ({
+                label: name,
+                value: name,
+              }))}
+            />
+          ) : null}
+
+          <Button type="primary" loading={processing} onClick={handleProcess}>
+            开始处理
+          </Button>
+
+          <Button
+            onClick={handleExport}
+            disabled={!result || result.missingColumns.length > 0}
+          >
+            导出结果
+          </Button>
+        </Space>
+      </Space>
+    </>
+  )
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="院校分提取（艺体类）" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
-        <Paragraph>
-          已按最新规则更新：从 B2 读取年份、从第 3 行读取正文、校验固定列、按分组规则取最低分代表行，并导出成院校分模板。
-        </Paragraph>
-
-        <Space direction="vertical" style={{ width: '100%' }} size={16}>
-          <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx,.xls">
-            <p className="ant-upload-drag-icon">
-              <InboxOutlined />
-            </p>
-            <p className="ant-upload-text">点击或拖拽上传艺体类专业分模板</p>
-            <p className="ant-upload-hint">默认按第 3 行表头读取，年份从 B2 读取</p>
-          </Dragger>
-
-          <Space wrap>
-            {loadedWorkbook ? (
-              <Select
-                value={sheetName}
-                onChange={setSheetName}
-                style={{ width: 260 }}
-                options={loadedWorkbook.sheetNames.map((name) => ({
-                  label: name,
-                  value: name,
-                }))}
-              />
-            ) : null}
-
-            <Button type="primary" loading={processing} onClick={handleProcess}>
-              开始处理
-            </Button>
-
-            <Button
-              onClick={handleExport}
-              disabled={!result || result.missingColumns.length > 0}
-            >
-              导出结果
-            </Button>
-          </Space>
-        </Space>
-      </Card>
+      {embedded ? (
+        uploadPanel
+      ) : (
+        <Card
+          title="院校分提取（艺体类）"
+          extra={<Button danger onClick={handleResetPage}>重置</Button>}
+        >
+          {uploadPanel}
+        </Card>
+      )}
 
       {result ? (
         <>
