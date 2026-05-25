@@ -674,7 +674,7 @@ async function loadWorkbookFromExcel(file: File, buffer: ArrayBuffer, meta?: Seg
   if (isZipBuffer(buffer)) {
     try {
       workbook = await loadWorkbookByExcelJs(buffer)
-    } catch (error) {
+    } catch {
       // 部分文件扩展名是 xlsx，但实际内容不是标准 xlsx zip 包。此时退回 SheetJS 读取。
       workbook = loadWorkbookBySheetJs(buffer)
     }

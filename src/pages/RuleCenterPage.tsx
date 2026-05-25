@@ -82,56 +82,66 @@ type PreviewRow = {
 }
 
 export default function RuleCenterPage() {
-  const {
-    validSchoolNames,
-    validMajorCombos,
-    schoolRuleFileName,
-    majorRuleFileName,
-    remarkTypeRules,
-    remarkRuleFileName,
-    exclusionKeywords,
-    provinceCategoryBatchRules,
-    provinceCategoryBatchRuleFileName,
-    controlLineRules,
-    controlLineRuleFileName,
+  const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
+  const validMajorCombos = useRuleCenterStore((state) => state.validMajorCombos)
+  const schoolRuleFileName = useRuleCenterStore((state) => state.schoolRuleFileName)
+  const majorRuleFileName = useRuleCenterStore((state) => state.majorRuleFileName)
+  const remarkTypeRules = useRuleCenterStore((state) => state.remarkTypeRules)
+  const remarkRuleFileName = useRuleCenterStore((state) => state.remarkRuleFileName)
+  const exclusionKeywords = useRuleCenterStore((state) => state.exclusionKeywords)
+  const provinceCategoryBatchRules = useRuleCenterStore((state) => state.provinceCategoryBatchRules)
+  const provinceCategoryBatchRuleFileName = useRuleCenterStore((state) => state.provinceCategoryBatchRuleFileName)
+  const controlLineRules = useRuleCenterStore((state) => state.controlLineRules)
+  const controlLineRuleFileName = useRuleCenterStore((state) => state.controlLineRuleFileName)
 
-    currentUserEmail,
-    isAdminUser,
-    authReady,
-    syncing,
-    authError,
+  const currentUserEmail = useRuleCenterStore((state) => state.currentUserEmail)
+  const isAdminUser = useRuleCenterStore((state) => state.isAdminUser)
+  const authReady = useRuleCenterStore((state) => state.authReady)
+  const syncing = useRuleCenterStore((state) => state.syncing)
+  const authError = useRuleCenterStore((state) => state.authError)
 
-    login,
-    loginWithGoogle,
-    logout,
+  const login = useRuleCenterStore((state) => state.login)
+  const loginWithGoogle = useRuleCenterStore((state) => state.loginWithGoogle)
+  const logout = useRuleCenterStore((state) => state.logout)
 
-    importSchoolRuleFile,
-    importMajorRuleFile,
-    importRemarkRuleFile,
-    importProvinceCategoryBatchRuleFile,
-    importControlLineRuleFile,
+  const importSchoolRuleFile = useRuleCenterStore((state) => state.importSchoolRuleFile)
+  const importMajorRuleFile = useRuleCenterStore((state) => state.importMajorRuleFile)
+  const importRemarkRuleFile = useRuleCenterStore((state) => state.importRemarkRuleFile)
+  const importProvinceCategoryBatchRuleFile = useRuleCenterStore((state) => state.importProvinceCategoryBatchRuleFile)
+  const importControlLineRuleFile = useRuleCenterStore((state) => state.importControlLineRuleFile)
 
-    clearSchoolRules,
-    clearMajorRules,
-    resetProvinceCategoryBatchRules,
-    resetControlLineRules,
+  const clearSchoolRules = useRuleCenterStore((state) => state.clearSchoolRules)
+  const clearMajorRules = useRuleCenterStore((state) => state.clearMajorRules)
+  const resetProvinceCategoryBatchRules = useRuleCenterStore((state) => state.resetProvinceCategoryBatchRules)
+  const resetControlLineRules = useRuleCenterStore((state) => state.resetControlLineRules)
 
-    addRemarkTypeRule,
-    updateRemarkTypeRule,
-    removeRemarkTypeRule,
-    resetRemarkTypeRules,
-    reorderRemarkTypeRules,
+  const addRemarkTypeRule = useRuleCenterStore((state) => state.addRemarkTypeRule)
+  const updateRemarkTypeRule = useRuleCenterStore((state) => state.updateRemarkTypeRule)
+  const removeRemarkTypeRule = useRuleCenterStore((state) => state.removeRemarkTypeRule)
+  const resetRemarkTypeRules = useRuleCenterStore((state) => state.resetRemarkTypeRules)
+  const reorderRemarkTypeRules = useRuleCenterStore((state) => state.reorderRemarkTypeRules)
 
-    setExclusionKeywords,
-  } = useRuleCenterStore()
+  const setExclusionKeywords = useRuleCenterStore((state) => state.setExclusionKeywords)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authSubmitting, setAuthSubmitting] = useState(false)
 
-  const [exclusionDraft, setExclusionDraft] = useState(
-    exclusionKeywords.join('\n')
-  )
+  const exclusionSourceText = exclusionKeywords.join('\n')
+  const [exclusionDraftState, setExclusionDraftState] = useState(() => ({
+    source: exclusionSourceText,
+    text: exclusionSourceText,
+  }))
+  const exclusionDraft =
+    exclusionDraftState.source === exclusionSourceText
+      ? exclusionDraftState.text
+      : exclusionSourceText
+  const setExclusionDraft = (text: string) => {
+    setExclusionDraftState({
+      source: exclusionSourceText,
+      text,
+    })
+  }
 
   /**
    * 备注招生类型规则本地草稿。
@@ -209,10 +219,6 @@ export default function RuleCenterPage() {
   )
 
   useEffect(() => {
-    setExclusionDraft(exclusionKeywords.join('\n'))
-  }, [exclusionKeywords])
-
-  useEffect(() => {
     setRemarkRuleDrafts((prevDrafts) => {
       if (!prevDrafts.length) return remarkTypeRules
 
@@ -274,13 +280,22 @@ export default function RuleCenterPage() {
     [provinceCategoryBatchRules]
   )
 
+  const activeProvinceCategoryBatchYearFilter = useMemo(
+    () => normalizeYearFilter(provinceCategoryBatchYearFilter, provinceCategoryBatchYears),
+    [provinceCategoryBatchYearFilter, provinceCategoryBatchYears]
+  )
+  const activeControlLineYearFilter = useMemo(
+    () => normalizeYearFilter(controlLineYearFilter, controlLineYears),
+    [controlLineYearFilter, controlLineYears]
+  )
+
   const provinceCategoryBatchFiltered = useMemo(() => {
     const keyword = provinceCategoryBatchKeyword.trim()
 
     return provinceCategoryBatchRules.filter((rule) => {
       if (
-        provinceCategoryBatchYearFilter !== '全部' &&
-        rule.year !== provinceCategoryBatchYearFilter
+        activeProvinceCategoryBatchYearFilter !== '全部' &&
+        rule.year !== activeProvinceCategoryBatchYearFilter
       ) {
         return false
       }
@@ -306,7 +321,7 @@ export default function RuleCenterPage() {
     })
   }, [
     provinceCategoryBatchRules,
-    provinceCategoryBatchYearFilter,
+    activeProvinceCategoryBatchYearFilter,
     provinceCategoryTypeFilter,
     provinceCategoryBatchKeyword,
   ])
@@ -315,7 +330,7 @@ export default function RuleCenterPage() {
     const keyword = controlLineKeyword.trim()
 
     return controlLineRules.filter((rule) => {
-      if (controlLineYearFilter !== '全部' && rule.year !== controlLineYearFilter) {
+      if (activeControlLineYearFilter !== '全部' && rule.year !== activeControlLineYearFilter) {
         return false
       }
 
@@ -325,7 +340,7 @@ export default function RuleCenterPage() {
         .join(' ')
         .includes(keyword)
     })
-  }, [controlLineRules, controlLineYearFilter, controlLineKeyword])
+  }, [controlLineRules, activeControlLineYearFilter, controlLineKeyword])
 
   const provinceCategoryBatchSummary = useMemo(
     () => buildYearSummary(provinceCategoryBatchFiltered),
@@ -336,23 +351,6 @@ export default function RuleCenterPage() {
     () => buildYearSummary(controlLineFiltered),
     [controlLineFiltered]
   )
-
-  useEffect(() => {
-    if (provinceCategoryBatchYearFilter === '全部') return
-    if (provinceCategoryBatchYears.includes(provinceCategoryBatchYearFilter)) return
-
-    setProvinceCategoryBatchYearFilter(
-      provinceCategoryBatchYears.includes('2025') ? '2025' : '全部'
-    )
-  }, [provinceCategoryBatchYearFilter, provinceCategoryBatchYears])
-
-  useEffect(() => {
-    if (controlLineYearFilter === '全部') return
-    if (controlLineYears.includes(controlLineYearFilter)) return
-
-    setControlLineYearFilter(controlLineYears.includes('2025') ? '2025' : '全部')
-  }, [controlLineYearFilter, controlLineYears])
-
 
   const getAuthErrorMessage = (error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error)
@@ -1022,7 +1020,7 @@ export default function RuleCenterPage() {
                             <Col xs={24} md={5}>
                               <Select
                                 style={{ width: '100%' }}
-                                value={provinceCategoryBatchYearFilter}
+                                value={activeProvinceCategoryBatchYearFilter}
                                 onChange={setProvinceCategoryBatchYearFilter}
                                 options={[
                                   { label: '全部年份', value: '全部' },
@@ -1079,7 +1077,7 @@ export default function RuleCenterPage() {
                             <Col xs={24} md={5}>
                               <Select
                                 style={{ width: '100%' }}
-                                value={controlLineYearFilter}
+                                value={activeControlLineYearFilter}
                                 onChange={setControlLineYearFilter}
                                 options={[
                                   { label: '全部年份', value: '全部' },
@@ -1633,6 +1631,14 @@ function buildYearSummary<T extends { year: string }>(rules: T[]): RuleSummaryIt
       count,
     }))
     .sort((a, b) => Number(b.year) - Number(a.year))
+}
+
+function normalizeYearFilter(selectedYear: string, availableYears: string[]) {
+  if (selectedYear === '全部' || availableYears.includes(selectedYear)) {
+    return selectedYear
+  }
+
+  return availableYears.includes('2025') ? '2025' : '全部'
 }
 
 function RuleYearSummary({

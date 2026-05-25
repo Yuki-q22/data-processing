@@ -37,7 +37,7 @@ import {
   message,
 } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
-import * as XLSX from 'xlsx'
+import type * as XLSX from 'xlsx'
 import {
   applyManualSelections,
   exportMatchedProfessionalTemplate,
@@ -47,6 +47,8 @@ import {
 } from '../../modules/groupCodeMatch'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 import { confirmToolReset } from '../../utils/toolReset'
+import { parseWorkbookInWorker, sheetToJsonInWorker } from '../../utils/excelWorkerClient'
+import { useLatestTaskGuard } from '../../hooks/useLatestTaskGuard'
 
 const { Dragger } = Upload
 const { Paragraph, Text } = Typography
@@ -65,31 +67,7 @@ type ManualSelection = {
 }
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
-  const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array' })
-  return {
-    fileName: file.name,
-    workbook,
-    sheetNames: workbook.SheetNames,
-  }
-}
-
-function readImportRows(workbook: XLSX.WorkBook, sheetName: string) {
-  const sheet = workbook.Sheets[sheetName]
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    range: 2,
-    raw: false,
-    defval: '',
-  })
-}
-
-function readPlanRows(workbook: XLSX.WorkBook, sheetName: string) {
-  const sheet = workbook.Sheets[sheetName]
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    range: 0,
-    raw: false,
-    defval: '',
-  })
+  return parseWorkbookInWorker(file)
 }
 
 function getImportYear(workbook: XLSX.WorkBook, sheetName: string) {
@@ -126,7 +104,9 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export default function GroupCodeMatchTool() {
-  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+  const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
+  const validMajorCombos = useRuleCenterStore((state) => state.validMajorCombos)
+  const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
 
   const [importWorkbook, setImportWorkbook] = useState<LoadedWorkbook | null>(null)
   const [planWorkbook, setPlanWorkbook] = useState<LoadedWorkbook | null>(null)
@@ -209,8 +189,10 @@ export default function GroupCodeMatchTool() {
   }, [activeRowIndexInRows, rows, visibleManualRows])
 
   const handleUploadImport = async (file: File) => {
+    const taskId = startTask('import-upload')
     try {
       const loaded = await loadWorkbook(file)
+      if (!isLatestTask('import-upload', taskId)) return false
       setImportWorkbook(loaded)
       setImportSheetName(loaded.sheetNames[0])
       setYearValue(getImportYear(loaded.workbook, loaded.sheetNames[0]))
@@ -218,20 +200,24 @@ export default function GroupCodeMatchTool() {
       setManualSelections({})
       message.success(`已上传专业分模板：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('import-upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '文件上传失败')
     }
     return false
   }
 
   const handleUploadPlan = async (file: File) => {
+    const taskId = startTask('plan-upload')
     try {
       const loaded = await loadWorkbook(file)
+      if (!isLatestTask('plan-upload', taskId)) return false
       setPlanWorkbook(loaded)
       setPlanSheetName(loaded.sheetNames[0])
       setRows([])
       setManualSelections({})
       message.success(`已上传招生计划模板：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('plan-upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '文件上传失败')
     }
     return false
@@ -243,10 +229,14 @@ export default function GroupCodeMatchTool() {
       return
     }
 
+    const taskId = startTask('process')
     setProcessing(true)
     try {
-      const importRows = readImportRows(importWorkbook.workbook, importSheetName)
-      const planRows = readPlanRows(planWorkbook.workbook, planSheetName)
+      const [importRows, planRows] = await Promise.all([
+        sheetToJsonInWorker(importWorkbook.workbook, importSheetName, { range: 2 }),
+        sheetToJsonInWorker(planWorkbook.workbook, planSheetName),
+      ])
+      if (!isLatestTask('process', taskId)) return
       const currentYear = yearValue || getImportYear(importWorkbook.workbook, importSheetName)
       const result = processGroupCodeMatch({
         importRows,
@@ -261,9 +251,12 @@ export default function GroupCodeMatchTool() {
       setManualOnly(false)
       message.success('专业组代码匹配完成')
     } catch (error) {
+      if (!isLatestTask('process', taskId)) return
       message.error(error instanceof Error ? error.message : '处理失败')
     } finally {
-      setProcessing(false)
+      if (isLatestTask('process', taskId)) {
+        setProcessing(false)
+      }
     }
   }
 
@@ -365,6 +358,7 @@ const saveManualSelection = () => {
         setImportSheetName(undefined)
         setPlanSheetName(undefined)
         setYearValue('')
+        cancelTask('process')
         setProcessing(false)
         setRows([])
         setManualSelections({})

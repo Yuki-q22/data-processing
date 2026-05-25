@@ -37,7 +37,7 @@ import {
   message,
 } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
-import * as XLSX from 'xlsx'
+import type * as XLSX from 'xlsx'
 import {
   buildCollegeTemplateRows,
   buildProfessionalTemplateRows,
@@ -53,6 +53,8 @@ import {
 } from '../../modules/planCompare'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 import { confirmToolReset } from '../../utils/toolReset'
+import { parseWorkbookInWorker, sheetToJsonInWorker } from '../../utils/excelWorkerClient'
+import { useLatestTaskGuard } from '../../hooks/useLatestTaskGuard'
 
 const { Dragger } = Upload
 const { Paragraph, Text } = Typography
@@ -66,21 +68,7 @@ type LoadedWorkbook = {
 
 type MatchFilter = 'all' | 'matched' | 'unmatched' | 'missing_code'
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
-  const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array' })
-  return {
-    fileName: file.name,
-    workbook,
-    sheetNames: workbook.SheetNames,
-  }
-}
-
-function readSheetRows(workbook: XLSX.WorkBook, sheetName: string) {
-  const sheet = workbook.Sheets[sheetName]
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    raw: false,
-    defval: '',
-  })
+  return parseWorkbookInWorker(file)
 }
 
 function getFirstSheetName(loaded: LoadedWorkbook | null) {
@@ -119,7 +107,9 @@ function getDiffTagColor(tag: string) {
 }
 
 export default function PlanCompareTool() {
-  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+  const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
+  const validMajorCombos = useRuleCenterStore((state) => state.validMajorCombos)
+  const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
 
   const [planWorkbook, setPlanWorkbook] = useState<LoadedWorkbook | null>(null)
   const [scoreWorkbook, setScoreWorkbook] = useState<LoadedWorkbook | null>(null)
@@ -149,39 +139,48 @@ export default function PlanCompareTool() {
   }
 
   const handleUploadPlan = async (file: File) => {
+    const taskId = startTask('plan-upload')
     try {
       const loaded = await loadWorkbook(file)
+      if (!isLatestTask('plan-upload', taskId)) return false
       setPlanWorkbook(loaded)
       setResult(null)
       resetFilters()
       message.success(`已上传招生计划文件：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('plan-upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '招生计划文件读取失败')
     }
     return false
   }
 
   const handleUploadScore = async (file: File) => {
+    const taskId = startTask('score-upload')
     try {
       const loaded = await loadWorkbook(file)
+      if (!isLatestTask('score-upload', taskId)) return false
       setScoreWorkbook(loaded)
       setResult(null)
       resetFilters()
       message.success(`已上传专业分文件：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('score-upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '专业分文件读取失败')
     }
     return false
   }
 
   const handleUploadCollege = async (file: File) => {
+    const taskId = startTask('college-upload')
     try {
       const loaded = await loadWorkbook(file)
+      if (!isLatestTask('college-upload', taskId)) return false
       setCollegeWorkbook(loaded)
       setResult(null)
       resetFilters()
       message.success(`已上传院校分文件：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('college-upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '院校分文件读取失败')
     }
     return false
@@ -193,15 +192,15 @@ export default function PlanCompareTool() {
       return
     }
 
+    const taskId = startTask('process')
     setProcessing(true)
     try {
-      const planRows = readSheetRows(planWorkbook.workbook, getFirstSheetName(planWorkbook))
-      const scoreRows = scoreWorkbook
-        ? readSheetRows(scoreWorkbook.workbook, getFirstSheetName(scoreWorkbook))
-        : []
-      const collegeRows = collegeWorkbook
-        ? readSheetRows(collegeWorkbook.workbook, getFirstSheetName(collegeWorkbook))
-        : []
+      const [planRows, scoreRows, collegeRows] = await Promise.all([
+        sheetToJsonInWorker(planWorkbook.workbook, getFirstSheetName(planWorkbook)),
+        scoreWorkbook ? sheetToJsonInWorker(scoreWorkbook.workbook, getFirstSheetName(scoreWorkbook)) : Promise.resolve([]),
+        collegeWorkbook ? sheetToJsonInWorker(collegeWorkbook.workbook, getFirstSheetName(collegeWorkbook)) : Promise.resolve([]),
+      ])
+      if (!isLatestTask('process', taskId)) return
 
       const firstPlanRow = planRows[0] || {}
       const yearValue = String(firstPlanRow['年份'] || '')
@@ -219,9 +218,12 @@ export default function PlanCompareTool() {
       resetFilters()
       message.success('招生计划数据比对完成')
     } catch (error) {
+      if (!isLatestTask('process', taskId)) return
       message.error(error instanceof Error ? error.message : '比对失败')
     } finally {
-      setProcessing(false)
+      if (isLatestTask('process', taskId)) {
+        setProcessing(false)
+      }
     }
   }
 
@@ -337,6 +339,7 @@ export default function PlanCompareTool() {
         setPlanWorkbook(null)
         setScoreWorkbook(null)
         setCollegeWorkbook(null)
+        cancelTask('process')
         setProcessing(false)
         setResult(null)
         resetFilters()

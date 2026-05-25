@@ -222,7 +222,7 @@ function parseSubjectRequirement(params: {
   }
 
   const requiredMode = /必选|均需|均须|必须|均应|都选/.test(segment)
-  const choiceMode = /[\/／]|\bOR\b|或|[23]\s*选\s*1|选考其中|任选|任意/.test(segment)
+  const choiceMode = /[/／]|\bOR\b|或|[23]\s*选\s*1|选考其中|任选|任意/.test(segment)
 
   return {
     subjectRequirementMode: !requiredMode && choiceMode ? '多门选考' : '单科、多科均需选考',

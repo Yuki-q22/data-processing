@@ -88,17 +88,15 @@ function buildCandidateRecommendReasons(
 }
 
 export default function ExceptionStep() {
-  const {
-    processedRecords,
-    scoreRecords,
-    planRecords,
-    manualMatchSelections,
-    setManualMatchSelection,
-    clearManualMatchSelection,
-    setProcessedRecords,
-  } = usePreviewStore()
+  const processedRecords = usePreviewStore((state) => state.processedRecords)
+  const scoreRecords = usePreviewStore((state) => state.scoreRecords)
+  const planRecords = usePreviewStore((state) => state.planRecords)
+  const manualMatchSelections = usePreviewStore((state) => state.manualMatchSelections)
+  const setManualMatchSelection = usePreviewStore((state) => state.setManualMatchSelection)
+  const clearManualMatchSelection = usePreviewStore((state) => state.clearManualMatchSelection)
+  const setProcessedRecords = usePreviewStore((state) => state.setProcessedRecords)
 
-  const { provinceCurrentBatchDictByYear } = useRuleCenterStore()
+  const provinceCurrentBatchDictByYear = useRuleCenterStore((state) => state.provinceCurrentBatchDictByYear)
 
   const [keyword, setKeyword] = useState('')
   const [matchStatusFilter, setMatchStatusFilter] = useState<

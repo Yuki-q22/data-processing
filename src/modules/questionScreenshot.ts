@@ -155,9 +155,9 @@ const NOTICE_ITEM_RE = /^\s*\d{1,2}[.．、]\s*(?:答卷前|答题前|回答选�
 
 const PARAM_NOTICE_RE = /^\s*\d{1,2}[.．、]\s*(?:可能用到|可能用到的相关参数|相关参数|参考公式|已知条件|本卷中|本试卷中)/
 
-const QUESTION_ANYWHERE_RE = /(?:^|[\s　]|[A-DＡ-Ｄ][.．、]?\s*|[。；;，,、）)]\s*)([1-9]\d{0,2})[.．、](?!\d)\s*/g
+const QUESTION_ANYWHERE_RE = /(?:^|[\s\u3000]|[A-DＡ-Ｄ][.．、]?\s*|[。；;，,、）)]\s*)([1-9]\d{0,2})[.．、](?!\d)\s*/g
 
-const PAGE_NUMBER_RE = /^\s*(?:第\s*)?\d+\s*(?:页\s*[\/／]?\s*共\s*\d+\s*页|[\/／]\s*\d+\s*页?)\s*$|^\s*第\s*\d+\s*页\s*[\/／]\s*共\s*\d+\s*页\s*$/
+const PAGE_NUMBER_RE = /^\s*(?:第\s*)?\d+\s*(?:页\s*[/／]?\s*共\s*\d+\s*页|[/／]\s*\d+\s*页?)\s*$|^\s*第\s*\d+\s*页\s*[/／]\s*共\s*\d+\s*页\s*$/
 
 const SOURCE_WATERMARK_RE = /(?:学科网|组卷网|zxxk|zujuan|www\.)/i
 

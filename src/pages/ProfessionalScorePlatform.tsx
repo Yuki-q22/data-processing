@@ -13,19 +13,15 @@ import { confirmToolReset } from '../utils/toolReset'
 
 export default function ProfessionalScorePlatform() {
   const [current, setCurrent] = useState(0)
-  const {
-    resetTask,
-    scoreWorkbook,
-    scoreSheetName,
-    planWorkbook,
-    planSheetName,
-  } = useTaskStore()
-  const {
-    resetPreview,
-    scoreMappings,
-    planMappings,
-    processedRecords,
-  } = usePreviewStore()
+  const resetTask = useTaskStore((state) => state.resetTask)
+  const scoreWorkbook = useTaskStore((state) => state.scoreWorkbook)
+  const scoreSheetName = useTaskStore((state) => state.scoreSheetName)
+  const planWorkbook = useTaskStore((state) => state.planWorkbook)
+  const planSheetName = useTaskStore((state) => state.planSheetName)
+  const resetPreview = usePreviewStore((state) => state.resetPreview)
+  const scoreMappings = usePreviewStore((state) => state.scoreMappings)
+  const planMappings = usePreviewStore((state) => state.planMappings)
+  const processedRecords = usePreviewStore((state) => state.processedRecords)
 
   const stepItems = [
     { title: '文件上传' },

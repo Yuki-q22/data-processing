@@ -22,6 +22,279 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+button {
+  font: inherit;
+}
+
+/* === 应用壳层 === */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-base);
+}
+
+.app-sider {
+  position: sticky;
+  top: 0;
+  flex: 0 0 300px;
+  width: 300px;
+  height: 100vh;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+}
+
+.app-sider-inner {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+}
+
+.app-brand {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--divider-color);
+}
+
+.app-brand-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.app-brand-subtitle {
+  margin: 4px 0 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.app-menu-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.app-menu {
+  padding: var(--space-2) 10px var(--space-3);
+}
+
+.app-menu-group + .app-menu-group {
+  margin-top: var(--space-2);
+}
+
+.app-menu-group-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.app-menu-group-arrow {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+.app-menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  padding: 0 var(--space-3);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  line-height: 1.4;
+  text-align: left;
+  transition: all 0.2s var(--ease-out);
+}
+
+.app-menu-item:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+
+.app-menu-item.is-active {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  font-weight: 600;
+}
+
+.app-menu-item-icon {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  background: var(--bg-sunken);
+  font-size: 14px;
+}
+
+.app-menu-item.is-active .app-menu-item-icon {
+  color: var(--text-inverse);
+  background: var(--color-primary);
+}
+
+.app-menu-item-icon .anticon {
+  display: inline-flex;
+}
+
+.app-menu-icon-glyph svg {
+  display: block;
+}
+
+.app-menu-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-sidebar-footer {
+  padding: 14px 20px 20px;
+  border-top: 1px solid var(--divider-color);
+}
+
+.app-readme-button {
+  width: 100%;
+  height: 36px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: all 0.2s var(--ease-out);
+}
+
+.app-readme-button:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.app-readme-button:active {
+  transform: scale(0.97);
+}
+
+.app-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 var(--space-6);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.app-header-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.app-content {
+  padding: var(--space-6) var(--space-8);
+}
+
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 180px;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.app-loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  animation: breathe 1.2s ease-in-out infinite;
+}
+
+.readme-modal-layout {
+  display: flex;
+  gap: var(--space-4);
+  height: 72vh;
+}
+
+.readme-modal-nav {
+  width: 230px;
+  overflow-y: auto;
+  padding-right: var(--space-3);
+  border-right: 1px solid var(--divider-color);
+}
+
+.readme-modal-nav-title {
+  margin-bottom: var(--space-3);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.readme-modal-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.readme-modal-nav-button {
+  height: auto;
+  cursor: pointer;
+  padding: 0;
+  color: var(--text-link);
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+}
+
+.readme-modal-nav-button:hover {
+  color: var(--text-link-hover);
+}
+
+.readme-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: var(--space-3);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
 /* === 通用工具类 === */
 .page-section {
   background: var(--bg-surface);

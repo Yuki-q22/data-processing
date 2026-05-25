@@ -19,7 +19,7 @@ function normalizeText(value: unknown) {
     .replace(/[（）]/g, (char) => (char === '（' ? '(' : ')'))
     .replace(/\s+/g, '')
     .replace(/[，。；：、,.;:]/g, '')
-    .replace(/[【】\[\]{}《》<>]/g, '')
+    .replace(/[【】[\]{}《》<>]/g, '')
     .toLowerCase()
 }
 

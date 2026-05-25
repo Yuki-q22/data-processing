@@ -27,7 +27,7 @@ export function normalizeRuleText(value: unknown): string {
     .replace(/\s+/g, '')
     .replace(/（/g, '(')
     .replace(/）/g, ')')
-    .replace(/[［\[【]/g, '(')
+    .replace(/[［[【]/g, '(')
     .replace(/[］\]】]/g, ')')
 }
 

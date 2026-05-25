@@ -1,26 +1,26 @@
-import type { ComponentType, ReactNode } from 'react'
+import type { ComponentType, ExoticComponent, ReactNode } from 'react'
+import FileTextOutlined from '@ant-design/icons-svg/es/asn/FileTextOutlined'
+import FileSearchOutlined from '@ant-design/icons-svg/es/asn/FileSearchOutlined'
+import AuditOutlined from '@ant-design/icons-svg/es/asn/AuditOutlined'
+import PartitionOutlined from '@ant-design/icons-svg/es/asn/PartitionOutlined'
+import ApartmentOutlined from '@ant-design/icons-svg/es/asn/ApartmentOutlined'
+import TagsOutlined from '@ant-design/icons-svg/es/asn/TagsOutlined'
+import SettingOutlined from '@ant-design/icons-svg/es/asn/SettingOutlined'
+import PictureOutlined from '@ant-design/icons-svg/es/asn/PictureOutlined'
+import ScissorOutlined from '@ant-design/icons-svg/es/asn/ScissorOutlined'
+import AntIconGlyph from '../components/AntIconGlyph'
 import {
-  FileTextOutlined,
-  FileSearchOutlined,
-  AuditOutlined,
-  PartitionOutlined,
-  ApartmentOutlined,
-  TagsOutlined,
-  SettingOutlined,
-  PictureOutlined,
-  ScissorOutlined,
-} from '@ant-design/icons'
-
-import ProfessionalScorePlatform from '../pages/ProfessionalScorePlatform'
-import RuleCenterPage from '../pages/RuleCenterPage'
-import CollegeScoreTool from '../pages/tools/CollegeScoreTool'
-import XueyeqiaoTool from '../pages/tools/XueyeqiaoTool'
-import SegmentationCheckTool from '../pages/tools/SegmentationCheckTool'
-import GroupCodeMatchTool from '../pages/tools/GroupCodeMatchTool'
-import PlanCompareTool from '../pages/tools/PlanCompareTool'
-import EmploymentReportImageTool from '../pages/tools/EmploymentReportImageTool'
-import RemarkTypeExtractTool from '../pages/tools/RemarkTypeExtractTool'
-import QuestionScreenshotTool from '../pages/tools/QuestionScreenshotTool'
+  CollegeScoreTool,
+  EmploymentReportImageTool,
+  GroupCodeMatchTool,
+  PlanCompareTool,
+  ProfessionalScorePlatform,
+  QuestionScreenshotTool,
+  RemarkTypeExtractTool,
+  RuleCenterPage,
+  SegmentationCheckTool,
+  XueyeqiaoTool,
+} from './toolComponents'
 
 export type MenuKey =
   | 'rule-center'
@@ -47,12 +47,14 @@ export interface ReadmeNavItem {
   keyword: string
 }
 
+export type ToolComponent = ComponentType | ExoticComponent
+
 export interface ToolDefinition {
   key: MenuKey
   title: string
   menuGroup: MenuGroupKey
   icon: ReactNode
-  Component: ComponentType
+  Component: ToolComponent
   readme?: ReadmeNavItem
 }
 
@@ -69,7 +71,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'rule-center',
     title: '规则中心',
     menuGroup: 'group-core',
-    icon: <SettingOutlined />,
+    icon: <AntIconGlyph icon={SettingOutlined} />,
     Component: RuleCenterPage,
     readme: { id: 'rule-center', label: '1. 规则中心', keyword: '1. 规则中心' },
   },
@@ -77,7 +79,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'professional-score-platform',
     title: '专业分模板智能填充',
     menuGroup: 'group-tools',
-    icon: <FileTextOutlined />,
+    icon: <AntIconGlyph icon={FileTextOutlined} />,
     Component: ProfessionalScorePlatform,
     readme: {
       id: 'professional-score-platform',
@@ -89,7 +91,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'college-score',
     title: '院校分提取',
     menuGroup: 'group-tools',
-    icon: <FileSearchOutlined />,
+    icon: <AntIconGlyph icon={FileSearchOutlined} />,
     Component: CollegeScoreTool,
     readme: { id: 'college-score', label: '3. 院校分提取', keyword: '3. 院校分提取' },
   },
@@ -97,7 +99,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'xueyeqiao',
     title: '模版转换工具',
     menuGroup: 'group-tools',
-    icon: <AuditOutlined />,
+    icon: <AntIconGlyph icon={AuditOutlined} />,
     Component: XueyeqiaoTool,
     readme: { id: 'xueyeqiao', label: '4. 模版转换工具', keyword: '4. 模版转换工具' },
   },
@@ -105,7 +107,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'group-code-match',
     title: '专业组代码匹配',
     menuGroup: 'group-tools',
-    icon: <ApartmentOutlined />,
+    icon: <AntIconGlyph icon={ApartmentOutlined} />,
     Component: GroupCodeMatchTool,
     readme: { id: 'group-code-match', label: '5. 专业组代码匹配', keyword: '5. 专业组代码匹配' },
   },
@@ -113,7 +115,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'employment-report-image',
     title: '就业质量报告图片提取',
     menuGroup: 'group-tools',
-    icon: <PictureOutlined />,
+    icon: <AntIconGlyph icon={PictureOutlined} />,
     Component: EmploymentReportImageTool,
     readme: {
       id: 'employment-report-image',
@@ -125,7 +127,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'plan-compare',
     title: '招生计划数据比对',
     menuGroup: 'group-tools',
-    icon: <ApartmentOutlined />,
+    icon: <AntIconGlyph icon={ApartmentOutlined} />,
     Component: PlanCompareTool,
     readme: { id: 'plan-compare', label: '7. 招生计划数据比对', keyword: '7. 招生计划数据比对' },
   },
@@ -133,7 +135,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'remark-type-extract',
     title: '备注处理',
     menuGroup: 'group-tools',
-    icon: <TagsOutlined />,
+    icon: <AntIconGlyph icon={TagsOutlined} />,
     Component: RemarkTypeExtractTool,
     readme: { id: 'remark-type-extract', label: '8. 备注处理', keyword: '8. 备注处理' },
   },
@@ -141,7 +143,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'question-screenshot',
     title: '高考真题题目处理',
     menuGroup: 'group-tools',
-    icon: <ScissorOutlined />,
+    icon: <AntIconGlyph icon={ScissorOutlined} />,
     Component: QuestionScreenshotTool,
     readme: {
       id: 'question-screenshot',
@@ -153,7 +155,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     key: 'segmentation-check',
     title: '一分一段处理',
     menuGroup: 'group-peak',
-    icon: <PartitionOutlined />,
+    icon: <AntIconGlyph icon={PartitionOutlined} />,
     Component: SegmentationCheckTool,
     readme: { id: 'segmentation-check', label: '10. 一分一段处理', keyword: '10. 一分一段处理' },
   },

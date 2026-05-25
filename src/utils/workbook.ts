@@ -12,12 +12,13 @@ export async function parseWorkbook(file: File): Promise<UploadedWorkbook> {
       defval: '',
     })
 
-    const previewHeaders = (rows[0] || []).map((v) => String(v)).slice(0, 20)
+    const headers = (rows[0] || []).map((v) => String(v ?? '').trim()).filter(Boolean)
 
     return {
       name: sheetName,
       rowCount: rows.length,
-      previewHeaders,
+      headers,
+      previewHeaders: headers.slice(0, 20),
     }
   })
 
@@ -28,10 +29,10 @@ export async function parseWorkbook(file: File): Promise<UploadedWorkbook> {
   }
 }
 
-export function getSheetRows(workbook: unknown, sheetName: string): any[][] {
+export function getSheetRows(workbook: unknown, sheetName: string): unknown[][] {
   const wb = workbook as XLSX.WorkBook
   const sheet = wb.Sheets[sheetName]
-  return XLSX.utils.sheet_to_json<any[]>(sheet, {
+  return XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: '',
   })

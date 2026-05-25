@@ -14,17 +14,19 @@ import {
   message,
 } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
-import * as XLSX from 'xlsx'
+import type * as XLSX from 'xlsx'
 import {
   NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS,
   downloadBlob,
   exportNormalCollegeScoreWorkbook,
-  processNormalCollegeScoreWorkbook,
+  processNormalCollegeScoreRows,
   type NormalCollegeScoreInputTemplateType,
   type NormalCollegeScoreProcessResult,
 } from '../../modules/collegeScoreNormal'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 import { confirmToolReset } from '../../utils/toolReset'
+import { parseWorkbookInWorker, readSheetDataInWorker } from '../../utils/excelWorkerClient'
+import { useLatestTaskGuard } from '../../hooks/useLatestTaskGuard'
 
 const { Dragger } = Upload
 const { Paragraph } = Typography
@@ -86,13 +88,7 @@ const TABLE_COLUMNS = [
 ]
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
-  const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array' })
-  return {
-    fileName: file.name,
-    workbook,
-    sheetNames: workbook.SheetNames,
-  }
+  return parseWorkbookInWorker(file)
 }
 
 function buildRowKey(row: PreviewRow) {
@@ -112,7 +108,9 @@ type CollegeScoreNormalToolProps = {
 }
 
 export default function CollegeScoreNormalTool({ embedded = false }: CollegeScoreNormalToolProps = {}) {
-  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+  const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
+  const validMajorCombos = useRuleCenterStore((state) => state.validMajorCombos)
+  const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
 
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
@@ -124,13 +122,16 @@ export default function CollegeScoreNormalTool({ embedded = false }: CollegeScor
   const previewRows = (result?.rows || []) as PreviewRow[]
 
   const handleUpload = async (file: File) => {
+    const taskId = startTask('upload')
     try {
       const loaded = await loadWorkbook(file)
+      if (!isLatestTask('upload', taskId)) return false
       setLoadedWorkbook(loaded)
       setSheetName(loaded.sheetNames[0])
       setResult(null)
       message.success(`已上传文件：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '文件上传失败')
     }
     return false
@@ -142,17 +143,28 @@ export default function CollegeScoreNormalTool({ embedded = false }: CollegeScor
       return
     }
 
+    const taskId = startTask('process')
     setProcessing(true)
     try {
-      const processed = processNormalCollegeScoreWorkbook(
-        loadedWorkbook.workbook,
-        sheetName,
+      const isLibrary = templateType === 'libraryMajorScore'
+      const sheetData = await readSheetDataInWorker(loadedWorkbook.workbook, sheetName, {
+        headerRowIndex: isLibrary ? 0 : 2,
+        range: isLibrary ? 0 : 2,
+        cellAddresses: ['B2'],
+      })
+      if (!isLatestTask('process', taskId)) return
+
+      const processed = processNormalCollegeScoreRows({
+        rows: sheetData.rows,
+        detectedHeaders: sheetData.headers,
+        yearFromB2: sheetData.cells.B2,
         templateType,
-        {
+        ruleCenterOptions: {
           validSchoolNames,
           validMajorCombos,
         },
-      )
+      })
+      if (!isLatestTask('process', taskId)) return
       setResult(processed)
 
       if (processed.missingColumns.length > 0) {
@@ -161,9 +173,12 @@ export default function CollegeScoreNormalTool({ embedded = false }: CollegeScor
         message.success('院校分提取（普通类）处理完成')
       }
     } catch (error) {
+      if (!isLatestTask('process', taskId)) return
       message.error(error instanceof Error ? error.message : '处理失败')
     } finally {
-      setProcessing(false)
+      if (isLatestTask('process', taskId)) {
+        setProcessing(false)
+      }
     }
   }
 
@@ -194,6 +209,7 @@ export default function CollegeScoreNormalTool({ embedded = false }: CollegeScor
         setLoadedWorkbook(null)
         setSheetName(undefined)
         setTemplateType('rawMajorScore')
+        cancelTask('process')
         setProcessing(false)
         setResult(null)
       },

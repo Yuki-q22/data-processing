@@ -4,7 +4,8 @@ import { useRuleStore } from '../stores/ruleStore'
 const { Paragraph } = Typography
 
 export default function RuleStep() {
-  const { provinceRules, categoryRules } = useRuleStore()
+  const provinceRules = useRuleStore((state) => state.provinceRules)
+  const categoryRules = useRuleStore((state) => state.categoryRules)
 
   const toDataSource = (obj: Record<string, string>) =>
     Object.entries(obj).map(([from, to]) => ({

@@ -319,7 +319,7 @@ function splitRuleList(value: unknown): string[] {
   return Array.from(
     new Set(
       String(value ?? '')
-        .split(/[\/／]/)
+        .split(/[/／]/)
         .map((item) => item.trim())
         .filter(Boolean),
     ),

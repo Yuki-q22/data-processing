@@ -1,7 +1,4 @@
-import { Button, Layout, Menu, Modal, Typography } from 'antd'
-import { useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import readmeText from '../README.md?raw'
+import { Suspense, useMemo, useRef, useState } from 'react'
 import {
   DEFAULT_MENU_KEY,
   MENU_GROUPS,
@@ -13,9 +10,6 @@ import {
   type MenuKey,
 } from './config/toolRegistry'
 
-const { Header, Content, Sider } = Layout
-const { Title, Text } = Typography
-
 export default function App() {
   const [activeKey, setActiveKey] = useState<MenuKey>(DEFAULT_MENU_KEY)
   const [openKeys, setOpenKeys] = useState<MenuGroupKey[]>(['group-core', 'group-tools', 'group-peak'])
@@ -23,24 +17,44 @@ export default function App() {
 
   const content = useMemo(() => {
     const ActiveComponent = TOOL_BY_KEY[activeKey]?.Component ?? TOOL_BY_KEY[DEFAULT_MENU_KEY].Component
-    return <ActiveComponent />
+    return (
+      <Suspense
+        fallback={
+          <div className="app-loading">
+            <span className="app-loading-dot" />
+            <span>正在加载工具...</span>
+          </div>
+        }
+      >
+        <ActiveComponent />
+      </Suspense>
+    )
   }, [activeKey])
 
   const menuItems = useMemo(
     () =>
       MENU_GROUPS.map((group) => ({
-        key: group.key,
-        label: group.label,
-        children: TOOL_DEFINITIONS.filter((tool) => tool.menuGroup === group.key).map((tool) => ({
-          key: tool.key,
-          icon: tool.icon,
-          label: tool.title,
-        })),
+        ...group,
+        tools: TOOL_DEFINITIONS.filter((tool) => tool.menuGroup === group.key),
       })),
     []
   )
 
-  const showReadme = () => {
+  const toggleGroup = (groupKey: MenuGroupKey) => {
+    setOpenKeys((current) =>
+      current.includes(groupKey)
+        ? current.filter((key) => key !== groupKey)
+        : [...current, groupKey]
+    )
+  }
+
+  const showReadme = async () => {
+    const [{ default: Modal }, { default: ReactMarkdown }, { default: readmeText }] = await Promise.all([
+      import('antd/es/modal'),
+      import('react-markdown'),
+      import('../README.md?raw'),
+    ])
+
     const scrollToReadmeSection = (keyword: string) => {
       const container = readmeContentRef.current
       if (!container) return
@@ -62,62 +76,29 @@ export default function App() {
       width: 1100,
       icon: null,
       content: (
-        <div
-          style={{
-            display: 'flex',
-            gap: 16,
-            height: '72vh',
-          }}
-        >
-          <div
-            style={{
-              width: 230,
-              borderRight: '1px solid var(--divider-color)',
-              paddingRight: 12,
-              overflowY: 'auto',
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 600,
-                marginBottom: 12,
-                color: 'var(--text-primary)',
-                fontSize: 14,
-              }}
-            >
+        <div className="readme-modal-layout">
+          <div className="readme-modal-nav">
+            <div className="readme-modal-nav-title">
               目录
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="readme-modal-nav-list">
               {README_NAV_ITEMS.map((item) => (
-                <Button
+                <button
                   key={item.id}
-                  type="link"
-                  size="small"
-                  style={{
-                    justifyContent: 'flex-start',
-                    padding: 0,
-                    height: 'auto',
-                    whiteSpace: 'normal',
-                    textAlign: 'left',
-                  }}
+                  className="readme-modal-nav-button"
+                  type="button"
                   onClick={() => scrollToReadmeSection(item.keyword)}
                 >
                   {item.label}
-                </Button>
+                </button>
               ))}
             </div>
           </div>
 
           <div
             ref={readmeContentRef}
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              paddingRight: 12,
-              lineHeight: 1.75,
-              fontSize: 13,
-            }}
+            className="readme-modal-content"
           >
             <ReactMarkdown>{readmeText}</ReactMarkdown>
           </div>
@@ -127,70 +108,77 @@ export default function App() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider
-        width={300}
-        theme="light"
-        style={{
-          height: '100vh',
-          position: 'sticky',
-          top: 0,
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid var(--divider-color)' }}>
-            <Title level={4} style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+    <div className="app-shell">
+      <aside className="app-sider">
+        <div className="app-sider-inner">
+          <div className="app-brand">
+            <h1 className="app-brand-title">
               数据处理工具平台
-            </Title>
-            <Text style={{ color: 'var(--text-tertiary)', fontSize: 13, marginTop: 4, display: 'block' }}>
+            </h1>
+            <p className="app-brand-subtitle">
               招生数据处理与校验工具集
-            </Text>
+            </p>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <Menu
-              mode="inline"
-              selectedKeys={[activeKey]}
-              openKeys={openKeys}
-              onOpenChange={(keys) => setOpenKeys(keys as MenuGroupKey[])}
-              onClick={(e) => {
-                if (MENU_KEYS.includes(e.key as MenuKey)) {
-                  setActiveKey(e.key as MenuKey)
-                }
-              }}
-              style={{ borderRight: 'none', paddingTop: 8 }}
-              items={menuItems}
-            />
+          <div className="app-menu-scroll">
+            <nav className="app-menu" aria-label="工具菜单">
+              {menuItems.map((group) => {
+                const isOpen = openKeys.includes(group.key)
+
+                return (
+                  <div className="app-menu-group" key={group.key}>
+                    <button
+                      className="app-menu-group-button"
+                      type="button"
+                      aria-expanded={isOpen}
+                      onClick={() => toggleGroup(group.key)}
+                    >
+                      <span>{group.label}</span>
+                      <span className="app-menu-group-arrow">{isOpen ? '−' : '+'}</span>
+                    </button>
+
+                    {isOpen ? (
+                      <div className="app-menu-items">
+                        {group.tools.map((tool) => (
+                          <button
+                            key={tool.key}
+                            className={`app-menu-item${activeKey === tool.key ? ' is-active' : ''}`}
+                            type="button"
+                            onClick={() => {
+                              if (MENU_KEYS.includes(tool.key)) {
+                                setActiveKey(tool.key)
+                              }
+                            }}
+                          >
+                            <span className="app-menu-item-icon">{tool.icon}</span>
+                            <span className="app-menu-item-label">{tool.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </nav>
           </div>
 
-          <div
-            style={{
-              padding: '14px 20px 20px',
-              borderTop: '1px solid var(--divider-color)',
-            }}
-          >
-            <Button block type="default" onClick={showReadme}>
+          <div className="app-sidebar-footer">
+            <button className="app-readme-button" type="button" onClick={() => void showReadme()}>
               使用规则 / README
-            </Button>
+            </button>
           </div>
         </div>
-      </Sider>
+      </aside>
 
-      <Layout>
-        <Header>
-          <Title level={4} style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--text-primary)' }}>
+      <main className="app-main">
+        <header className="app-header">
+          <h2 className="app-header-title">
             {TOOL_BY_KEY[activeKey]?.title ?? '数据处理工具平台'}
-          </Title>
-        </Header>
+          </h2>
+        </header>
 
-        <Content style={{ padding: 'var(--space-6) var(--space-8)' }}>{content}</Content>
-      </Layout>
-    </Layout>
+        <section className="app-content">{content}</section>
+      </main>
+    </div>
   )
 }

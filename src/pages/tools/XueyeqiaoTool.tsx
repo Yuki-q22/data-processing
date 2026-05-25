@@ -35,9 +35,11 @@ import {
   message,
 } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
-import * as XLSX from 'xlsx'
+import type * as XLSX from 'xlsx'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 import { confirmToolReset } from '../../utils/toolReset'
+import { parseWorkbookInWorker, sheetToJsonInWorker } from '../../utils/excelWorkerClient'
+import { useLatestTaskGuard } from '../../hooks/useLatestTaskGuard'
 import {
   downloadBlob,
   exportXueyeqiaoWorkbook,
@@ -93,21 +95,7 @@ type XueyeqiaoPreviewRow = {
 }
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
-  const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array' })
-  return {
-    fileName: file.name,
-    workbook,
-    sheetNames: workbook.SheetNames,
-  }
-}
-
-function readRows(workbook: XLSX.WorkBook, selectedSheetName: string) {
-  const sheet = workbook.Sheets[selectedSheetName]
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: '',
-    raw: false,
-  })
+  return parseWorkbookInWorker(file)
 }
 
 function buildXueyeqiaoRowKey(row: XueyeqiaoPreviewRow) {
@@ -197,7 +185,9 @@ const LIBRARY_TEMPLATE_TABLE_COLUMNS = [
 ]
 
 function XueyeqiaoConvertPanel() {
-  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+  const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
+  const validMajorCombos = useRuleCenterStore((state) => state.validMajorCombos)
+  const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
 
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
@@ -209,13 +199,16 @@ function XueyeqiaoConvertPanel() {
   }, [result])
 
   const handleUpload = async (file: File) => {
+    const taskId = startTask('upload')
     try {
       const loaded = await loadWorkbook(file)
+      if (!isLatestTask('upload', taskId)) return false
       setLoadedWorkbook(loaded)
       setSheetName(loaded.sheetNames[0])
       setResult(null)
       message.success(`已上传文件：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '文件上传失败')
     }
     return false
@@ -227,9 +220,11 @@ function XueyeqiaoConvertPanel() {
       return
     }
 
+    const taskId = startTask('process')
     setProcessing(true)
     try {
-      const rows = readRows(loadedWorkbook.workbook, sheetName)
+      const rows = await sheetToJsonInWorker(loadedWorkbook.workbook, sheetName)
+      if (!isLatestTask('process', taskId)) return
       const processed = processXueyeqiaoData({
         rows,
         validSchoolNames,
@@ -243,9 +238,12 @@ function XueyeqiaoConvertPanel() {
         message.success('学业桥专业分处理完成')
       }
     } catch (error) {
+      if (!isLatestTask('process', taskId)) return
       message.error(error instanceof Error ? error.message : '处理失败')
     } finally {
-      setProcessing(false)
+      if (isLatestTask('process', taskId)) {
+        setProcessing(false)
+      }
     }
   }
 
@@ -278,6 +276,7 @@ function XueyeqiaoConvertPanel() {
       onReset: () => {
         setLoadedWorkbook(null)
         setSheetName(undefined)
+        cancelTask('process')
         setProcessing(false)
         setResult(null)
       },
@@ -367,19 +366,23 @@ function XueyeqiaoConvertPanel() {
 }
 
 function LibraryTemplateConvertPanel() {
+  const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<LibraryProfessionalScoreProcessResult | null>(null)
 
   const handleUpload = async (file: File) => {
+    const taskId = startTask('upload')
     try {
       const loaded = await loadWorkbook(file)
+      if (!isLatestTask('upload', taskId)) return false
       setLoadedWorkbook(loaded)
       setSheetName(loaded.sheetNames[0])
       setResult(null)
       message.success(`已上传文件：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '文件上传失败')
     }
     return false
@@ -391,9 +394,11 @@ function LibraryTemplateConvertPanel() {
       return
     }
 
+    const taskId = startTask('process')
     setProcessing(true)
     try {
-      const rows = readRows(loadedWorkbook.workbook, sheetName)
+      const rows = await sheetToJsonInWorker(loadedWorkbook.workbook, sheetName)
+      if (!isLatestTask('process', taskId)) return
       const processed = processLibraryProfessionalScoreRows(rows)
       setResult(processed)
 
@@ -403,9 +408,12 @@ function LibraryTemplateConvertPanel() {
         message.success('专业分导出专业分模板转换完成')
       }
     } catch (error) {
+      if (!isLatestTask('process', taskId)) return
       message.error(error instanceof Error ? error.message : '处理失败')
     } finally {
-      setProcessing(false)
+      if (isLatestTask('process', taskId)) {
+        setProcessing(false)
+      }
     }
   }
 
@@ -438,6 +446,7 @@ function LibraryTemplateConvertPanel() {
       onReset: () => {
         setLoadedWorkbook(null)
         setSheetName(undefined)
+        cancelTask('process')
         setProcessing(false)
         setResult(null)
       },

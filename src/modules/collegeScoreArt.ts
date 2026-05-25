@@ -27,6 +27,16 @@ export type ArtCollegeScoreProcessResult = {
   detectedHeaders: string[]
 }
 
+export type ArtCollegeScoreRowsInput = {
+  rows: Record<string, unknown>[]
+  detectedHeaders: string[]
+  year?: string
+  ruleCenterOptions?: {
+    validSchoolNames?: string[]
+    validMajorCombos?: string[]
+  }
+}
+
 const EXPECTED_NEW_COLUMNS = [
   '学校名称',
   '省份',
@@ -247,7 +257,42 @@ function processRows(
 
   return output
     .sort((a, b) => a.__sortNo - b.__sortNo)
-    .map(({ __sortNo, ...rest }) => rest)
+    .map((item) => {
+      const { __sortNo, ...rest } = item
+      void __sortNo
+      return rest
+    })
+}
+
+export function processArtCollegeScoreRows({
+  rows,
+  detectedHeaders,
+  year = '',
+  ruleCenterOptions = {},
+}: ArtCollegeScoreRowsInput): ArtCollegeScoreProcessResult {
+  const missingColumns = EXPECTED_NEW_COLUMNS.filter((col) => !detectedHeaders.includes(col))
+
+  if (missingColumns.length > 0) {
+    return {
+      year,
+      inputRowCount: 0,
+      outputRowCount: 0,
+      rows: [],
+      missingColumns,
+      detectedHeaders,
+    }
+  }
+
+  const outputRows = processRows(rows, ruleCenterOptions)
+
+  return {
+    year,
+    inputRowCount: rows.length,
+    outputRowCount: outputRows.length,
+    rows: outputRows,
+    missingColumns,
+    detectedHeaders,
+  }
 }
 
 export function processArtCollegeScoreWorkbook(
@@ -262,35 +307,18 @@ export function processArtCollegeScoreWorkbook(
 
   const year = getCellText(sheet, 'B2')
   const detectedHeaders = readHeaders(sheet)
-  const missingColumns = EXPECTED_NEW_COLUMNS.filter((col) => !detectedHeaders.includes(col))
-
-  if (missingColumns.length > 0) {
-    return {
-      year,
-      inputRowCount: 0,
-      outputRowCount: 0,
-      rows: [],
-      missingColumns,
-      detectedHeaders,
-    }
-  }
-
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     range: 2,
     raw: false,
     defval: '',
   })
 
-  const outputRows = processRows(rows, ruleCenterOptions)
-
-  return {
-    year,
-    inputRowCount: rows.length,
-    outputRowCount: outputRows.length,
-    rows: outputRows,
-    missingColumns,
+  return processArtCollegeScoreRows({
+    rows,
     detectedHeaders,
-  }
+    year,
+    ruleCenterOptions,
+  })
 }
 
 export async function exportArtCollegeScoreWorkbook(

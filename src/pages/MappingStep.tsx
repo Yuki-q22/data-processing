@@ -15,7 +15,8 @@ import { TARGET_FIELDS } from '../constants/targetFields'
 import { useTaskStore } from '../stores/taskStore'
 import { useRuleStore } from '../stores/ruleStore'
 import { useRuleCenterStore } from '../stores/ruleCenterStore'
-import { getSheetJson, getSheetRows } from '../utils/workbook'
+import { sheetToJsonInWorker } from '../utils/excelWorkerClient'
+import { useLatestTaskGuard } from '../hooks/useLatestTaskGuard'
 import { matchFields } from '../utils/mapping'
 import { buildScoreRecords, buildPlanRecords } from '../modules/transform'
 import { buildProcessedRecords } from '../modules/match'
@@ -27,12 +28,7 @@ const { Paragraph } = Typography
 
 function getSheetHeaders(workbook: UploadedWorkbook | null | undefined, sheetName?: string): string[] {
   if (!workbook || !sheetName) return []
-
-  const headerRows = getSheetRows(workbook.workbook, sheetName)
-
-  return (headerRows[0] || [])
-    .map((value: unknown) => String(value ?? '').trim())
-    .filter(Boolean)
+  return workbook.sheets.find((sheet) => sheet.name === sheetName)?.headers ?? []
 }
 
 function sameSourceFields(
@@ -45,41 +41,34 @@ function sameSourceFields(
 }
 
 export default function MappingStep() {
-  const {
-    scoreMappings,
-    planMappings,
-    updateScoreMapping,
-    updatePlanMapping,
-    resetScoreMappingsToAuto,
-    resetPlanMappingsToAuto,
-    setScoreRecords,
-    setPlanRecords,
-    setProcessedRecords,
-  } = usePreviewStore()
+  const scoreMappings = usePreviewStore((state) => state.scoreMappings)
+  const planMappings = usePreviewStore((state) => state.planMappings)
+  const updateScoreMapping = usePreviewStore((state) => state.updateScoreMapping)
+  const updatePlanMapping = usePreviewStore((state) => state.updatePlanMapping)
+  const resetScoreMappingsToAuto = usePreviewStore((state) => state.resetScoreMappingsToAuto)
+  const resetPlanMappingsToAuto = usePreviewStore((state) => state.resetPlanMappingsToAuto)
+  const setScoreRecords = usePreviewStore((state) => state.setScoreRecords)
+  const setPlanRecords = usePreviewStore((state) => state.setPlanRecords)
+  const setProcessedRecords = usePreviewStore((state) => state.setProcessedRecords)
 
-  const {
-    year,
-    defaultDataSource,
-    scoreWorkbook,
-    planWorkbook,
-    scoreSheetName,
-    planSheetName,
-    manualSchoolName,
-  } = useTaskStore()
+  const year = useTaskStore((state) => state.year)
+  const defaultDataSource = useTaskStore((state) => state.defaultDataSource)
+  const scoreWorkbook = useTaskStore((state) => state.scoreWorkbook)
+  const planWorkbook = useTaskStore((state) => state.planWorkbook)
+  const scoreSheetName = useTaskStore((state) => state.scoreSheetName)
+  const planSheetName = useTaskStore((state) => state.planSheetName)
+  const manualSchoolName = useTaskStore((state) => state.manualSchoolName)
 
-  const {
-    fieldAliases,
-    provinceRules,
-    categoryRules,
-    batchRules,
-    ignoredPlanSourceFields,
-  } = useRuleStore()
+  const fieldAliases = useRuleStore((state) => state.fieldAliases)
+  const provinceRules = useRuleStore((state) => state.provinceRules)
+  const categoryRules = useRuleStore((state) => state.categoryRules)
+  const batchRules = useRuleStore((state) => state.batchRules)
+  const ignoredPlanSourceFields = useRuleStore((state) => state.ignoredPlanSourceFields)
 
-  const {
-    remarkTypeRules: cloudRemarkTypeRules,
-    provinceYearCategoryType,
-    provinceCurrentBatchDictByYear,
-  } = useRuleCenterStore()
+  const cloudRemarkTypeRules = useRuleCenterStore((state) => state.remarkTypeRules)
+  const provinceYearCategoryType = useRuleCenterStore((state) => state.provinceYearCategoryType)
+  const provinceCurrentBatchDictByYear = useRuleCenterStore((state) => state.provinceCurrentBatchDictByYear)
+  const { startTask, isLatestTask } = useLatestTaskGuard()
 
   const remarkTypeRules = useMemo(
     () =>
@@ -106,26 +95,31 @@ export default function MappingStep() {
     [planWorkbook, planSheetName]
   )
 
-  const buildAutoScoreMappings = () => matchFields(scoreHeaders, fieldAliases)
+  const autoScoreMappings = useMemo(
+    () => matchFields(scoreHeaders, fieldAliases),
+    [scoreHeaders, fieldAliases]
+  )
 
-  const buildAutoPlanMappings = () =>
-    matchFields(planHeaders, fieldAliases).filter(
+  const autoPlanMappings = useMemo(
+    () => matchFields(planHeaders, fieldAliases).filter(
       (item) => !ignoredPlanSourceFields.includes(item.sourceField)
-    )
+    ),
+    [planHeaders, fieldAliases, ignoredPlanSourceFields]
+  )
 
   useEffect(() => {
     if (!scoreHeaders.length) return
     if (sameSourceFields(scoreMappings, scoreHeaders)) return
 
-    resetScoreMappingsToAuto(buildAutoScoreMappings())
-  }, [scoreHeaders.join('\u0001'), fieldAliases])
+    resetScoreMappingsToAuto(autoScoreMappings)
+  }, [autoScoreMappings, resetScoreMappingsToAuto, scoreHeaders, scoreMappings])
 
   useEffect(() => {
     if (!planHeaders.length) return
     if (sameSourceFields(planMappings, planHeaders)) return
 
-    resetPlanMappingsToAuto(buildAutoPlanMappings())
-  }, [planHeaders.join('\u0001'), fieldAliases, ignoredPlanSourceFields])
+    resetPlanMappingsToAuto(autoPlanMappings)
+  }, [autoPlanMappings, planHeaders, planMappings, resetPlanMappingsToAuto])
 
   const handleResetAutoMappings = () => {
     if (!scoreWorkbook || !scoreSheetName || !planWorkbook || !planSheetName) {
@@ -133,20 +127,17 @@ export default function MappingStep() {
       return
     }
 
-    resetScoreMappingsToAuto(buildAutoScoreMappings())
-    resetPlanMappingsToAuto(buildAutoPlanMappings())
+    resetScoreMappingsToAuto(autoScoreMappings)
+    resetPlanMappingsToAuto(autoPlanMappings)
 
     message.success('已恢复自动映射')
   }
 
-  const handleApplyMappings = () => {
+  const handleApplyMappings = async () => {
     if (!scoreWorkbook || !scoreSheetName || !planWorkbook || !planSheetName) {
       message.warning('请先在第一步上传并选择表格')
       return
     }
-
-    const scoreRows = getSheetJson(scoreWorkbook.workbook, scoreSheetName)
-    const planRows = getSheetJson(planWorkbook.workbook, planSheetName)
 
     const finalScoreMappings = scoreMappings.filter(
       (item) => !item.ignored && item.targetField
@@ -160,6 +151,23 @@ export default function MappingStep() {
       message.warning('请先完成原始专业分和招生计划字段映射')
       return
     }
+
+    const taskId = startTask('apply-mappings')
+    let scoreRows: Record<string, unknown>[]
+    let planRows: Record<string, unknown>[]
+
+    try {
+      [scoreRows, planRows] = await Promise.all([
+        sheetToJsonInWorker(scoreWorkbook.workbook, scoreSheetName),
+        sheetToJsonInWorker(planWorkbook.workbook, planSheetName),
+      ])
+    } catch (error) {
+      if (!isLatestTask('apply-mappings', taskId)) return
+      message.error(error instanceof Error ? error.message : '映射应用失败')
+      return
+    }
+
+    if (!isLatestTask('apply-mappings', taskId)) return
 
     const scoreRecords = buildScoreRecords(
       scoreRows,

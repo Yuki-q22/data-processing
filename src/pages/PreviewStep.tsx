@@ -63,7 +63,7 @@ function getRecordSearchText(record: ProcessedRecord) {
 }
 
 export default function PreviewStep() {
-  const { processedRecords } = usePreviewStore()
+  const processedRecords = usePreviewStore((state) => state.processedRecords)
   const [keyword, setKeyword] = useState('')
   const [matchStatusFilter, setMatchStatusFilter] = useState('all')
   const [issueLevelFilter, setIssueLevelFilter] = useState('all')

@@ -56,9 +56,10 @@ function getResultTagColor(value: string) {
 }
 
 export default function ExportStep() {
-  const { processedRecords } = usePreviewStore()
-  const { year } = useTaskStore()
-  const { validSchoolNames, validMajorCombos } = useRuleCenterStore()
+  const processedRecords = usePreviewStore((state) => state.processedRecords)
+  const year = useTaskStore((state) => state.year)
+  const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
+  const validMajorCombos = useRuleCenterStore((state) => state.validMajorCombos)
 
   const exportable = useMemo(() => getExportableRecords(processedRecords), [processedRecords])
   const blocked = processedRecords.length - exportable.length

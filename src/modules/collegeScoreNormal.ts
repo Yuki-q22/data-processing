@@ -55,6 +55,17 @@ export type NormalCollegeScoreProcessResult = {
   detectedHeaders: string[];
 };
 
+export type NormalCollegeScoreRowsInput = {
+  rows: Record<string, unknown>[];
+  detectedHeaders: string[];
+  yearFromB2?: string;
+  templateType: NormalCollegeScoreInputTemplateType;
+  ruleCenterOptions?: {
+    validSchoolNames?: string[];
+    validMajorCombos?: string[];
+  };
+};
+
 const RAW_MAJOR_SCORE_EXPECTED_COLUMNS = [
   "学校名称",
   "省份",
@@ -473,7 +484,54 @@ function processRows(
 
   return output
     .sort((a, b) => a.__sortNo - b.__sortNo)
-    .map(({ __sortNo, ...rest }) => rest);
+    .map((item) => {
+      const { __sortNo, ...rest } = item;
+      void __sortNo;
+      return rest;
+    });
+}
+
+export function processNormalCollegeScoreRows({
+  rows,
+  detectedHeaders,
+  yearFromB2 = "",
+  templateType,
+  ruleCenterOptions = {},
+}: NormalCollegeScoreRowsInput): NormalCollegeScoreProcessResult {
+  const isLibrary = templateType === "libraryMajorScore";
+  const expectedColumns = isLibrary
+    ? LIBRARY_MAJOR_SCORE_EXPECTED_COLUMNS
+    : RAW_MAJOR_SCORE_EXPECTED_COLUMNS;
+  const missingColumns = expectedColumns.filter(
+    (col) => !detectedHeaders.includes(col),
+  );
+
+  if (missingColumns.length > 0) {
+    return {
+      templateType,
+      templateName: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS[templateType],
+      year: yearFromB2,
+      inputRowCount: 0,
+      outputRowCount: 0,
+      rows: [],
+      missingColumns,
+      detectedHeaders,
+    };
+  }
+
+  const year = isLibrary ? pickText(rows[0] || {}, ["年份"]) : yearFromB2;
+  const outputRows = processRows(rows, templateType, year, ruleCenterOptions);
+
+  return {
+    templateType,
+    templateName: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS[templateType],
+    year,
+    inputRowCount: rows.length,
+    outputRowCount: outputRows.length,
+    rows: outputRows,
+    missingColumns,
+    detectedHeaders,
+  };
 }
 
 export function processNormalCollegeScoreWorkbook(
@@ -491,31 +549,11 @@ export function processNormalCollegeScoreWorkbook(
   }
 
   const isLibrary = templateType === "libraryMajorScore";
-  const expectedColumns = isLibrary
-    ? LIBRARY_MAJOR_SCORE_EXPECTED_COLUMNS
-    : RAW_MAJOR_SCORE_EXPECTED_COLUMNS;
-
   const headerRowIndex = isLibrary ? 0 : 2;
   const dataRange = isLibrary ? 0 : 2;
 
   const detectedHeaders = readHeaders(sheet, headerRowIndex);
-  const missingColumns = expectedColumns.filter(
-    (col) => !detectedHeaders.includes(col),
-  );
   const yearFromB2 = getCellText(sheet, "B2");
-
-  if (missingColumns.length > 0) {
-    return {
-      templateType,
-      templateName: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS[templateType],
-      year: yearFromB2,
-      inputRowCount: 0,
-      outputRowCount: 0,
-      rows: [],
-      missingColumns,
-      detectedHeaders,
-    };
-  }
 
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     range: dataRange,
@@ -523,19 +561,13 @@ export function processNormalCollegeScoreWorkbook(
     defval: "",
   });
 
-  const year = isLibrary ? pickText(rows[0] || {}, ["年份"]) : yearFromB2;
-  const outputRows = processRows(rows, templateType, year, ruleCenterOptions);
-
-  return {
-    templateType,
-    templateName: NORMAL_COLLEGE_SCORE_TEMPLATE_LABELS[templateType],
-    year,
-    inputRowCount: rows.length,
-    outputRowCount: outputRows.length,
-    rows: outputRows,
-    missingColumns,
+  return processNormalCollegeScoreRows({
+    rows,
     detectedHeaders,
-  };
+    yearFromB2,
+    templateType,
+    ruleCenterOptions,
+  });
 }
 
 export async function exportNormalCollegeScoreWorkbook(

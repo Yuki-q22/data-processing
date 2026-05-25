@@ -3,6 +3,7 @@ import type * as XLSX from 'xlsx'
 export type SheetMeta = {
   name: string
   rowCount: number
+  headers: string[]
   previewHeaders: string[]
 }
 

@@ -12,13 +12,14 @@ import {
   Typography,
   message,
 } from 'antd'
-import * as XLSX from 'xlsx'
 import FileUploadCard from '../components/FileUploadCard'
 import { validateUploadedHeaders } from '../modules/uploadValidation'
 import { useTaskStore } from '../stores/taskStore'
 import { usePreviewStore } from '../stores/previewStore'
 import { useRuleCenterStore } from '../stores/ruleCenterStore'
 import { confirmToolReset } from '../utils/toolReset'
+import { parseUploadedWorkbookInWorker } from '../utils/excelWorkerClient'
+import { useLatestTaskGuard } from '../hooks/useLatestTaskGuard'
 import type { UploadedWorkbook } from '../types/workbook'
 
 const { Paragraph, Text } = Typography
@@ -54,49 +55,8 @@ const REQUIRED_PLAN_FIELDS = [
   '数据来源',
 ]
 
-function normalizeHeader(value: unknown) {
-  return String(value ?? '').trim()
-}
-
 function normalizeSchoolSearchText(value: unknown) {
   return String(value ?? '').replace(/\s+/g, '').trim()
-}
-
-async function parseUploadedWorkbook(file: File): Promise<UploadedWorkbook> {
-  const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array' })
-
-  const sheets = workbook.SheetNames.map((sheetName) => {
-    const sheet = workbook.Sheets[sheetName]
-
-    const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-      header: 1,
-      defval: '',
-      raw: false,
-    })
-
-    const previewHeaders = (aoa[0] || [])
-      .map((value) => normalizeHeader(value))
-      .filter(Boolean)
-      .slice(0, 20)
-
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: '',
-      raw: false,
-    })
-
-    return {
-      name: sheetName,
-      rowCount: rows.length,
-      previewHeaders,
-    }
-  })
-
-  return {
-    fileName: file.name,
-    workbook,
-    sheets,
-  }
 }
 
 function getSheetHeaders(
@@ -105,37 +65,26 @@ function getSheetHeaders(
 ): string[] {
   if (!workbook || !selectedSheet) return []
 
-  const sheet = workbook.workbook.Sheets[selectedSheet]
-
-  if (!sheet) return []
-
-  const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    defval: '',
-    raw: false,
-  })
-
-  return (aoa[0] || []).map(normalizeHeader).filter(Boolean)
+  return workbook.sheets.find((sheet) => sheet.name === selectedSheet)?.headers ?? []
 }
 
 export default function UploadStep() {
-  const {
-    taskName,
-    year,
-    defaultDataSource,
-    manualSchoolName,
-    scoreWorkbook,
-    scoreSheetName,
-    planWorkbook,
-    planSheetName,
-    setTaskMeta,
-    setWorkbook,
-    setSheetName,
-    resetTask,
-  } = useTaskStore()
+  const taskName = useTaskStore((state) => state.taskName)
+  const year = useTaskStore((state) => state.year)
+  const defaultDataSource = useTaskStore((state) => state.defaultDataSource)
+  const manualSchoolName = useTaskStore((state) => state.manualSchoolName)
+  const scoreWorkbook = useTaskStore((state) => state.scoreWorkbook)
+  const scoreSheetName = useTaskStore((state) => state.scoreSheetName)
+  const planWorkbook = useTaskStore((state) => state.planWorkbook)
+  const planSheetName = useTaskStore((state) => state.planSheetName)
+  const setTaskMeta = useTaskStore((state) => state.setTaskMeta)
+  const setWorkbook = useTaskStore((state) => state.setWorkbook)
+  const setSheetName = useTaskStore((state) => state.setSheetName)
+  const resetTask = useTaskStore((state) => state.resetTask)
 
-  const { resetPreview } = usePreviewStore()
-  const { validSchoolNames } = useRuleCenterStore()
+  const resetPreview = usePreviewStore((state) => state.resetPreview)
+  const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
+  const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
 
   const schoolNameOptions = useMemo(() => {
     const keyword = normalizeSchoolSearchText(manualSchoolName)
@@ -170,7 +119,9 @@ export default function UploadStep() {
   }, [planHeaders])
 
   const handleScoreUpload = async (file: File) => {
-    const uploaded = await parseUploadedWorkbook(file)
+    const taskId = startTask('score-upload')
+    const uploaded = await parseUploadedWorkbookInWorker(file)
+    if (!isLatestTask('score-upload', taskId)) return
 
     setWorkbook('score', uploaded)
 
@@ -187,7 +138,9 @@ export default function UploadStep() {
   }
 
   const handlePlanUpload = async (file: File) => {
-    const uploaded = await parseUploadedWorkbook(file)
+    const taskId = startTask('plan-upload')
+    const uploaded = await parseUploadedWorkbookInWorker(file)
+    if (!isLatestTask('plan-upload', taskId)) return
 
     setWorkbook('plan', uploaded)
 
@@ -218,6 +171,8 @@ export default function UploadStep() {
         '将清空已上传文件、Sheet 选择、字段映射、处理预览和异常人工匹配记录，并清理工具运行缓存。规则中心规则不会被删除。',
       successMessage: '已重置专业分模板智能填充数据和运行缓存',
       onReset: () => {
+        cancelTask('score-upload')
+        cancelTask('plan-upload')
         resetTask()
         resetPreview()
       },

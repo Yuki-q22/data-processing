@@ -45,6 +45,8 @@ import {
 } from '../../modules/remarkTypeExtract'
 import { downloadBlob, fixRemark } from '../../modules/xueyeqiao'
 import { confirmToolReset } from '../../utils/toolReset'
+import { parseWorkbookInWorker } from '../../utils/excelWorkerClient'
+import { useLatestTaskGuard } from '../../hooks/useLatestTaskGuard'
 
 const { Dragger } = Upload
 const { Paragraph, Text } = Typography
@@ -72,9 +74,7 @@ type RemarkProcessResult = {
 }
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
-  const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array' })
-  return { fileName: file.name, workbook, sheetNames: workbook.SheetNames }
+  return parseWorkbookInWorker(file)
 }
 
 function cellToText(value: unknown) {
@@ -196,7 +196,9 @@ const REMARK_CLEAN_TABLE_COLUMNS = [
 ]
 
 function RemarkTypeExtractPanel() {
-  const { remarkTypeRules, exclusionKeywords } = useRuleCenterStore()
+  const remarkTypeRules = useRuleCenterStore((state) => state.remarkTypeRules)
+  const exclusionKeywords = useRuleCenterStore((state) => state.exclusionKeywords)
+  const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
 
   const [loaded, setLoaded] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
@@ -212,8 +214,10 @@ function RemarkTypeExtractPanel() {
   }, [loaded, sheetName])
 
   const handleUpload = async (file: File) => {
+    const taskId = startTask('upload')
     try {
       const wb = await loadWorkbook(file)
+      if (!isLatestTask('upload', taskId)) return false
       const firstSheet = wb.sheetNames[0]
       const rows = firstSheet ? getRows(wb.workbook, firstSheet) : []
       const headers = rows.length ? Object.keys(rows[0]) : []
@@ -224,6 +228,7 @@ function RemarkTypeExtractPanel() {
       setResult(null)
       message.success(`已加载文件：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '文件加载失败')
     }
     return false
@@ -245,6 +250,7 @@ function RemarkTypeExtractPanel() {
       return
     }
 
+    const taskId = startTask('process')
     setProcessing(true)
     try {
       const rows = getRows(loaded.workbook, sheetName)
@@ -254,12 +260,16 @@ function RemarkTypeExtractPanel() {
         rules: remarkTypeRules,
         exclusionKeywords,
       })
+      if (!isLatestTask('process', taskId)) return
       setResult(processed)
       message.success('备注招生类型提取完成')
     } catch (error) {
+      if (!isLatestTask('process', taskId)) return
       message.error(error instanceof Error ? error.message : '处理失败')
     } finally {
-      setProcessing(false)
+      if (isLatestTask('process', taskId)) {
+        setProcessing(false)
+      }
     }
   }
 
@@ -277,6 +287,7 @@ function RemarkTypeExtractPanel() {
         setLoaded(null)
         setSheetName(undefined)
         setRemarkColumn(undefined)
+        cancelTask('process')
         setProcessing(false)
         setResult(null)
       },
@@ -358,6 +369,7 @@ function RemarkTypeExtractPanel() {
 }
 
 function RemarkCleanPanel() {
+  const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
   const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>()
   const [remarkField, setRemarkField] = useState<string>()
@@ -375,8 +387,10 @@ function RemarkCleanPanel() {
   }, [rowsForFieldOptions])
 
   const handleUpload = async (file: File) => {
+    const taskId = startTask('upload')
     try {
       const loaded = await loadWorkbook(file)
+      if (!isLatestTask('upload', taskId)) return false
       const firstSheet = loaded.sheetNames[0]
       const rows = firstSheet ? getRows(loaded.workbook, firstSheet) : []
       const headers = rows.length ? Object.keys(rows[0]) : []
@@ -388,6 +402,7 @@ function RemarkCleanPanel() {
       setResult(null)
       message.success(`已上传文件：${file.name}`)
     } catch (error) {
+      if (!isLatestTask('upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '文件上传失败')
     }
     return false
@@ -415,16 +430,21 @@ function RemarkCleanPanel() {
       return
     }
 
+    const taskId = startTask('process')
     setProcessing(true)
     try {
       const rows = getRows(loadedWorkbook.workbook, sheetName)
       const processed = buildRemarkRows(rows, remarkField)
+      if (!isLatestTask('process', taskId)) return
       setResult(processed)
       message.success('备注处理完成')
     } catch (error) {
+      if (!isLatestTask('process', taskId)) return
       message.error(error instanceof Error ? error.message : '处理失败')
     } finally {
-      setProcessing(false)
+      if (isLatestTask('process', taskId)) {
+        setProcessing(false)
+      }
     }
   }
 
@@ -449,6 +469,7 @@ function RemarkCleanPanel() {
         setLoadedWorkbook(null)
         setSheetName(undefined)
         setRemarkField(undefined)
+        cancelTask('process')
         setProcessing(false)
         setResult(null)
       },

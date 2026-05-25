@@ -567,8 +567,8 @@ function t(value: unknown): string {
 function normalizeText(value: unknown): string {
   return t(value)
     .replace(/\s+/g, '')
-    .replace(/[（）()\[\]【】]/g, '')
-    .replace(/[\-—–_]/g, '')
+    .replace(/[（）()[\]【】]/g, '')
+    .replace(/[-—–_]/g, '')
 }
 
 function includesAny(text: string, keywords: string[]): boolean {

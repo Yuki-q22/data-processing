@@ -397,7 +397,7 @@ function compressPunctuation(text: string) {
   const next = text
     .replace(/[，,]{2,}/g, '，')
     .replace(/[；;]{2,}/g, '；')
-    .replace(/[。\.]{2,}/g, '。')
+    .replace(/[。.]{2,}/g, '。')
     .replace(/([，；。])([，；。]+)/g, '$1')
     .replace(/\s{2,}/g, ' ')
   return { text: next, changed: next !== text }
