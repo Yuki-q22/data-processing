@@ -197,6 +197,7 @@ function filterRowsByFullScore(rows: ScoreCumulativeRow[], fullScore: number) {
 
 function inferProvinceFromRows(rows: PdfRow[]) {
   const text = rows.slice(0, 30).map((row) => row.text).join(' ')
+  if (text.includes('宁夏')) return '宁夏'
   if (text.includes('吉林')) return '吉林'
   if (text.includes('贵州')) return '贵州'
   if (text.includes('上海')) return '上海'
@@ -468,6 +469,28 @@ function parseDirectFromRows(rows: PdfRow[]) {
   return dedupeAndSortScoreRows(result)
 }
 
+function parseNingxiaFromRows(rows: PdfRow[], fullScore: number) {
+  const result: ScoreCumulativeRow[] = []
+
+  rows.forEach((row) => {
+    if (!/分以上|分及以上/.test(row.text)) return
+
+    const items = getRowNumberItems(row).sort((a, b) => a.x - b.x)
+    if (items.length < 4) return
+
+    for (let index = 0; index + 1 < items.length; index += 2) {
+      const score = items[index].value
+      const cumulative = items[index + 1].value
+
+      if (!isScoreInFullRange(score, fullScore) || !Number.isFinite(cumulative) || cumulative < 0) continue
+
+      result.push({ score, cumulative })
+    }
+  })
+
+  return dedupeAndSortScoreRows(result)
+}
+
 function dedupeAndSortScoreRows(rows: ScoreCumulativeRow[]) {
   const seen = new Set<number>()
   const unique: ScoreCumulativeRow[] = []
@@ -503,11 +526,13 @@ async function buildWorkbookFromPdf(buffer: ArrayBuffer, meta?: SegmentationMeta
   const province = inputProvince || inferredProvince
   const fullScore = getFullScoreByProvince(province)
 
+  const ningxiaRows = province === '宁夏' ? filterRowsByFullScore(parseNingxiaFromRows(rows, fullScore), fullScore) : []
   const jilinRows = province === '贵州' ? [] : filterRowsByFullScore(parseJilinFromRows(rows, fullScore), fullScore)
   const guizhouRows = province === '吉林' ? [] : filterRowsByFullScore(parseGuizhouFromRows(rows, fullScore), fullScore)
   const directRows = province ? [] : filterRowsByFullScore(parseDirectFromRows(rows), fullScore)
 
   const candidates = [
+    { format: 'ningxia-two-column-groups', rows: ningxiaRows, priority: province === '宁夏' ? 10000 : 0 },
     { format: 'jilin', rows: jilinRows, priority: province === '吉林' ? 10000 : inferredProvince === '吉林' ? 5000 : 0 },
     { format: 'horizontal_multiline', rows: guizhouRows, priority: province === '贵州' ? 10000 : inferredProvince === '贵州' ? 5000 : 0 },
     { format: 'direct', rows: directRows, priority: -1000 },
