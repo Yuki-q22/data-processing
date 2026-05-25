@@ -526,13 +526,14 @@ async function buildWorkbookFromPdf(buffer: ArrayBuffer, meta?: SegmentationMeta
   const province = inputProvince || inferredProvince
   const fullScore = getFullScoreByProvince(province)
 
-  const ningxiaRows = province === '宁夏' ? filterRowsByFullScore(parseNingxiaFromRows(rows, fullScore), fullScore) : []
+  const shouldTryNingxia = province === '宁夏' || !province
+  const ningxiaRows = shouldTryNingxia ? filterRowsByFullScore(parseNingxiaFromRows(rows, fullScore), fullScore) : []
   const jilinRows = province === '贵州' ? [] : filterRowsByFullScore(parseJilinFromRows(rows, fullScore), fullScore)
   const guizhouRows = province === '吉林' ? [] : filterRowsByFullScore(parseGuizhouFromRows(rows, fullScore), fullScore)
   const directRows = province ? [] : filterRowsByFullScore(parseDirectFromRows(rows), fullScore)
 
   const candidates = [
-    { format: 'ningxia-two-column-groups', rows: ningxiaRows, priority: province === '宁夏' ? 10000 : 0 },
+    { format: 'ningxia-two-column-groups', rows: ningxiaRows, priority: province === '宁夏' ? 10000 : 2000 },
     { format: 'jilin', rows: jilinRows, priority: province === '吉林' ? 10000 : inferredProvince === '吉林' ? 5000 : 0 },
     { format: 'horizontal_multiline', rows: guizhouRows, priority: province === '贵州' ? 10000 : inferredProvince === '贵州' ? 5000 : 0 },
     { format: 'direct', rows: directRows, priority: -1000 },
