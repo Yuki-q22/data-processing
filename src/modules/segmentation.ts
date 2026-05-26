@@ -26,6 +26,12 @@ type SegmentationProcessResult = {
   }
 }
 
+type LoadedSegmentationWorkbook = {
+  workbook: ExcelJS.Workbook
+  detectedFormat: string
+  extractedRows: number
+}
+
 type PdfDocumentProxy = {
   numPages: number
   getPage(pageNumber: number): Promise<PdfPageProxy>
@@ -72,6 +78,12 @@ type JilinHeaderOffset = {
   offset: number
 }
 
+type PdfLikeRowsOptions = {
+  includeDirect?: boolean
+  includeTable?: boolean
+  detectedFormatPrefix?: string
+}
+
 const REQUIRED_YEAR = '2026'
 const TEMPLATE_NOTE = '注：1、分数必须最高三位数，数据必须为非负数 2、多分一段填写是，单分可不填写 3、层次只能选择本科、高职（专科）、不分层次'
 
@@ -99,6 +111,33 @@ function parseScoreNumber(value: unknown) {
   return Number.isNaN(n) ? null : n
 }
 
+function parseScoreSpan(value: unknown) {
+  const text = normalizeText(getPlainCellValue(value)).replace(/\s+/g, '')
+  const rangeMatch = text.match(/^(\d{1,4})(?:分)?(?:→|->|-|－|—|–|~|～|至|到)(\d{1,4})(?:分)?$/)
+  if (rangeMatch) {
+    const first = Number(rangeMatch[1])
+    const second = Number(rangeMatch[2])
+    if (Number.isFinite(first) && Number.isFinite(second) && first >= 0 && second >= 0 && first <= 1000 && second <= 1000 && first !== second) {
+      const low = Math.min(first, second)
+      const high = Math.max(first, second)
+      return {
+        low,
+        high,
+        isRange: true,
+        label: `${low}-${high}`,
+      }
+    }
+  }
+
+  const score = parseScoreNumber(value)
+  return score === null ? null : {
+    low: score,
+    high: score,
+    isRange: false,
+    label: String(score),
+  }
+}
+
 function parseNumber(value: unknown) {
   const plainValue = getPlainCellValue(value)
   if (plainValue === null || plainValue === undefined || String(plainValue).trim() === '') {
@@ -121,15 +160,48 @@ function normalizeMetaValue(value?: string) {
   return normalizeText(value)
 }
 
+function getWantedSubject(meta?: SegmentationMeta) {
+  const text = `${normalizeMetaValue(meta?.category)} ${normalizeMetaValue(meta?.firstSubject)}`
+  if (/物理/.test(text)) return '物理'
+  if (/历史/.test(text)) return '历史'
+  return ''
+}
+
+function filterRowsBySubject<T>(rows: T[], meta: SegmentationMeta | undefined, getText: (row: T) => string) {
+  const wantedSubject = getWantedSubject(meta)
+  if (!wantedSubject) return rows
+
+  let hasSubjectMarker = false
+  let shouldInclude = false
+  const filtered: T[] = []
+
+  rows.forEach((row) => {
+    const text = getText(row).replace(/\s+/g, '')
+    const hasPhysical = /物理/.test(text)
+    const hasHistory = /历史/.test(text)
+
+    if (hasPhysical || hasHistory) {
+      hasSubjectMarker = true
+      shouldInclude = wantedSubject === '物理' ? hasPhysical : hasHistory
+    }
+
+    if (shouldInclude) {
+      filtered.push(row)
+    }
+  })
+
+  return hasSubjectMarker && filtered.length ? filtered : rows
+}
+
 function setGapRowFill(worksheet: ExcelJS.Worksheet, row: number, fill: ExcelJS.Fill) {
   ;['A', 'B', 'C', 'E', 'F'].forEach((col) => {
     worksheet.getCell(`${col}${row}`).fill = fill
   })
 }
 
-function getFullScoreByProvince(province: string) {
-  if (province === '上海') return 660
-  if (province === '海南') return 900
+function getFullScoreByProvince(province: string, level?: string) {
+  if (province.includes('上海')) return /专科|高职/.test(level ?? '') ? 450 : 660
+  if (province.includes('海南')) return 900
   return 750
 }
 
@@ -233,6 +305,20 @@ function applyMetaToWorksheet(worksheet: ExcelJS.Worksheet, meta?: SegmentationM
   if (category) worksheet.getCell('B4').value = category
   if (firstSubject) worksheet.getCell('B5').value = firstSubject
   if (level) worksheet.getCell('B6').value = level
+}
+
+function applyExactMetaToWorksheet(worksheet: ExcelJS.Worksheet, meta?: SegmentationMeta) {
+  const fields: Array<[string, string]> = [
+    ['B2', normalizeMetaValue(meta?.year)],
+    ['B3', normalizeMetaValue(meta?.province)],
+    ['B4', normalizeMetaValue(meta?.category)],
+    ['B5', normalizeMetaValue(meta?.firstSubject)],
+    ['B6', normalizeMetaValue(meta?.level)],
+  ]
+
+  fields.forEach(([cellAddress, value]) => {
+    worksheet.getCell(cellAddress).value = value || null
+  })
 }
 
 async function readPdfRowsFromBuffer(buffer: ArrayBuffer): Promise<PdfRow[]> {
@@ -519,32 +605,68 @@ function calculateSegmentCounts(data: ScoreCumulativeRow[]): ScoreSegmentRow[] {
   })
 }
 
-async function buildWorkbookFromPdf(buffer: ArrayBuffer, meta?: SegmentationMeta) {
-  const rows = await readPdfRowsFromBuffer(buffer)
+function buildWorkbookFromPdfLikeRows(
+  rows: PdfRow[],
+  meta?: SegmentationMeta,
+  options: PdfLikeRowsOptions = {},
+): LoadedSegmentationWorkbook | null {
+  const scopedRows = filterRowsBySubject(rows, meta, (row) => row.text)
   const inputProvince = normalizeMetaValue(meta?.province)
   const inferredProvince = inferProvinceFromRows(rows)
   const province = inputProvince || inferredProvince
-  const fullScore = getFullScoreByProvince(province)
+  const fullScore = getFullScoreByProvince(province, meta?.level)
 
+  const tableParsed = options.includeTable === false
+    ? { rows: [], detectedFormat: 'table-disabled' }
+    : parseSegmentationTableRows(scopedRows.map((row) => row.cells.map((cell) => cell.text)), { level: meta?.level })
   const shouldTryNingxia = province === '宁夏' || !province
-  const ningxiaRows = shouldTryNingxia ? filterRowsByFullScore(parseNingxiaFromRows(rows, fullScore), fullScore) : []
-  const jilinRows = province === '贵州' ? [] : filterRowsByFullScore(parseJilinFromRows(rows, fullScore), fullScore)
-  const guizhouRows = province === '吉林' ? [] : filterRowsByFullScore(parseGuizhouFromRows(rows, fullScore), fullScore)
-  const directRows = province ? [] : filterRowsByFullScore(parseDirectFromRows(rows), fullScore)
+  const ningxiaRows = shouldTryNingxia ? filterRowsByFullScore(parseNingxiaFromRows(scopedRows, fullScore), fullScore) : []
+  const jilinRows = province === '贵州' ? [] : filterRowsByFullScore(parseJilinFromRows(scopedRows, fullScore), fullScore)
+  const guizhouRows = province === '吉林' ? [] : filterRowsByFullScore(parseGuizhouFromRows(scopedRows, fullScore), fullScore)
+  const directRows = options.includeDirect && !province ? filterRowsByFullScore(parseDirectFromRows(scopedRows), fullScore) : []
 
   const candidates = [
-    { format: 'ningxia-two-column-groups', rows: ningxiaRows, priority: province === '宁夏' ? 10000 : 2000 },
-    { format: 'jilin', rows: jilinRows, priority: province === '吉林' ? 10000 : inferredProvince === '吉林' ? 5000 : 0 },
-    { format: 'horizontal_multiline', rows: guizhouRows, priority: province === '贵州' ? 10000 : inferredProvince === '贵州' ? 5000 : 0 },
-    { format: 'direct', rows: directRows, priority: -1000 },
-  ].filter((item) => item.rows.length)
+    {
+      format: `table-${tableParsed.detectedFormat}`,
+      rowCount: tableParsed.rows.length,
+      priority: 1500,
+      build: () => ({
+        workbook: buildWorkbookFromParsedRows(tableParsed.rows, meta),
+        extractedRows: tableParsed.rows.length,
+      }),
+    },
+    {
+      format: 'ningxia-two-column-groups',
+      rowCount: ningxiaRows.length,
+      priority: province === '宁夏' ? 10000 : 2000,
+      build: () => buildWorkbookFromCumulativeRows(ningxiaRows, meta),
+    },
+    {
+      format: 'jilin',
+      rowCount: jilinRows.length,
+      priority: province === '吉林' ? 10000 : inferredProvince === '吉林' ? 5000 : 0,
+      build: () => buildWorkbookFromCumulativeRows(jilinRows, meta),
+    },
+    {
+      format: 'horizontal_multiline',
+      rowCount: guizhouRows.length,
+      priority: province === '贵州' ? 10000 : inferredProvince === '贵州' ? 5000 : 0,
+      build: () => buildWorkbookFromCumulativeRows(guizhouRows, meta),
+    },
+    {
+      format: 'direct',
+      rowCount: directRows.length,
+      priority: -1000,
+      build: () => buildWorkbookFromCumulativeRows(directRows, meta),
+    },
+  ].filter((item) => item.rowCount)
 
   if (!candidates.length) {
-    throw new Error('PDF 未识别到有效的一分一段数据。当前仅保留原有文本型 PDF 识别能力；图片型 PDF、扫描件或复杂表格请先用外部 OCR 识别为表格文本，再粘贴到本页面处理。')
+    return null
   }
 
-  const selected = candidates.sort((a, b) => (b.priority + b.rows.length) - (a.priority + a.rows.length))[0]
-  const built = buildWorkbookFromCumulativeRows(selected.rows, meta)
+  const selected = candidates.sort((a, b) => (b.priority + b.rowCount) - (a.priority + a.rowCount))[0]
+  const built = selected.build()
 
   if (!inputProvince && inferredProvince) {
     built.workbook.worksheets[0].getCell('B3').value = inferredProvince
@@ -552,9 +674,18 @@ async function buildWorkbookFromPdf(buffer: ArrayBuffer, meta?: SegmentationMeta
 
   return {
     workbook: built.workbook,
-    detectedFormat: selected.format,
+    detectedFormat: `${options.detectedFormatPrefix ?? ''}${selected.format}`,
     extractedRows: built.extractedRows,
   }
+}
+
+async function buildWorkbookFromPdf(buffer: ArrayBuffer, meta?: SegmentationMeta) {
+  const rows = await readPdfRowsFromBuffer(buffer)
+  const built = buildWorkbookFromPdfLikeRows(rows, meta, { includeDirect: true })
+  if (!built) {
+    throw new Error('PDF 未识别到有效的一分一段数据。当前仅保留原有文本型 PDF 识别能力；图片型 PDF、扫描件或复杂表格请先用外部 OCR 识别为表格文本，再粘贴到本页面处理。')
+  }
+  return built
 }
 
 function isPdfBuffer(buffer: ArrayBuffer) {
@@ -643,18 +774,40 @@ function worksheetToGrid(worksheet: ExcelJS.Worksheet) {
   return rows
 }
 
+function worksheetToPdfLikeRows(worksheet: ExcelJS.Worksheet) {
+  const rows: PdfRow[] = []
+  const columnWidth = 48
+
+  worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    const cells: Array<{ x: number; text: string }> = []
+
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      const text = normalizeText(getPlainCellValue(cell.value))
+      if (!text) return
+      cells.push({
+        x: (colNumber - 1) * columnWidth,
+        text,
+      })
+    })
+
+    if (!cells.length) return
+    rows.push({
+      pageIndex: 0,
+      y: -rowNumber,
+      cells,
+      text: cells.map((cell) => cell.text).join(' ').replace(/\s+/g, ' ').trim(),
+    })
+  })
+
+  return rows
+}
+
 function isTemplateLikeWorksheet(worksheet: ExcelJS.Worksheet) {
   const scoreHeader = normalizeText(getPlainCellValue(worksheet.getCell('A7').value)).replace(/\s+/g, '')
   const countHeader = normalizeText(getPlainCellValue(worksheet.getCell('B7').value)).replace(/\s+/g, '')
   const cumulativeHeader = normalizeText(getPlainCellValue(worksheet.getCell('C7').value)).replace(/\s+/g, '')
 
-  if (/分数|总分|成绩/.test(scoreHeader) && /人数/.test(countHeader) && /累计/.test(cumulativeHeader)) {
-    return true
-  }
-
-  const firstScore = parseScoreNumber(worksheet.getCell('A8').value)
-  const firstCumulative = parseNumber(worksheet.getCell('C8').value)
-  return firstScore !== null && firstCumulative !== null
+  return /分数|总分|成绩/.test(scoreHeader) && /人数/.test(countHeader) && /累计/.test(cumulativeHeader)
 }
 
 function buildWorkbookFromParsedRows(rows: SegmentationParsedRow[], meta?: SegmentationMeta, sheetName = '一分一段') {
@@ -666,7 +819,7 @@ function buildWorkbookFromParsedRows(rows: SegmentationParsedRow[], meta?: Segme
 
   rows.forEach((item, index) => {
     const row = index + 8
-    worksheet.getCell(`A${row}`).value = item.score
+    worksheet.getCell(`A${row}`).value = item.scoreLabel ?? item.score
     if (item.count !== null && item.count !== undefined) {
       worksheet.getCell(`B${row}`).value = item.count
     }
@@ -694,6 +847,37 @@ function buildWorkbookFromCumulativeRows(rows: ScoreCumulativeRow[], meta?: Segm
   return { workbook, extractedRows: convertedRows.length }
 }
 
+function normalizeRangeScoreRows(worksheet: ExcelJS.Worksheet, startRow = 8) {
+  for (let row = startRow; row <= worksheet.rowCount; row += 1) {
+    const scoreCell = worksheet.getCell(`A${row}`)
+    const span = parseScoreSpan(scoreCell.value)
+    if (!span?.isRange) continue
+
+    scoreCell.value = span.label
+    worksheet.getCell(`D${row}`).value = '是'
+  }
+}
+
+function buildPlainExportWorkbook(workbook: ExcelJS.Workbook, meta?: SegmentationMeta) {
+  const sourceWorksheet = workbook.worksheets[0]
+  const outputWorkbook = new ExcelJS.Workbook()
+  const outputWorksheet = outputWorkbook.addWorksheet(sourceWorksheet?.name || '一分一段')
+
+  if (!sourceWorksheet) return outputWorkbook
+
+  for (let rowNumber = 1; rowNumber <= sourceWorksheet.rowCount; rowNumber += 1) {
+    const sourceRow = sourceWorksheet.getRow(rowNumber)
+    sourceRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      if (isEmpty(cell.value)) return
+      outputWorksheet.getCell(rowNumber, colNumber).value = getPlainCellValue(cell.value) as ExcelJS.CellValue
+    })
+  }
+
+  applyExactMetaToWorksheet(outputWorksheet, meta)
+
+  return outputWorkbook
+}
+
 async function loadWorkbookFromExcel(file: File, buffer: ArrayBuffer, meta?: SegmentationMeta) {
   let workbook: ExcelJS.Workbook
 
@@ -719,6 +903,15 @@ async function loadWorkbookFromExcel(file: File, buffer: ArrayBuffer, meta?: Seg
     throw new Error('Excel 文件中未识别到可处理的工作表')
   }
 
+  const pdfLikeRows = worksheetToPdfLikeRows(worksheet)
+  const pdfExtracted = buildWorkbookFromPdfLikeRows(pdfLikeRows, meta, {
+    includeTable: false,
+    detectedFormatPrefix: 'excel-pdf-',
+  })
+  if (pdfExtracted) {
+    return pdfExtracted
+  }
+
   if (isTemplateLikeWorksheet(worksheet)) {
     applyTemplateHeaders(worksheet)
     applyMetaToWorksheet(worksheet, meta)
@@ -730,8 +923,23 @@ async function loadWorkbookFromExcel(file: File, buffer: ArrayBuffer, meta?: Seg
     }
   }
 
-  const parsed = parseSegmentationTableRows(worksheetToGrid(worksheet), { level: meta?.level })
+  const gridRows = worksheetToGrid(worksheet)
+  const scopedGridRows = filterRowsBySubject(
+    gridRows,
+    meta,
+    (row) => row.map((cell) => normalizeText(getPlainCellValue(cell))).join(' '),
+  )
+  const parsed = parseSegmentationTableRows(scopedGridRows, { level: meta?.level })
   if (!parsed.rows.length) {
+    const directPdfExtracted = buildWorkbookFromPdfLikeRows(pdfLikeRows, meta, {
+      includeDirect: true,
+      includeTable: false,
+      detectedFormatPrefix: 'excel-pdf-',
+    })
+    if (directPdfExtracted) {
+      return directPdfExtracted
+    }
+
     throw new Error(`Excel 未识别到有效的一分一段数据。${parsed.warnings.join('；') || '请检查是否包含分数、人数、累计人数。'}`)
   }
 
@@ -768,14 +976,16 @@ function processLoadedWorkbook(
   worksheet.getCell('G2').value = yearCheck
 
   const province = String(getPlainCellValue(worksheet.getCell('B3').value) ?? '').trim()
-  const fullScore = getFullScoreByProvince(province)
+  const level = String(getPlainCellValue(worksheet.getCell('B6').value) ?? '').trim()
+  const fullScore = getFullScoreByProvince(province, level)
 
   let insertedGapRows = 0
   let autoFilledCountRows = 0
 
   // ---------- 第8行特殊处理 ----------
   let row = 8
-  const firstScore = parseScoreNumber(worksheet.getCell(`A${row}`).value)
+  const firstScoreSpan = parseScoreSpan(worksheet.getCell(`A${row}`).value)
+  const firstScore = firstScoreSpan?.low ?? null
   const firstTotal = parseNumber(worksheet.getCell(`C${row}`).value)
 
   if (firstScore !== null) {
@@ -787,7 +997,10 @@ function processLoadedWorkbook(
     const normalizedFirstCount = parseNumber(worksheet.getCell(`B${row}`).value)
     const normalizedFirstTotal = parseNumber(worksheet.getCell(`C${row}`).value)
 
-    if (normalizedFirstCount !== null && normalizedFirstTotal !== null && normalizedFirstCount !== normalizedFirstTotal) {
+    if (firstScoreSpan?.isRange) {
+      worksheet.getCell(`A${row}`).value = firstScoreSpan.label
+      worksheet.getCell(`D${row}`).value = '是'
+    } else if (normalizedFirstCount !== null && normalizedFirstTotal !== null && normalizedFirstCount !== normalizedFirstTotal) {
       const insertScore = firstScore + 1
       const insertCount = normalizedFirstTotal - normalizedFirstCount
 
@@ -811,13 +1024,15 @@ function processLoadedWorkbook(
     }
   }
 
+  normalizeRangeScoreRows(worksheet)
+
   // ---------- 补断点逻辑 ----------
   while (row < worksheet.rowCount) {
-    const currScore = parseScoreNumber(worksheet.getCell(`A${row}`).value)
-    const nextScore = parseScoreNumber(worksheet.getCell(`A${row + 1}`).value)
+    const currScore = parseScoreSpan(worksheet.getCell(`A${row}`).value)
+    const nextScore = parseScoreSpan(worksheet.getCell(`A${row + 1}`).value)
 
-    if (currScore !== null && nextScore !== null && currScore - nextScore > 1) {
-      const missingScore = currScore - 1
+    if (currScore !== null && nextScore !== null && currScore.low - nextScore.high > 1) {
+      const missingScore = currScore.low - 1
       const currTotal = worksheet.getCell(`C${row}`).value
 
       worksheet.spliceRows(row + 1, 0, [missingScore, 0, currTotal, '', '补断点', '补断点'])
@@ -839,7 +1054,7 @@ function processLoadedWorkbook(
     const cumulativeCheckCell = worksheet.getCell(`E${r}`)
     const scoreCheckCell = worksheet.getCell(`F${r}`)
 
-    const score = parseScoreNumber(scoreCell.value)
+    const score = parseScoreSpan(scoreCell.value)
     const total = parseNumber(totalCell.value)
 
     if (isEmpty(countCell.value) && total !== null) {
@@ -879,9 +1094,9 @@ function processLoadedWorkbook(
     }
 
     if (r > 8) {
-      const prevScore = parseScoreNumber(worksheet.getCell(`A${r - 1}`).value)
+      const prevScore = parseScoreSpan(worksheet.getCell(`A${r - 1}`).value)
       if (prevScore !== null && score !== null) {
-        const diff = prevScore - score
+        const diff = prevScore.low - score.high
         if (scoreCheckCell.value !== '补断点') {
           scoreCheckCell.value = diff === 1 ? '√' : `× 差值${diff}`
         }
@@ -947,7 +1162,8 @@ export async function processSegmentationWorkbook(
     loaded.extractedRows,
   )
 
-  const outBuffer = await loaded.workbook.xlsx.writeBuffer()
+  const exportWorkbook = buildPlainExportWorkbook(loaded.workbook, meta)
+  const outBuffer = await exportWorkbook.xlsx.writeBuffer()
   return {
     blob: new Blob([outBuffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

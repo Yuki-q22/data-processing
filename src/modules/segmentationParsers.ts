@@ -1,5 +1,6 @@
 export type SegmentationParsedRow = {
   score: number
+  scoreLabel?: string
   count?: number | null
   cumulative: number
   source?: string
@@ -25,9 +26,9 @@ type ColumnGroup = {
   label: string
 }
 
-const SCORE_HEADER_RE = /(分数|总分|文化总分|成绩)$/
+const SCORE_HEADER_RE = /(分数|分数段|总分|文化总分|成绩)$/
 const COUNT_HEADER_RE = /(本分人数|本段人数|分数段人数|分段人数|段内人数|同分人数|人数)/
-const CUMULATIVE_HEADER_RE = /(累计人数|累计人次|累计数|累计)/
+const CUMULATIVE_HEADER_RE = /(累计人数|累计人次|累计数|累计|累积人数|累积)/
 const RANK_ONLY_RE = /名次|排名|位次/
 const RATIO_RE = /比例|占比|率|%|％/
 
@@ -54,7 +55,7 @@ function isScoreHeader(value: unknown) {
 function isCountHeader(value: unknown) {
   const text = compactText(value)
   if (!text) return false
-  if (/累计|比例|占比|率|名次|排名|位次/.test(text)) return false
+  if (/累计|累积|比例|占比|率|名次|排名|位次/.test(text)) return false
   return COUNT_HEADER_RE.test(text)
 }
 
@@ -94,6 +95,31 @@ function parseScore(value: unknown) {
 
 function isValidScore(value: number) {
   return Number.isFinite(value) && value >= 0 && value <= 1000
+}
+
+function parseScoreRange(value: unknown) {
+  const text = normalizeCell(value).replace(/\s+/g, '')
+  const match = text.match(/^(\d{1,4})(?:分)?(?:→|->|-|－|—|–|~|～|至|到)(\d{1,4})(?:分)?$/)
+  if (!match) return null
+
+  const first = Number(match[1])
+  const second = Number(match[2])
+  if (!isValidScore(first) || !isValidScore(second) || first === second) return null
+
+  const low = Math.min(first, second)
+  const high = Math.max(first, second)
+  return {
+    score: low,
+    label: `${low}-${high}`,
+  }
+}
+
+function parseScoreCell(value: unknown) {
+  const range = parseScoreRange(value)
+  if (range) return range
+
+  const score = parseScore(value)
+  return score === null ? null : { score }
 }
 
 function isValidCumulative(value: number) {
@@ -212,13 +238,14 @@ function parseRowsByGroups(rows: TableGrid, groups: ColumnGroup[]): Segmentation
   groups.forEach((group) => {
     for (let r = group.headerRowIndex + 1; r < rows.length; r += 1) {
       const row = rows[r]
-      const score = parseScore(row[group.scoreCol])
+      const scoreCell = parseScoreCell(row[group.scoreCol])
       const cumulative = parseInteger(row[group.cumulativeCol])
-      if (score === null || cumulative === null || !isValidCumulative(cumulative)) continue
+      if (!scoreCell || cumulative === null || !isValidCumulative(cumulative)) continue
 
       const count = group.countCol === undefined ? null : parseInteger(row[group.countCol])
       parsed.push({
-        score,
+        score: scoreCell.score,
+        scoreLabel: 'label' in scoreCell ? scoreCell.label : undefined,
         count,
         cumulative,
         source: `r${r + 1}:c${group.scoreCol + 1}-${group.cumulativeCol + 1}`,
@@ -334,6 +361,22 @@ function parseDirectNumericRows(rows: TableGrid, options?: ParserOptions): Segme
   const parsedRows: SegmentationParsedRow[] = []
 
   rows.forEach((row, rowIndex) => {
+    const rangeCol = row.findIndex((cell) => parseScoreRange(cell))
+    if (rangeCol >= 0) {
+      const range = parseScoreRange(row[rangeCol])
+      const values = row.slice(rangeCol + 1).flatMap((cell) => extractIntegers(cell))
+      if (range && values.length >= 2 && isValidCumulative(values[1])) {
+        parsedRows.push({
+          score: range.score,
+          scoreLabel: range.label,
+          count: values[0],
+          cumulative: values[1],
+          source: `direct-range-r${rowIndex + 1}`,
+        })
+      }
+      return
+    }
+
     const values = row.flatMap((cell) => extractIntegers(cell))
     if (values.length < 2) return
 
@@ -388,7 +431,9 @@ function dedupeAndSortRows(rows: SegmentationParsedRow[]) {
 
     const currentHasCount = current.count !== null && current.count !== undefined
     const nextHasCount = row.count !== null && row.count !== undefined
-    if (!currentHasCount && nextHasCount) {
+    const currentHasLabel = Boolean(current.scoreLabel)
+    const nextHasLabel = Boolean(row.scoreLabel)
+    if ((!currentHasLabel && nextHasLabel) || (!currentHasCount && nextHasCount)) {
       bestByScore.set(row.score, row)
     }
   })
@@ -433,11 +478,11 @@ export function parseSegmentationTableRows(rows: unknown[][], options?: ParserOp
   }
 
   const candidates = [
-    parseJilinMatrixRows(grid),
-    parseGuizhouWideRows(grid),
-    parseGenericGroupedRows(grid, options),
-    parseDirectNumericRows(grid, options),
-  ].filter((candidate) => candidate.rows.length)
+    { result: parseJilinMatrixRows(grid), priority: 300 },
+    { result: parseGuizhouWideRows(grid), priority: 300 },
+    { result: parseGenericGroupedRows(grid, options), priority: 200 },
+    { result: parseDirectNumericRows(grid, options), priority: 0 },
+  ].filter((candidate) => candidate.result.rows.length)
 
   if (!candidates.length) {
     return {
@@ -447,7 +492,9 @@ export function parseSegmentationTableRows(rows: unknown[][], options?: ParserOp
     }
   }
 
-  const selected = candidates.sort((a, b) => b.rows.length - a.rows.length)[0]
+  const selected = candidates.sort((a, b) => (
+    b.result.rows.length - a.result.rows.length || b.priority - a.priority
+  ))[0].result
   return {
     ...selected,
     rows: dedupeAndSortRows(selected.rows),

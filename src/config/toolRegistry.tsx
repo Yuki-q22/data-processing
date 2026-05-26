@@ -113,14 +113,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     key: 'employment-report-image',
-    title: '就业质量报告图片提取',
+    title: '图片下载',
     menuGroup: 'group-tools',
     icon: <AntIconGlyph icon={PictureOutlined} />,
     Component: EmploymentReportImageTool,
     readme: {
       id: 'employment-report-image',
-      label: '6. 就业质量报告图片提取',
-      keyword: '6. 就业质量报告图片提取',
+      label: '6. 图片下载',
+      keyword: '6. 图片下载',
     },
   },
   {

@@ -9,6 +9,11 @@ export type ExtractedImageItem = {
   height: number
 }
 
+export type StaticImagesFromPageResult = {
+  pageTitle: string
+  images: ExtractedImageItem[]
+}
+
 function getAbsoluteUrl(src: string, baseUrl: string) {
   try {
     return new URL(src, baseUrl).toString()
@@ -105,17 +110,29 @@ export function extractStaticImageUrlsFromHtml(html: string, baseUrl: string): s
   return dedupe(absoluteUrls)
 }
 
-export async function fetchStaticImagesFromPage(url: string): Promise<ExtractedImageItem[]> {
+export function extractPageTitleFromHtml(html: string): string {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  return (doc.querySelector('title')?.textContent || '').replace(/\s+/g, ' ').trim()
+}
+
+export function toSafePdfFilename(pageTitle: string) {
+  const safeTitle = pageTitle.replace(/[\\/:*?"<>|]/g, '_').trim()
+  return `${safeTitle || '就业质量报告'}.pdf`
+}
+
+export async function fetchStaticImagesFromPage(url: string): Promise<StaticImagesFromPageResult> {
   const htmlResp = await fetch(url)
   if (!htmlResp.ok) {
     throw new Error(`页面获取失败：HTTP ${htmlResp.status}`)
   }
 
   const html = await htmlResp.text()
+  const pageTitle = extractPageTitleFromHtml(html)
   const imageUrls = extractStaticImageUrlsFromHtml(html, url)
 
   if (!imageUrls.length) {
-    return []
+    return { pageTitle, images: [] }
   }
 
   const settled = await Promise.allSettled(
@@ -150,9 +167,12 @@ export async function fetchStaticImagesFromPage(url: string): Promise<ExtractedI
     })
   )
 
-  return settled
-    .filter((item): item is PromiseFulfilledResult<ExtractedImageItem> => item.status === 'fulfilled')
-    .map((item) => item.value)
+  return {
+    pageTitle,
+    images: settled
+      .filter((item): item is PromiseFulfilledResult<ExtractedImageItem> => item.status === 'fulfilled')
+      .map((item) => item.value),
+  }
 }
 
 export async function imagesToPdfBlob(images: ExtractedImageItem[]): Promise<Blob> {
@@ -160,47 +180,36 @@ export async function imagesToPdfBlob(images: ExtractedImageItem[]): Promise<Blo
     throw new Error('没有图片可生成 PDF')
   }
 
+  const firstImage = images[0]
+  const firstPageWidth = Math.max(1, Math.round(firstImage.width))
+  const firstPageHeight = Math.max(1, Math.round(firstImage.height))
   const pdf = new jsPDF({
-    orientation: 'p',
+    orientation: firstPageWidth >= firstPageHeight ? 'l' : 'p',
     unit: 'pt',
-    format: 'a4',
+    format: [firstPageWidth, firstPageHeight],
     compress: true,
   })
 
-  const pageWidth = pdf.internal.pageSize.getWidth()
-  const pageHeight = pdf.internal.pageSize.getHeight()
-  const margin = 24
-  const usableWidth = pageWidth - margin * 2
-  const usableHeight = pageHeight - margin * 2
-
   for (let i = 0; i < images.length; i += 1) {
     const item = images[i]
+    const pageWidth = Math.max(1, Math.round(item.width))
+    const pageHeight = Math.max(1, Math.round(item.height))
 
     // 先压缩，再写入 PDF，避免大图/大量 PNG 导致：
     // Error in function Array.join (: Invalid string length
     const compressed = await compressImageForPdf(item.blob, 1200, 0.75)
 
-    const widthRatio = usableWidth / compressed.width
-    const heightRatio = usableHeight / compressed.height
-    const scale = Math.min(widthRatio, heightRatio, 1)
-
-    const renderWidth = compressed.width * scale
-    const renderHeight = compressed.height * scale
-
-    const x = (pageWidth - renderWidth) / 2
-    const y = (pageHeight - renderHeight) / 2
-
     if (i > 0) {
-      pdf.addPage()
+      pdf.addPage([pageWidth, pageHeight], pageWidth >= pageHeight ? 'l' : 'p')
     }
 
     pdf.addImage(
       compressed.dataUrl,
       'JPEG',
-      x,
-      y,
-      renderWidth,
-      renderHeight,
+      0,
+      0,
+      pageWidth,
+      pageHeight,
       undefined,
       'FAST'
     )

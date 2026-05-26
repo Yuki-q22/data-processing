@@ -111,7 +111,7 @@ export default function SegmentationCheckTool() {
       <Card title="一分一段处理" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           这个页面会做年份校验、自动补断点、自动补人数，并在表中写入累计人数校验结果与分数校验结果。
-          本次改造增加了稳定的“表格文本 / OCR 结果粘贴”入口，不在前端直接做图片 OCR。
+          各省份均可上传 Excel / 文本型 PDF，也可粘贴表格文本 / OCR 结果。
         </Paragraph>
 
         <Alert
@@ -119,7 +119,7 @@ export default function SegmentationCheckTool() {
           type="info"
           style={{ marginBottom: 16 }}
           message="处理方案"
-          description="网页表格可直接复制粘贴；图片型 PDF、扫描型 PDF 请先用 WPS、微信、Adobe 等工具识别为表格文本，再粘贴到本页面处理。工具会把单组三列、多组三列、吉林矩阵、贵州横向表等格式统一转换为标准的分数 / 人数 / 累计人数后，再执行原有分数处理逻辑。"
+          description="Excel 只需第一行为标题行；文本型 PDF 可直接上传。图片型 PDF、扫描型 PDF 请先用 WPS、微信、Adobe 等工具识别为表格文本，再粘贴到本页面处理。工具会把单组三列、多组三列、吉林矩阵、贵州横向表等格式统一转换为标准的分数 / 人数 / 累计人数后，再执行原有分数处理逻辑。"
         />
 
         <Form form={form} layout="vertical" initialValues={{ year: '2026' }}>
@@ -182,7 +182,7 @@ export default function SegmentationCheckTool() {
               setResult(null)
             }}
           >
-            <Radio.Button value="file">上传 Excel / 文本型 PDF</Radio.Button>
+            <Radio.Button value="file">上传 Excel / PDF</Radio.Button>
             <Radio.Button value="paste">粘贴表格文本 / OCR 结果</Radio.Button>
           </Radio.Group>
         </Card>
@@ -192,9 +192,9 @@ export default function SegmentationCheckTool() {
             <p className="ant-upload-drag-icon">
               <InboxOutlined />
             </p>
-            <p className="ant-upload-text">上传一分一段 Excel / 文本型 PDF 文件</p>
+            <p className="ant-upload-text">上传一分一段 Excel / PDF 文件</p>
             <p className="ant-upload-hint">
-              Excel 支持标准模板、单组三列、多组三列、吉林矩阵、贵州横向表等结构。图片型 / 扫描型 PDF 请先 OCR 后粘贴。
+              Excel 支持首行为标题行的单组三列、多组三列、吉林矩阵、贵州横向表等结构；文本型 PDF 可直接识别，图片型 / 扫描型 PDF 请先 OCR 后粘贴。
             </p>
           </Dragger>
         ) : (

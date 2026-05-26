@@ -18,6 +18,7 @@ import {
   downloadBlob,
   fetchStaticImagesFromPage,
   imagesToPdfBlob,
+  toSafePdfFilename,
   type ExtractedImageItem,
 } from '../../modules/employmentReport'
 import { confirmToolReset } from '../../utils/toolReset'
@@ -29,6 +30,7 @@ export default function EmploymentReportImageTool() {
   const [loading, setLoading] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [images, setImages] = useState<ExtractedImageItem[]>([])
+  const [pageTitle, setPageTitle] = useState('')
 
   useEffect(() => {
     return () => {
@@ -51,14 +53,16 @@ export default function EmploymentReportImageTool() {
 
     cleanupImageObjectUrls(images)
     setImages([])
+    setPageTitle('')
     setLoading(true)
 
     try {
       const result = await fetchStaticImagesFromPage(url.trim())
-      setImages(result)
+      setImages(result.images)
+      setPageTitle(result.pageTitle)
 
-      if (result.length) {
-        message.success(`成功提取 ${result.length} 张图片`)
+      if (result.images.length) {
+        message.success(`成功提取 ${result.images.length} 张图片`)
       } else {
         message.warning('未抓取到任何图片')
       }
@@ -78,7 +82,7 @@ export default function EmploymentReportImageTool() {
     setPdfLoading(true)
     try {
       const blob = await imagesToPdfBlob(images)
-      downloadBlob(blob, '就业质量报告.pdf')
+      downloadBlob(blob, toSafePdfFilename(pageTitle))
       message.success('PDF 已生成')
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'PDF 生成失败')
@@ -89,20 +93,21 @@ export default function EmploymentReportImageTool() {
 
   const handleResetPage = () => {
     confirmToolReset({
-      title: '确认重置就业质量报告图片提取？',
+      title: '确认重置图片下载？',
       onReset: () => {
         cleanupImageObjectUrls(images)
         setUrl('')
         setLoading(false)
         setPdfLoading(false)
         setImages([])
+        setPageTitle('')
       },
     })
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="就业质量报告图片提取" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
+      <Card title="图片下载" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
           输入就业质量报告网页链接，提取静态页面中的图片，预览后合成 PDF 下载。
         </Paragraph>
