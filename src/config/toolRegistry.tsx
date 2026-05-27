@@ -14,6 +14,7 @@ import {
   EmploymentReportImageTool,
   GroupCodeMatchTool,
   PlanCompareTool,
+  ProfessionalExtractTool,
   ProfessionalScorePlatform,
   QuestionScreenshotTool,
   RemarkTypeExtractTool,
@@ -25,6 +26,7 @@ import {
 export type MenuKey =
   | 'rule-center'
   | 'professional-score-platform'
+  | 'professional-extract'
   | 'college-score'
   | 'xueyeqiao'
   | 'segmentation-check'
@@ -86,6 +88,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       label: '2. 专业分模板智能填充',
       keyword: '2. 专业分模板智能填充',
     },
+  },
+  {
+    key: 'professional-extract',
+    title: '专业提取工具',
+    menuGroup: 'group-tools',
+    icon: <AntIconGlyph icon={FileSearchOutlined} />,
+    Component: ProfessionalExtractTool,
   },
   {
     key: 'college-score',

@@ -2,6 +2,7 @@ import { lazy } from 'react'
 
 export const RuleCenterPage = lazy(() => import('../pages/RuleCenterPage'))
 export const ProfessionalScorePlatform = lazy(() => import('../pages/ProfessionalScorePlatform'))
+export const ProfessionalExtractTool = lazy(() => import('../pages/tools/ProfessionalExtractTool'))
 export const CollegeScoreTool = lazy(() => import('../pages/tools/CollegeScoreTool'))
 export const XueyeqiaoTool = lazy(() => import('../pages/tools/XueyeqiaoTool'))
 export const SegmentationCheckTool = lazy(() => import('../pages/tools/SegmentationCheckTool'))
