@@ -16,6 +16,7 @@ type TableGrid = string[][]
 
 type ParserOptions = {
   level?: string
+  province?: string
 }
 
 type ColumnGroup = {
@@ -99,6 +100,17 @@ function isValidScore(value: number) {
 
 function parseScoreRange(value: unknown) {
   const text = normalizeCell(value).replace(/\s+/g, '')
+  const lowerBoundMatch = text.includes('以上') ? null : text.match(/^(\d{1,4})(?:分)?(?:及)?以下/)
+  if (lowerBoundMatch) {
+    const high = Number(lowerBoundMatch[1]) - (text.includes('及以下') ? 0 : 1)
+    if (!isValidScore(high)) return null
+
+    return {
+      score: 0,
+      label: `0-${high}`,
+    }
+  }
+
   const match = text.match(/^(\d{1,4})(?:分)?(?:→|->|-|－|—|–|~|～|至|到)(\d{1,4})(?:分)?$/)
   if (!match) return null
 
@@ -350,6 +362,149 @@ function parseJilinMatrixRows(rows: TableGrid): SegmentationParseResult {
   }
 }
 
+function shouldParseFujianHeaderlessGroups(rows: TableGrid, options?: ParserOptions) {
+  const province = compactText(options?.province)
+  if (/福建/.test(province)) return true
+
+  const sample = compactText(rows.slice(0, 12).map((row) => row.join(' ')).join(' '))
+  return /福建/.test(sample)
+}
+
+function findFujianHeaderStart(row: string[]) {
+  for (let col = 0; col + 2 < row.length; col += 1) {
+    if (isScoreHeader(row[col]) && isCountHeader(row[col + 1]) && isCumulativeHeader(row[col + 2])) {
+      return col
+    }
+  }
+
+  return -1
+}
+
+function parseFujianHeaderlessGroupsRows(rows: TableGrid, options?: ParserOptions): SegmentationParseResult {
+  if (!shouldParseFujianHeaderlessGroups(rows, options)) {
+    return { rows: [], detectedFormat: 'fujian-headerless-groups', warnings: [] }
+  }
+
+  const headerRowIndex = rows.findIndex((row) => findFujianHeaderStart(row) >= 0)
+  if (headerRowIndex < 0) {
+    return { rows: [], detectedFormat: 'fujian-headerless-groups', warnings: [] }
+  }
+
+  const parsedRows: SegmentationParsedRow[] = []
+
+  for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex]
+
+    for (let col = 0; col + 2 < row.length; col += 1) {
+      const scoreCell = parseScoreCell(row[col])
+      const count = parseInteger(row[col + 1])
+      const cumulative = parseInteger(row[col + 2])
+
+      if (!scoreCell || count === null || cumulative === null || !isValidCumulative(cumulative)) {
+        continue
+      }
+
+      parsedRows.push({
+        score: scoreCell.score,
+        scoreLabel: 'label' in scoreCell ? scoreCell.label : undefined,
+        count,
+        cumulative,
+        source: `fujian-r${rowIndex + 1}:c${col + 1}-${col + 3}`,
+      })
+      col += 2
+    }
+  }
+
+  return {
+    rows: dedupeAndSortRows(parsedRows),
+    detectedFormat: 'fujian-headerless-groups',
+    warnings: [],
+  }
+}
+
+function isSpecialProvinceForGroupedPairs(rows: TableGrid, options?: ParserOptions) {
+  const text = `${compactText(options?.province)} ${compactText(rows.slice(0, 12).map((row) => row.join(' ')).join(' '))}`
+  return /吉林|贵州|福建|宁夏/.test(text)
+}
+
+function findRepeatedScoreValueGroups(row: string[]) {
+  const groups: Array<{ scoreCol: number; countCol?: number; cumulativeCol: number }> = []
+
+  for (let col = 0; col + 1 < row.length; col += 1) {
+    if (!isScoreHeader(row[col])) continue
+
+    if (isCountHeader(row[col + 1]) && isCumulativeHeader(row[col + 2])) {
+      groups.push({
+        scoreCol: col,
+        countCol: col + 1,
+        cumulativeCol: col + 2,
+      })
+      col += 2
+      continue
+    }
+
+    if (isCountHeader(row[col + 1]) || isCumulativeHeader(row[col + 1])) {
+      groups.push({
+        scoreCol: col,
+        cumulativeCol: col + 1,
+      })
+      col += 1
+    }
+  }
+
+  return groups.length >= 2 ? groups : []
+}
+
+function parseRepeatedScoreValuePairRows(rows: TableGrid, options?: ParserOptions): SegmentationParseResult {
+  if (isSpecialProvinceForGroupedPairs(rows, options)) {
+    return { rows: [], detectedFormat: 'multi-score-value-pairs', warnings: [] }
+  }
+
+  let headerRowIndex = -1
+  let groups: Array<{ scoreCol: number; countCol?: number; cumulativeCol: number }> = []
+
+  rows.some((row, rowIndex) => {
+    const nextGroups = findRepeatedScoreValueGroups(row)
+    if (!nextGroups.length) return false
+
+    headerRowIndex = rowIndex
+    groups = nextGroups
+    return true
+  })
+
+  if (headerRowIndex < 0 || groups.length < 2) {
+    return { rows: [], detectedFormat: 'multi-score-value-pairs', warnings: [] }
+  }
+
+  const parsedRows: SegmentationParsedRow[] = []
+
+  for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex]
+
+    groups.forEach(({ scoreCol, countCol, cumulativeCol }) => {
+      const scoreCell = parseScoreCell(row[scoreCol])
+      const count = countCol === undefined ? null : parseInteger(row[countCol])
+      const cumulative = parseInteger(row[cumulativeCol])
+
+      if (!scoreCell || cumulative === null || !isValidCumulative(cumulative)) return
+
+      parsedRows.push({
+        score: scoreCell.score,
+        scoreLabel: 'label' in scoreCell ? scoreCell.label : undefined,
+        count,
+        cumulative,
+        source: `multi-pair-r${rowIndex + 1}:c${scoreCol + 1}-${cumulativeCol + 1}`,
+      })
+    })
+  }
+
+  return {
+    rows: dedupeAndSortRows(parsedRows),
+    detectedFormat: 'multi-score-value-pairs',
+    warnings: [],
+  }
+}
+
 function chooseSharedScorePairIndex(pairCount: number, options?: ParserOptions) {
   const level = compactText(options?.level)
   if (pairCount <= 1) return 0
@@ -478,9 +633,11 @@ export function parseSegmentationTableRows(rows: unknown[][], options?: ParserOp
   }
 
   const candidates = [
+    { result: parseFujianHeaderlessGroupsRows(grid, options), priority: 350 },
     { result: parseJilinMatrixRows(grid), priority: 300 },
     { result: parseGuizhouWideRows(grid), priority: 300 },
     { result: parseGenericGroupedRows(grid, options), priority: 200 },
+    { result: parseRepeatedScoreValuePairRows(grid, options), priority: 150 },
     { result: parseDirectNumericRows(grid, options), priority: 0 },
   ].filter((candidate) => candidate.result.rows.length)
 

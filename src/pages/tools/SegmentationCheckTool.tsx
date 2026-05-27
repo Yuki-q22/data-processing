@@ -114,13 +114,32 @@ export default function SegmentationCheckTool() {
           各省份均可上传 Excel / 文本型 PDF，也可粘贴表格文本 / OCR 结果。
         </Paragraph>
 
-        <Alert
-          showIcon
-          type="info"
-          style={{ marginBottom: 16 }}
-          message="处理方案"
-          description="Excel 只需第一行为标题行；文本型 PDF 可直接上传。图片型 PDF、扫描型 PDF 请先用 WPS、微信、Adobe 等工具识别为表格文本，再粘贴到本页面处理。工具会把单组三列、多组三列、吉林矩阵、贵州横向表等格式统一转换为标准的分数 / 人数 / 累计人数后，再执行原有分数处理逻辑。"
-        />
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} lg={15}>
+            <Alert
+              showIcon
+              type="info"
+              message="处理方案"
+              description="支持 Excel / 文本型 PDF / 表格文本，将常规三列、多组三列及已适配的特殊格式统一转换为标准分数、人数、累计人数后，再执行校验和补断点。"
+            />
+          </Col>
+          <Col xs={24} lg={9}>
+            <Alert
+              showIcon
+              type="warning"
+              message="提醒"
+              description={(
+                <ol style={{ margin: 0, paddingLeft: 18 }}>
+                  <li>优先上传 Excel 文件</li>
+                  <li>表格中不能存在合并单元格，需要手动修改</li>
+                  <li>需要先选择省份然后上传文件</li>
+                  <li>吉林、贵州只需上传PDF转换后的Excel表格，吉林标题行（“+9”、“+8”等）需要保持文本格式，福建省需要给第一列每组数据加标题（“分数”、“人数”、“累计人数”）</li>
+                  <li>上传前需检查表格分数一列是否有特殊符号，“注”、“略”等无关内容需要删除</li>
+                </ol>
+              )}
+            />
+          </Col>
+        </Row>
 
         <Form form={form} layout="vertical" initialValues={{ year: '2026' }}>
           <Row gutter={16}>

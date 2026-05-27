@@ -57,11 +57,13 @@ type PdfRow = {
 
 type ScoreCumulativeRow = {
   score: number
+  scoreLabel?: string
   cumulative: number
 }
 
 type ScoreSegmentRow = {
   score: number
+  scoreLabel?: string
   segment: number
   cumulative: number
 }
@@ -113,6 +115,19 @@ function parseScoreNumber(value: unknown) {
 
 function parseScoreSpan(value: unknown) {
   const text = normalizeText(getPlainCellValue(value)).replace(/\s+/g, '')
+  const lowerBoundMatch = text.includes('以上') ? null : text.match(/^(\d{1,4})(?:分)?(?:及)?以下/)
+  if (lowerBoundMatch) {
+    const high = Number(lowerBoundMatch[1]) - (text.includes('及以下') ? 0 : 1)
+    if (Number.isFinite(high) && high >= 0 && high <= 1000) {
+      return {
+        low: 0,
+        high,
+        isRange: true,
+        label: `0-${high}`,
+      }
+    }
+  }
+
   const rangeMatch = text.match(/^(\d{1,4})(?:分)?(?:→|->|-|－|—|–|~|～|至|到)(\d{1,4})(?:分)?$/)
   if (rangeMatch) {
     const first = Number(rangeMatch[1])
@@ -231,14 +246,6 @@ function getRowNumberItems(row: PdfRow): NumberCell[] {
     .filter((item): item is NumberCell => item.numbers.length > 0 && Number.isFinite(item.value))
 }
 
-function getRowNumbers(row: PdfRow) {
-  return getRowNumberItems(row).map((item) => ({
-    x: item.x,
-    text: item.text,
-    value: item.value,
-  }))
-}
-
 function isScoreInFullRange(value: number, fullScore: number) {
   return value >= 0 && value <= fullScore
 }
@@ -272,9 +279,18 @@ function inferProvinceFromRows(rows: PdfRow[]) {
   if (text.includes('宁夏')) return '宁夏'
   if (text.includes('吉林')) return '吉林'
   if (text.includes('贵州')) return '贵州'
+  if (text.includes('福建')) return '福建'
   if (text.includes('上海')) return '上海'
   if (text.includes('海南')) return '海南'
   return ''
+}
+
+function withFileInferredMeta(file: File, meta?: SegmentationMeta) {
+  if (normalizeMetaValue(meta?.province) || !file.name.includes('福建')) return meta
+  return {
+    ...meta,
+    province: '福建',
+  }
 }
 
 function applyTemplateHeaders(worksheet: ExcelJS.Worksheet) {
@@ -542,13 +558,19 @@ function parseDirectFromRows(rows: PdfRow[]) {
   const result: ScoreCumulativeRow[] = []
 
   rows.forEach((row) => {
-    const numbers = getRowNumbers(row).map((item) => item.value)
+    const numberItems = getRowNumberItems(row)
+    const numbers = numberItems.map((item) => item.value)
     if (numbers.length < 2) return
 
-    const score = numbers[0]
+    const firstScoreSpan = parseScoreSpan(numberItems[0]?.text)
+    const score = firstScoreSpan?.low ?? numbers[0]
     const cumulative = numbers[1]
     if (score >= 0 && score <= 1000 && cumulative >= 0) {
-      result.push({ score, cumulative })
+      result.push({
+        score,
+        scoreLabel: firstScoreSpan?.isRange ? firstScoreSpan.label : undefined,
+        cumulative,
+      })
     }
   })
 
@@ -599,6 +621,7 @@ function calculateSegmentCounts(data: ScoreCumulativeRow[]): ScoreSegmentRow[] {
     const segment = index === 0 ? row.cumulative : Math.max(0, row.cumulative - previous)
     return {
       score: row.score,
+      scoreLabel: row.scoreLabel,
       segment,
       cumulative: row.cumulative,
     }
@@ -618,7 +641,7 @@ function buildWorkbookFromPdfLikeRows(
 
   const tableParsed = options.includeTable === false
     ? { rows: [], detectedFormat: 'table-disabled' }
-    : parseSegmentationTableRows(scopedRows.map((row) => row.cells.map((cell) => cell.text)), { level: meta?.level })
+    : parseSegmentationTableRows(scopedRows.map((row) => row.cells.map((cell) => cell.text)), { level: meta?.level, province })
   const shouldTryNingxia = province === '宁夏' || !province
   const ningxiaRows = shouldTryNingxia ? filterRowsByFullScore(parseNingxiaFromRows(scopedRows, fullScore), fullScore) : []
   const jilinRows = province === '贵州' ? [] : filterRowsByFullScore(parseJilinFromRows(scopedRows, fullScore), fullScore)
@@ -839,7 +862,7 @@ function buildWorkbookFromCumulativeRows(rows: ScoreCumulativeRow[], meta?: Segm
 
   convertedRows.forEach((item, index) => {
     const row = index + 8
-    worksheet.getCell(`A${row}`).value = item.score
+    worksheet.getCell(`A${row}`).value = item.scoreLabel ?? item.score
     worksheet.getCell(`B${row}`).value = item.segment
     worksheet.getCell(`C${row}`).value = item.cumulative
   })
@@ -952,7 +975,7 @@ async function loadWorkbookFromExcel(file: File, buffer: ArrayBuffer, meta?: Seg
     meta,
     (row) => row.map((cell) => normalizeText(getPlainCellValue(cell))).join(' '),
   )
-  const parsed = parseSegmentationTableRows(scopedGridRows, { level: meta?.level })
+  const parsed = parseSegmentationTableRows(scopedGridRows, { level: meta?.level, province: normalizeMetaValue(meta?.province) })
   if (!parsed.rows.length) {
     const directPdfExtracted = buildWorkbookFromPdfLikeRows(pdfLikeRows, meta, {
       includeDirect: true,
@@ -1149,7 +1172,7 @@ export async function processSegmentationText(
   text: string,
   meta?: SegmentationMeta,
 ): Promise<SegmentationProcessResult> {
-  const parsed = parseSegmentationPlainText(text, { level: meta?.level })
+  const parsed = parseSegmentationPlainText(text, { level: meta?.level, province: normalizeMetaValue(meta?.province) })
   if (!parsed.rows.length) {
     throw new Error(parsed.warnings.join('；') || '未识别到有效的一分一段数据。请粘贴包含“分数 / 人数 / 累计人数”的表格文本或 OCR 结果。')
   }
@@ -1178,17 +1201,18 @@ export async function processSegmentationWorkbook(
 ): Promise<SegmentationProcessResult> {
   const buffer = await file.arrayBuffer()
   const isPdf = shouldTreatAsPdf(file, buffer)
-  const loaded = isPdf ? await buildWorkbookFromPdf(buffer, meta) : await loadWorkbookFromExcel(file, buffer, meta)
+  const effectiveMeta = withFileInferredMeta(file, meta)
+  const loaded = isPdf ? await buildWorkbookFromPdf(buffer, effectiveMeta) : await loadWorkbookFromExcel(file, buffer, effectiveMeta)
 
   const summary = processLoadedWorkbook(
     loaded.workbook,
-    meta,
+    effectiveMeta,
     isPdf ? 'pdf' : 'excel',
     loaded.detectedFormat,
     loaded.extractedRows,
   )
 
-  const exportWorkbook = buildPlainExportWorkbook(loaded.workbook, meta)
+  const exportWorkbook = buildPlainExportWorkbook(loaded.workbook, effectiveMeta)
   const outBuffer = await exportWorkbook.xlsx.writeBuffer()
   return {
     blob: new Blob([outBuffer], {
