@@ -55,12 +55,11 @@ function escapeRegExp(value: string) {
 }
 
 function filterDirections(text: string, matches: MatchItem[], allStdMajors: string[]) {
-  const result: string[] = []
+  const result: MatchItem[] = []
   const allSorted = Array.from(new Set(allStdMajors)).sort((a, b) => b.length - a.length)
 
   for (const match of matches) {
     const start = match.start
-    const major = match.major
 
     let parenDepth = 0
     let parenStart = -1
@@ -78,7 +77,7 @@ function filterDirections(text: string, matches: MatchItem[], allStdMajors: stri
     }
 
     if (parenStart === -1) {
-      result.push(major)
+      result.push(match)
       continue
     }
 
@@ -94,6 +93,50 @@ function filterDirections(text: string, matches: MatchItem[], allStdMajors: stri
     }
 
     if (!isDirection) {
+      result.push(match)
+    }
+  }
+
+  return result
+}
+
+function filterEnglishRequirements(text: string, matches: MatchItem[]) {
+  const result: string[] = []
+  const excludePatterns = [
+    /非英语/g,
+    /外语要求[：:]英语/g,
+    /外语语种要求[：:]英语/g,
+    /要求外语语种[为:]英语/g,
+    /招英语语种/g,
+    /宜英语语种/g,
+  ]
+
+  for (const match of matches) {
+    const major = match.major
+    const start = match.start
+
+    if (major !== '英语') {
+      result.push(major)
+      continue
+    }
+
+    let isRequirement = false
+    for (const pattern of excludePatterns) {
+      pattern.lastIndex = 0
+      let reqMatch = pattern.exec(text)
+      while (reqMatch) {
+        const reqStart = reqMatch.index
+        const reqEnd = reqMatch.index + reqMatch[0].length
+        if (start >= reqStart && start < reqEnd) {
+          isRequirement = true
+          break
+        }
+        reqMatch = pattern.exec(text)
+      }
+      if (isRequirement) break
+    }
+
+    if (!isRequirement) {
       result.push(major)
     }
   }
@@ -166,7 +209,7 @@ export async function processProfessionalExtract(params: {
   for (const [level, majors] of stdMajors.entries()) {
     const majorsSorted = Array.from(new Set(majors)).sort((a, b) => b.length - a.length)
     const escaped = majorsSorted.map((major) => escapeRegExp(major))
-    const patternStr = `(?:${escaped.join('|')})(?=专业|[、,，；;：:（）()\\s\\-\\+]|$)`
+    const patternStr = `(?:${escaped.join('|')})(?=专业|[、,，；;.。:：（）()\\s\\-\\+]|$)`
     patterns.set(level, new RegExp(patternStr, 'g'))
   }
 
@@ -218,7 +261,7 @@ export async function processProfessionalExtract(params: {
       match = pat.exec(note)
     }
 
-    const filtered = filterDirections(note, rawMatches, stdMajors.get(level) || [])
+    const filtered = filterEnglishRequirements(note, filterDirections(note, rawMatches, stdMajors.get(level) || []))
     const seen = new Set<string>()
     const result: string[] = []
     for (const item of filtered) {
