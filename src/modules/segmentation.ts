@@ -858,6 +858,29 @@ function normalizeRangeScoreRows(worksheet: ExcelJS.Worksheet, startRow = 8) {
   }
 }
 
+function removePdfRowsAfterCumulativeReset(worksheet: ExcelJS.Worksheet, startRow = 8) {
+  let row = startRow
+
+  while (row < worksheet.rowCount) {
+    const currScore = parseScoreSpan(worksheet.getCell(`A${row}`).value)
+    const nextScore = parseScoreSpan(worksheet.getCell(`A${row + 1}`).value)
+    const currTotal = parseNumber(worksheet.getCell(`C${row}`).value)
+    const nextTotal = parseNumber(worksheet.getCell(`C${row + 1}`).value)
+
+    if (currScore === null || nextScore === null || currTotal === null || nextTotal === null) {
+      row += 1
+      continue
+    }
+
+    if (currScore.low > nextScore.high && nextTotal < currTotal) {
+      worksheet.spliceRows(row + 1, 1)
+      continue
+    }
+
+    row += 1
+  }
+}
+
 function buildPlainExportWorkbook(workbook: ExcelJS.Workbook, meta?: SegmentationMeta) {
   const sourceWorksheet = workbook.worksheets[0]
   const outputWorkbook = new ExcelJS.Workbook()
@@ -1025,6 +1048,9 @@ function processLoadedWorkbook(
   }
 
   normalizeRangeScoreRows(worksheet)
+  if (sourceType === 'pdf') {
+    removePdfRowsAfterCumulativeReset(worksheet)
+  }
 
   // ---------- 补断点逻辑 ----------
   while (row < worksheet.rowCount) {
