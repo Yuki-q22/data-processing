@@ -280,20 +280,25 @@ export default function ExceptionStep() {
       .sort((a, b) => b.score - a.score)
   }, [activeRecord])
 
+  const navigationRecords = useMemo(() => {
+    const activeInFiltered =
+      !!activeRowId && filteredRecords.some((item) => item.rowId === activeRowId)
+    const records = activeInFiltered ? filteredRecords : exceptionRecords
+
+    return records.filter(
+      (record) =>
+        !!record.matchCandidates?.length || !!manualMatchSelections[record.rowId]
+    )
+  }, [activeRowId, exceptionRecords, filteredRecords, manualMatchSelections])
+
   const nextActionableRecord = useMemo(() => {
     if (!activeRowId) return null
 
-    const records = filteredRecords.length ? filteredRecords : exceptionRecords
+    const records = navigationRecords
     const currentIndex = records.findIndex((item) => item.rowId === activeRowId)
 
-    const hasCandidates = (record: ProcessedRecord) => !!record.matchCandidates?.length
-
     if (currentIndex >= 0) {
-      for (let i = currentIndex + 1; i < records.length; i += 1) {
-        if (hasCandidates(records[i])) {
-          return records[i]
-        }
-      }
+      return records[currentIndex + 1] || null
     }
 
     const currentRowNumber = Number(activeRowId)
@@ -305,8 +310,7 @@ export default function ExceptionStep() {
 
           return (
             !Number.isNaN(rowNumber) &&
-            rowNumber > currentRowNumber &&
-            hasCandidates(item)
+            rowNumber > currentRowNumber
           )
         })
         .sort((a, b) => Number(a.rowId) - Number(b.rowId))[0]
@@ -315,25 +319,18 @@ export default function ExceptionStep() {
     }
 
     return (
-      records.find((item) => item.rowId !== activeRowId && hasCandidates(item)) ||
-      null
+      records.find((item) => item.rowId !== activeRowId) || null
     )
-  }, [activeRowId, filteredRecords, exceptionRecords])
+  }, [activeRowId, navigationRecords])
 
   const prevActionableRecord = useMemo(() => {
     if (!activeRowId) return null
 
-    const records = filteredRecords.length ? filteredRecords : exceptionRecords
+    const records = navigationRecords
     const currentIndex = records.findIndex((item) => item.rowId === activeRowId)
 
-    const hasCandidates = (record: ProcessedRecord) => !!record.matchCandidates?.length
-
     if (currentIndex >= 0) {
-      for (let i = currentIndex - 1; i >= 0; i -= 1) {
-        if (hasCandidates(records[i])) {
-          return records[i]
-        }
-      }
+      return records[currentIndex - 1] || null
     }
 
     const currentRowNumber = Number(activeRowId)
@@ -345,8 +342,7 @@ export default function ExceptionStep() {
 
           return (
             !Number.isNaN(rowNumber) &&
-            rowNumber < currentRowNumber &&
-            hasCandidates(item)
+            rowNumber < currentRowNumber
           )
         })
         .sort((a, b) => Number(b.rowId) - Number(a.rowId))[0]
@@ -355,7 +351,7 @@ export default function ExceptionStep() {
     }
 
     return null
-  }, [activeRowId, filteredRecords, exceptionRecords])
+  }, [activeRowId, navigationRecords])
 
   const rebuildWithManualSelections = (
     nextManualSelections: Record<string, string>

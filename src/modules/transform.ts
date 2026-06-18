@@ -75,6 +75,7 @@ type StandardizeOptions = {
   provinceYearCategoryType: Record<string, Record<string, string>>
   remarkTypeRules: Array<{ keyword: string; output: string; priority: number }>
   manualSchoolName?: string
+  manualProvince?: string
 }
 
 export function buildScoreRecords(
@@ -88,7 +89,10 @@ export function buildScoreRecords(
     const mapped = mapRowByMappings(row, mappings)
 
     const year = toText(mapped['招生年份']) || defaultYear
-    const province = normalizeProvince(toText(mapped['省份']), options.provinceRules)
+    const province = normalizeProvince(
+      toText(mapped['省份']) || options.manualProvince,
+      options.provinceRules
+    )
     const rawCategory = toText(mapped['招生科类'])
 
     const categoryType = getCategoryTypeByYearProvince(

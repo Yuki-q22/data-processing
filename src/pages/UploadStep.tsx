@@ -35,6 +35,40 @@ const DATA_SOURCE_OPTIONS = [
 
 const YEAR_OPTIONS = ['2023', '2024', '2025', '2026', '2027']
 
+const PROVINCE_OPTIONS = [
+  '北京',
+  '天津',
+  '上海',
+  '重庆',
+  '河北',
+  '山西',
+  '内蒙古',
+  '辽宁',
+  '吉林',
+  '黑龙江',
+  '江苏',
+  '浙江',
+  '安徽',
+  '福建',
+  '江西',
+  '山东',
+  '河南',
+  '湖北',
+  '湖南',
+  '广东',
+  '广西',
+  '海南',
+  '四川',
+  '贵州',
+  '云南',
+  '西藏',
+  '陕西',
+  '甘肃',
+  '青海',
+  '宁夏',
+  '新疆',
+]
+
 const REQUIRED_PLAN_FIELDS = [
   '年份',
   '省份',
@@ -73,6 +107,7 @@ export default function UploadStep() {
   const year = useTaskStore((state) => state.year)
   const defaultDataSource = useTaskStore((state) => state.defaultDataSource)
   const manualSchoolName = useTaskStore((state) => state.manualSchoolName)
+  const manualProvince = useTaskStore((state) => state.manualProvince)
   const scoreWorkbook = useTaskStore((state) => state.scoreWorkbook)
   const scoreSheetName = useTaskStore((state) => state.scoreSheetName)
   const planWorkbook = useTaskStore((state) => state.planWorkbook)
@@ -190,7 +225,7 @@ export default function UploadStep() {
         }
       >
         <Row gutter={16}>
-          <Col span={7}>
+          <Col span={6}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>任务名称</Text>
               <Input
@@ -215,7 +250,7 @@ export default function UploadStep() {
             </Space>
           </Col>
 
-          <Col span={6}>
+          <Col span={5}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>默认数据来源</Text>
               <Select
@@ -231,7 +266,7 @@ export default function UploadStep() {
             </Space>
           </Col>
 
-          <Col span={8}>
+          <Col span={5}>
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
               <Text>学校名称（选填）</Text>
               <AutoComplete
@@ -242,6 +277,24 @@ export default function UploadStep() {
                 filterOption={false}
                 placeholder="输入学校关键词"
                 style={{ width: '100%' }}
+              />
+            </Space>
+          </Col>
+
+          <Col span={5}>
+            <Space direction="vertical" style={{ width: '100%' }} size={6}>
+              <Text>省份（选填）</Text>
+              <Select
+                allowClear
+                showSearch
+                value={manualProvince || undefined}
+                onChange={(value) => setTaskMeta({ manualProvince: value || '' })}
+                placeholder="选择省份"
+                style={{ width: '100%' }}
+                options={PROVINCE_OPTIONS.map((item) => ({
+                  label: item,
+                  value: item,
+                }))}
               />
             </Space>
           </Col>

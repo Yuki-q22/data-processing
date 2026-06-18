@@ -6,6 +6,7 @@ type TaskStore = {
   year: string
   defaultDataSource: string
   manualSchoolName: string
+  manualProvince: string
 
   templateWorkbook?: UploadedWorkbook
   scoreWorkbook?: UploadedWorkbook
@@ -19,7 +20,7 @@ type TaskStore = {
     patch: Partial<
       Pick<
         TaskStore,
-        'taskName' | 'year' | 'defaultDataSource' | 'manualSchoolName'
+        'taskName' | 'year' | 'defaultDataSource' | 'manualSchoolName' | 'manualProvince'
       >
     >
   ) => void
@@ -42,6 +43,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
   year: '2025',
   defaultDataSource: '销售',
   manualSchoolName: '',
+  manualProvince: '',
 
   templateWorkbook: undefined,
   scoreWorkbook: undefined,
@@ -93,6 +95,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
       year: '2025',
       defaultDataSource: '销售',
       manualSchoolName: '',
+      manualProvince: '',
       templateWorkbook: undefined,
       scoreWorkbook: undefined,
       planWorkbook: undefined,

@@ -52,6 +52,12 @@ import {
   type LibraryProfessionalScoreProcessResult,
   type LibraryProfessionalScorePreviewRow,
 } from '../../modules/libraryProfessionalScoreTemplate'
+import {
+  exportXueyeqiaoPlanWorkbook,
+  processXueyeqiaoPlanRows,
+  type XueyeqiaoPlanPreviewRow,
+  type XueyeqiaoPlanProcessResult,
+} from '../../modules/xueyeqiaoPlan'
 
 const { Dragger } = Upload
 const { Paragraph } = Typography
@@ -126,6 +132,20 @@ function buildLibraryRowKey(row: LibraryProfessionalScorePreviewRow) {
   ].join('__')
 }
 
+function buildXueyeqiaoPlanRowKey(row: XueyeqiaoPlanPreviewRow) {
+  return [
+    row.rowId || '',
+    row.招生年份 || '',
+    row.学校名称 || '',
+    row.省份 || '',
+    row.招生科类 || '',
+    row.招生批次 || '',
+    row.招生代码 || '',
+    row.专业组代码 || '',
+    row.专业代码 || '',
+  ].join('__')
+}
+
 const XUEYEQIAO_TABLE_COLUMNS = [
   { title: '学校名称', dataIndex: '学校名称', key: '学校名称', width: 180 },
   { title: '学校匹配', dataIndex: '学校名称匹配', key: '学校名称匹配', width: 120 },
@@ -182,6 +202,33 @@ const LIBRARY_TEMPLATE_TABLE_COLUMNS = [
   { title: '专业代码', dataIndex: '专业代码', key: '专业代码', width: 120 },
   { title: '招生代码', dataIndex: '招生代码', key: '招生代码', width: 120 },
   { title: '原始选科要求', dataIndex: '原始选科要求', key: '原始选科要求', width: 260 },
+]
+
+const XUEYEQIAO_PLAN_TABLE_COLUMNS = [
+  { title: '招生年份', dataIndex: '招生年份', key: '招生年份', width: 100 },
+  { title: '学校名称', dataIndex: '学校名称', key: '学校名称', width: 180 },
+  { title: '学校匹配', dataIndex: '学校名称校验结果', key: '学校名称校验结果', width: 120 },
+  { title: '专业匹配', dataIndex: '专业名称校验结果', key: '专业名称校验结果', width: 120 },
+  { title: '省份', dataIndex: '省份', key: '省份', width: 100 },
+  { title: '招生专业', dataIndex: '招生专业', key: '招生专业', width: 180 },
+  { title: '专业备注', dataIndex: '专业备注', key: '专业备注', width: 220 },
+  { title: '一级层次', dataIndex: '一级层次', key: '一级层次', width: 130 },
+  { title: '招生科类', dataIndex: '招生科类', key: '招生科类', width: 120 },
+  { title: '招生批次', dataIndex: '招生批次', key: '招生批次', width: 140 },
+  { title: '招生类型', dataIndex: '招生类型', key: '招生类型', width: 140 },
+  { title: '招生代码', dataIndex: '招生代码', key: '招生代码', width: 120 },
+  { title: '招生人数', dataIndex: '招生人数', key: '招生人数', width: 100 },
+  { title: '专业学制', dataIndex: '专业学制', key: '专业学制', width: 100 },
+  { title: '学费', dataIndex: '学费', key: '学费', width: 100 },
+  { title: '学费单位', dataIndex: '学费单位', key: '学费单位', width: 100 },
+  { title: '数据来源', dataIndex: '数据来源', key: '数据来源', width: 110 },
+  { title: '专业组代码', dataIndex: '专业组代码', key: '专业组代码', width: 140 },
+  { title: '首选科目', dataIndex: '首选科目', key: '首选科目', width: 100 },
+  { title: '选科要求', dataIndex: '选科要求', key: '选科要求', width: 180 },
+  { title: '次选科目', dataIndex: '次选科目', key: '次选科目', width: 120 },
+  { title: '专业代码', dataIndex: '专业代码', key: '专业代码', width: 120 },
+  { title: '原始报考要求', dataIndex: '原始报考要求', key: '原始报考要求', width: 220 },
+  { title: '批次备注', dataIndex: '批次备注', key: '批次备注', width: 140 },
 ]
 
 function XueyeqiaoConvertPanel() {
@@ -359,6 +406,182 @@ function XueyeqiaoConvertPanel() {
       ) : (
         <Card>
           <Empty description="上传并处理后，这里显示转换结果预览" />
+        </Card>
+      )}
+    </div>
+  )
+}
+
+function XueyeqiaoPlanConvertPanel() {
+  const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
+  const validMajorCombos = useRuleCenterStore((state) => state.validMajorCombos)
+  const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
+  const [loadedWorkbook, setLoadedWorkbook] = useState<LoadedWorkbook | null>(null)
+  const [sheetName, setSheetName] = useState<string>()
+  const [processing, setProcessing] = useState(false)
+  const [result, setResult] = useState<XueyeqiaoPlanProcessResult | null>(null)
+
+  const handleUpload = async (file: File) => {
+    const taskId = startTask('upload')
+    try {
+      const loaded = await loadWorkbook(file)
+      if (!isLatestTask('upload', taskId)) return false
+      setLoadedWorkbook(loaded)
+      setSheetName(loaded.sheetNames[0])
+      setResult(null)
+      message.success(`已上传文件：${file.name}`)
+    } catch (error) {
+      if (!isLatestTask('upload', taskId)) return false
+      message.error(error instanceof Error ? error.message : '文件上传失败')
+    }
+    return false
+  }
+
+  const handleProcess = async () => {
+    if (!loadedWorkbook || !sheetName) {
+      message.warning('请先上传文件')
+      return
+    }
+
+    const taskId = startTask('process')
+    setProcessing(true)
+    try {
+      const rows = await sheetToJsonInWorker(loadedWorkbook.workbook, sheetName)
+      if (!isLatestTask('process', taskId)) return
+      const processed = processXueyeqiaoPlanRows({
+        rows,
+        validSchoolNames,
+        validMajorCombos,
+      })
+      setResult(processed)
+
+      if (processed.missingColumns.length > 0) {
+        message.warning(`缺少字段：${processed.missingColumns.join('、')}`)
+      } else {
+        message.success('学业桥计划转换完成')
+      }
+    } catch (error) {
+      if (!isLatestTask('process', taskId)) return
+      message.error(error instanceof Error ? error.message : '处理失败')
+    } finally {
+      if (isLatestTask('process', taskId)) {
+        setProcessing(false)
+      }
+    }
+  }
+
+  const handleExport = async () => {
+    if (!result) {
+      message.warning('请先处理数据')
+      return
+    }
+
+    if (result.missingColumns.length > 0) {
+      message.warning('当前文件字段不完整，不能导出')
+      return
+    }
+
+    try {
+      const blob = await exportXueyeqiaoPlanWorkbook({
+        exportRows: result.exportRows,
+        yearValue: result.yearValue,
+      })
+      downloadBlob(blob, `学业桥计划转换_${result.yearValue || '未识别年份'}.xlsx`)
+      message.success('导出成功')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '导出失败')
+    }
+  }
+
+  const handleResetPage = () => {
+    confirmToolReset({
+      title: '确认重置学业桥计划转换？',
+      onReset: () => {
+        setLoadedWorkbook(null)
+        setSheetName(undefined)
+        cancelTask('process')
+        setProcessing(false)
+        setResult(null)
+      },
+    })
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Card title="学业桥计划转换" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
+        <Paragraph>
+          将学业桥计划数据转换为招生计划导入模板。
+        </Paragraph>
+
+        <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx,.xls">
+            <p className="ant-upload-drag-icon">
+              <InboxOutlined />
+            </p>
+            <p className="ant-upload-text">点击或拖拽上传学业桥计划 Excel 文件</p>
+            <p className="ant-upload-hint">默认按第一行表头读取</p>
+          </Dragger>
+
+          <Space wrap>
+            {loadedWorkbook ? (
+              <Select
+                value={sheetName}
+                onChange={setSheetName}
+                style={{ width: 260 }}
+                options={loadedWorkbook.sheetNames.map((name) => ({ label: name, value: name }))}
+              />
+            ) : null}
+
+            <Button type="primary" loading={processing} onClick={handleProcess}>
+              开始转换
+            </Button>
+
+            <Button onClick={handleExport} disabled={!result || result.missingColumns.length > 0}>
+              导出招生计划模板
+            </Button>
+          </Space>
+        </Space>
+      </Card>
+
+      {result ? (
+        <>
+          <Space size={16} wrap>
+            <Card>
+              <Statistic title="招生年份" value={result.yearValue || '-'} />
+            </Card>
+            <Card>
+              <Statistic title="原始记录数" value={result.inputRowCount} />
+            </Card>
+            <Card>
+              <Statistic title="输出记录数" value={result.outputRowCount} />
+            </Card>
+          </Space>
+
+          <Card title="字段检查">
+            {result.missingColumns.length > 0 ? (
+              <Alert type="warning" showIcon message="字段不完整" description={`缺少字段：${result.missingColumns.join('、')}`} />
+            ) : (
+              <Alert type="success" showIcon message="字段检查通过" description={`共识别 ${result.detectedHeaders.length} 个表头字段`} />
+            )}
+          </Card>
+
+          <Card title="转换结果预览">
+            {result.previewRows.length > 0 ? (
+              <Table<XueyeqiaoPlanPreviewRow>
+                rowKey={buildXueyeqiaoPlanRowKey}
+                dataSource={result.previewRows}
+                columns={XUEYEQIAO_PLAN_TABLE_COLUMNS}
+                scroll={{ x: 3400 }}
+                pagination={{ pageSize: 10 }}
+              />
+            ) : (
+              <Empty description="没有可输出的数据" />
+            )}
+          </Card>
+        </>
+      ) : (
+        <Card>
+          <Empty description="上传并转换后，这里显示结果预览" />
         </Card>
       )}
     </div>
@@ -547,6 +770,11 @@ export default function XueyeqiaoTool() {
           key: 'xueyeqiao-convert',
           label: '学业桥专业分转换',
           children: <XueyeqiaoConvertPanel />,
+        },
+        {
+          key: 'xueyeqiao-plan-convert',
+          label: '学业桥计划转换',
+          children: <XueyeqiaoPlanConvertPanel />,
         },
         {
           key: 'library-template-convert',

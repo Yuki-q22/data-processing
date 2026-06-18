@@ -79,6 +79,18 @@ function getCorePlanCandidates(score: ScoreRecord, plans: PlanRecord[]) {
   return plans.filter((plan) => makeCoreMatchKey(plan) === scoreKey)
 }
 
+function planCandidatesHaveSameFields(
+  candidates: PlanRecord[],
+  fields: Array<keyof Pick<PlanRecord, 'batch' | 'level1' | 'enrollmentType' | 'groupCode'>>
+) {
+  if (candidates.length <= 1) return false
+
+  return fields.every((field) => {
+    const values = candidates.map((candidate) => normalizeText(candidate[field]))
+    return new Set(values).size <= 1
+  })
+}
+
 function filterCandidates(
   score: ScoreRecord,
   plans: PlanRecord[],
@@ -234,6 +246,21 @@ function pickMatch(
    */
   if (scoreCoreDuplicated || planCoreDuplicated) {
     const candidates = getCorePlanCandidates(score, plans)
+    if (
+      planCandidatesHaveSameFields(candidates, [
+        'batch',
+        'level1',
+        'enrollmentType',
+        'groupCode',
+      ])
+    ) {
+      return {
+        matchedPlan: candidates[0],
+        matchStatus: 'matched_without_batch',
+        candidatesOut: candidates,
+      }
+    }
+
     return {
       matchedPlan: undefined,
       matchStatus: candidates.length > 0 ? 'matched_multiple' : 'unmatched',
@@ -391,6 +418,7 @@ export function buildProcessedRecords(
     const requirement = deriveRequirementFromPlan(matchedPlan)
     const scoreBatchValid = isBatchInProvinceRules(score, provinceCurrentBatchDictByYear)
     const shouldUsePlanCategory = !!score.subjectCategoryNeedsReview && !!matchedPlan?.subjectCategory
+    const isManualMatch = matchStatus === 'matched_manual'
     const finalSubjectCategory = shouldUsePlanCategory
       ? matchedPlan?.subjectCategory
       : score.subjectCategory || matchedPlan?.subjectCategory
@@ -404,7 +432,9 @@ export function buildProcessedRecords(
       firstSubject: finalFirstSubject,
       batch: scoreBatchValid ? score.batch || matchedPlan?.batch : matchedPlan?.batch || score.batch,
       level1: score.level1 || matchedPlan?.level1,
-      enrollmentType: score.enrollmentType || matchedPlan?.enrollmentType,
+      enrollmentType: isManualMatch
+        ? matchedPlan?.enrollmentType
+        : score.enrollmentType || matchedPlan?.enrollmentType,
       enrollmentPlan: score.enrollmentPlan ?? matchedPlan?.enrollmentPlan ?? null,
       groupCode: score.groupCode || matchedPlan?.groupCode,
       // 统一由匹配逻辑填入

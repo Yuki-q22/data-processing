@@ -59,7 +59,6 @@ const HEADERS = [
   '最低分',
   '平均分',
   '最低分位次（选填）',
-  '招生人数（选填）',
   '数据来源',
   '专业组代码',
   '首选科目',
@@ -136,7 +135,7 @@ export async function exportProfessionalScoreTemplate(
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false }
   })
 
-  const widths = [20, 12, 22, 18, 18, 14, 14, 16, 16, 10, 10, 10, 14, 12, 14, 14, 10, 18, 10, 12, 12, 14, 14, 16, 16, 12, 18, 18]
+  const widths = [20, 12, 22, 18, 18, 14, 14, 16, 16, 10, 10, 10, 14, 14, 14, 10, 18, 10, 12, 12, 14, 14, 16, 16, 12, 18, 18]
   widths.forEach((width, index) => {
     worksheet.getColumn(index + 1).width = width
   })
@@ -162,7 +161,6 @@ export async function exportProfessionalScoreTemplate(
       r.lowestScore ?? '',
       r.averageScore ?? '',
       r.lowestRank ?? '',
-      r.enrollmentPlan ?? '',
       r.dataSource ?? '',
       r.groupCode ?? '',
       r.firstSubject ?? '',
@@ -189,7 +187,7 @@ export async function exportProfessionalScoreTemplate(
     rowValues.forEach((value, colIdx) => {
       const cell = worksheet.getCell(rowIndex, colIdx + 1)
 
-      if ([16, 17, 18, 19, 20, 21].includes(colIdx + 1)) {
+      if ([15, 16, 17, 18, 19, 20].includes(colIdx + 1)) {
         cell.numFmt = '@'
         cell.value = value === '' ? '' : String(value)
       } else {

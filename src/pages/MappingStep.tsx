@@ -44,7 +44,6 @@ export default function MappingStep() {
   const scoreMappings = usePreviewStore((state) => state.scoreMappings)
   const planMappings = usePreviewStore((state) => state.planMappings)
   const updateScoreMapping = usePreviewStore((state) => state.updateScoreMapping)
-  const updatePlanMapping = usePreviewStore((state) => state.updatePlanMapping)
   const resetScoreMappingsToAuto = usePreviewStore((state) => state.resetScoreMappingsToAuto)
   const resetPlanMappingsToAuto = usePreviewStore((state) => state.resetPlanMappingsToAuto)
   const setScoreRecords = usePreviewStore((state) => state.setScoreRecords)
@@ -58,6 +57,7 @@ export default function MappingStep() {
   const scoreSheetName = useTaskStore((state) => state.scoreSheetName)
   const planSheetName = useTaskStore((state) => state.planSheetName)
   const manualSchoolName = useTaskStore((state) => state.manualSchoolName)
+  const manualProvince = useTaskStore((state) => state.manualProvince)
 
   const fieldAliases = useRuleStore((state) => state.fieldAliases)
   const provinceRules = useRuleStore((state) => state.provinceRules)
@@ -180,6 +180,7 @@ export default function MappingStep() {
         batchRules,
         provinceYearCategoryType,
         manualSchoolName,
+        manualProvince,
         remarkTypeRules,
       }
     )
@@ -217,7 +218,7 @@ export default function MappingStep() {
     message.success('映射已应用，预览数据已重新生成')
   }
 
-  const commonColumns = (type: 'score' | 'plan') => [
+  const scoreColumns = [
     {
       title: '忽略',
       dataIndex: 'ignored',
@@ -227,15 +228,9 @@ export default function MappingStep() {
         <Checkbox
           checked={!!record.ignored}
           onChange={(e) => {
-            if (type === 'score') {
-              updateScoreMapping(record.sourceField, {
-                ignored: e.target.checked,
-              })
-            } else {
-              updatePlanMapping(record.sourceField, {
-                ignored: e.target.checked,
-              })
-            }
+            updateScoreMapping(record.sourceField, {
+              ignored: e.target.checked,
+            })
           }}
         />
       ),
@@ -267,15 +262,9 @@ export default function MappingStep() {
           options={targetOptions}
           disabled={!!record.ignored}
           onChange={(nextValue) => {
-            if (type === 'score') {
-              updateScoreMapping(record.sourceField, {
-                targetField: nextValue,
-              })
-            } else {
-              updatePlanMapping(record.sourceField, {
-                targetField: nextValue,
-              })
-            }
+            updateScoreMapping(record.sourceField, {
+              targetField: nextValue,
+            })
           }}
         />
       ),
@@ -297,7 +286,7 @@ export default function MappingStep() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card title="字段映射说明">
         <Paragraph style={{ marginBottom: 12 }}>
-          上传文件或切换 Sheet 后会自动生成字段映射。这里可以手工调整字段映射，修改后点击“应用当前映射”，第四步预览会重新生成。
+          上传文件或切换 Sheet 后会自动识别字段。原始专业分字段可在这里手工调整，招生计划字段由程序自动映射；点击“应用当前映射”后，第四步预览会重新生成。
         </Paragraph>
 
         <Space>
@@ -311,18 +300,8 @@ export default function MappingStep() {
       <Card title="原始专业分字段映射">
         <Table
           rowKey="sourceField"
-          columns={commonColumns('score')}
+          columns={scoreColumns}
           dataSource={scoreMappings}
-          pagination={false}
-          scroll={{ x: 800 }}
-        />
-      </Card>
-
-      <Card title="招生计划字段映射">
-        <Table
-          rowKey="sourceField"
-          columns={commonColumns('plan')}
-          dataSource={planMappings}
           pagination={false}
           scroll={{ x: 800 }}
         />
