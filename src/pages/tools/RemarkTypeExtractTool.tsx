@@ -36,6 +36,7 @@ import {
   message,
 } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
+import ExcelJS from 'exceljs'
 import * as XLSX from 'xlsx'
 import { useRuleCenterStore } from '../../stores/ruleCenterStore'
 import {
@@ -43,7 +44,13 @@ import {
   exportRemarkTypeExtractWorkbook,
   type RemarkTypeExtractResult,
 } from '../../modules/remarkTypeExtract'
-import { downloadBlob, fixRemark } from '../../modules/xueyeqiao'
+import {
+  findRemarkColumn,
+  isEmptyRemark,
+  processRemark,
+  REMARK_COLUMN_NAMES,
+} from '../../modules/remarkCheck'
+import { downloadBlob } from '../../modules/xueyeqiao'
 import { confirmToolReset } from '../../utils/toolReset'
 import { parseWorkbookInWorker } from '../../utils/excelWorkerClient'
 import { useLatestTaskGuard } from '../../hooks/useLatestTaskGuard'
@@ -53,6 +60,7 @@ const { Paragraph, Text } = Typography
 
 type LoadedWorkbook = {
   fileName: string
+  sourceFile: File
   workbook: XLSX.WorkBook
   sheetNames: string[]
 }
@@ -60,21 +68,24 @@ type LoadedWorkbook = {
 type RemarkPreviewRow = {
   rowId: string
   原始备注: string
-  修改后的备注: string
-  处理结果: string
+  备注问题标注: string
+  修改后备注: string
 }
 
 type RemarkProcessResult = {
-  inputRowCount: number
-  outputRowCount: number
+  totalRows: number
+  remarkRows: number
+  issueRows: number
+  fixedRows: number
   detectedHeaders: string[]
   remarkField: string
   previewRows: RemarkPreviewRow[]
-  exportRows: Record<string, unknown>[]
+  rowResults: Array<{ issues: string; fixed: string }>
 }
 
 async function loadWorkbook(file: File): Promise<LoadedWorkbook> {
-  return parseWorkbookInWorker(file)
+  const parsed = await parseWorkbookInWorker(file)
+  return { ...parsed, sourceFile: file }
 }
 
 function cellToText(value: unknown) {
@@ -123,56 +134,95 @@ function getRows(workbook: XLSX.WorkBook, sheetName: string) {
 }
 
 function getDefaultRemarkField(headers: string[]) {
-  return (
-    headers.find((header) => header === '专业备注') ||
-    headers.find((header) => header === '备注') ||
-    headers.find((header) => header.includes('备注')) ||
-    headers[0]
-  )
+  return findRemarkColumn(headers)
 }
 
 function buildRemarkRows(rows: Record<string, unknown>[], remarkField: string): RemarkProcessResult {
   const detectedHeaders = rows.length ? Object.keys(rows[0]) : []
-  const exportRows: Record<string, unknown>[] = []
+  const rowResults: Array<{ issues: string; fixed: string }> = []
+  let remarkRows = 0
+  let issueRows = 0
+  let fixedRows = 0
   const previewRows = rows.map((row, rowIndex) => {
-    const rawRemark = String(row[remarkField] ?? '').trim()
-    const fixed = fixRemark(rawRemark)
-    const issueText = fixed.issues.join('；')
-
-    exportRows.push({
-      ...row,
-      修改后的备注: fixed.fixedText,
-      备注处理结果: issueText,
-    })
+    const rawValue = row[remarkField]
+    const rawRemark = rawValue === null || rawValue === undefined ? '' : String(rawValue)
+    const checked = processRemark(rawValue)
+    rowResults.push({ issues: checked.issues, fixed: checked.fixed })
+    if (!isEmptyRemark(rawValue)) remarkRows += 1
+    if (checked.issues) issueRows += 1
+    if (checked.fixed) fixedRows += 1
 
     return {
       rowId: String(rowIndex + 1),
       原始备注: rawRemark,
-      修改后的备注: fixed.fixedText,
-      处理结果: issueText,
+      备注问题标注: checked.issues,
+      修改后备注: checked.fixed,
     }
   })
 
   return {
-    inputRowCount: rows.length,
-    outputRowCount: previewRows.length,
+    totalRows: rows.length,
+    remarkRows,
+    issueRows,
+    fixedRows,
     detectedHeaders,
     remarkField,
     previewRows,
-    exportRows,
+    rowResults,
   }
 }
 
-function exportRemarkCleanWorkbook(result: RemarkProcessResult, fileName: string) {
-  const workbook = XLSX.utils.book_new()
-  const worksheet = XLSX.utils.json_to_sheet(result.exportRows)
-  XLSX.utils.book_append_sheet(workbook, worksheet, '备注处理结果')
-  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
+async function exportRemarkCleanWorkbook(
+  result: RemarkProcessResult,
+  loaded: LoadedWorkbook,
+  sheetName: string,
+) {
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(await loaded.sourceFile.arrayBuffer())
+  const worksheet = workbook.getWorksheet(sheetName)
+  if (!worksheet) throw new Error(`未找到工作表：${sheetName}`)
+
+  const issueColumnNumber = worksheet.columnCount + 1
+  const fixedColumnNumber = issueColumnNumber + 1
+  const headerRow = worksheet.getRow(1)
+  const issueHeader = headerRow.getCell(issueColumnNumber)
+  const fixedHeader = headerRow.getCell(fixedColumnNumber)
+  issueHeader.value = '备注问题标注'
+  fixedHeader.value = '修改后备注'
+  issueHeader.font = { ...issueHeader.font, bold: true }
+  fixedHeader.font = { ...fixedHeader.font, bold: true }
+  issueHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2F0D9' } }
+  fixedHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2F0D9' } }
+
+  result.rowResults.forEach((checked, index) => {
+    const row = worksheet.getRow(index + 2)
+    const issueCell = row.getCell(issueColumnNumber)
+    const fixedCell = row.getCell(fixedColumnNumber)
+    issueCell.value = checked.issues
+    fixedCell.value = checked.fixed
+    issueCell.alignment = { vertical: 'top', wrapText: true }
+    fixedCell.alignment = { vertical: 'top', wrapText: true }
+
+    if (checked.issues) {
+      const fill: ExcelJS.Fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFF2CC' },
+      }
+      issueCell.fill = fill
+      fixedCell.fill = fill
+    }
+  })
+
+  worksheet.getColumn(issueColumnNumber).width = 48
+  worksheet.getColumn(fixedColumnNumber).width = 42
+
+  const buffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
-  const stem = fileName.replace(/\.(xlsx|xls)$/i, '') || '备注处理结果'
-  downloadBlob(blob, `${stem}_备注处理结果.xlsx`)
+  const stem = loaded.fileName.replace(/\.xlsx$/i, '') || '备注检查结果'
+  downloadBlob(blob, `${stem}_备注检查结果.xlsx`)
 }
 
 const REMARK_TYPE_TABLE_COLUMNS = [
@@ -191,8 +241,8 @@ const REMARK_TYPE_TABLE_COLUMNS = [
 const REMARK_CLEAN_TABLE_COLUMNS = [
   { title: '行号', dataIndex: 'rowId', key: 'rowId', width: 80 },
   { title: '原始备注', dataIndex: '原始备注', key: '原始备注', width: 360 },
-  { title: '修改后的备注', dataIndex: '修改后的备注', key: '修改后的备注', width: 360 },
-  { title: '处理结果', dataIndex: '处理结果', key: '处理结果', width: 280 },
+  { title: '备注问题标注', dataIndex: '备注问题标注', key: '备注问题标注', width: 360 },
+  { title: '修改后备注', dataIndex: '修改后备注', key: '修改后备注', width: 360 },
 ]
 
 function RemarkTypeExtractPanel() {
@@ -400,7 +450,13 @@ function RemarkCleanPanel() {
       setSheetName(firstSheet)
       setRemarkField(autoRemarkField)
       setResult(null)
-      message.success(`已上传文件：${file.name}`)
+      if (autoRemarkField) {
+        message.success(`已上传文件并识别备注列：${autoRemarkField}`)
+      } else {
+        message.warning(
+          `未自动找到备注列，请手动选择。支持的列名：${REMARK_COLUMN_NAMES.join('、')}`,
+        )
+      }
     } catch (error) {
       if (!isLatestTask('upload', taskId)) return false
       message.error(error instanceof Error ? error.message : '文件上传失败')
@@ -448,14 +504,14 @@ function RemarkCleanPanel() {
     }
   }
 
-  const handleExport = () => {
-    if (!result || !loadedWorkbook) {
+  const handleExport = async () => {
+    if (!result || !loadedWorkbook || !sheetName) {
       message.warning('请先处理数据')
       return
     }
 
     try {
-      exportRemarkCleanWorkbook(result, loadedWorkbook.fileName)
+      await exportRemarkCleanWorkbook(result, loadedWorkbook, sheetName)
       message.success('导出成功')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '导出失败')
@@ -480,19 +536,21 @@ function RemarkCleanPanel() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card title="备注处理" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
-          单独复用学业桥专业分中的备注处理逻辑，对所选备注字段进行括号修复、错字修正、空括号删除、重复括号内容去重、标点压缩等处理。
+          检查招生计划备注中的常见错字、重复内容、格式异常、括号不成对和疑似乱码。
+          只有确定的问题会自动修正，不确定内容仅提示人工检查。
         </Paragraph>
         <Paragraph type="secondary">
-          导出时保留原始表格字段，并新增 <Text code>修改后的备注</Text>、<Text code>备注处理结果</Text> 两列。
+          导出时保留原工作簿和原始字段，在所选 Sheet 最后新增 <Text code>备注问题标注</Text>、
+          <Text code>修改后备注</Text> 两列；有问题的结果单元格会标为浅黄色。
         </Paragraph>
 
         <Space direction="vertical" style={{ width: '100%' }} size={16}>
-          <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx,.xls">
+          <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx">
             <p className="ant-upload-drag-icon">
               <InboxOutlined />
             </p>
             <p className="ant-upload-text">点击或拖拽上传需要处理备注的 Excel 文件</p>
-            <p className="ant-upload-hint">可选择任意包含备注字段的 Sheet</p>
+            <p className="ant-upload-hint">仅支持 .xlsx，可选择任意包含备注字段的 Sheet</p>
           </Dragger>
 
           <Space wrap>
@@ -531,13 +589,16 @@ function RemarkCleanPanel() {
         <>
           <Space size={16} wrap>
             <Card>
-              <Statistic title="原始记录数" value={result.inputRowCount} />
+              <Statistic title="总行数" value={result.totalRows} />
             </Card>
             <Card>
-              <Statistic title="输出记录数" value={result.outputRowCount} />
+              <Statistic title="有备注行数" value={result.remarkRows} />
             </Card>
             <Card>
-              <Statistic title="备注字段" value={result.remarkField} />
+              <Statistic title="检测出问题" value={result.issueRows} />
+            </Card>
+            <Card>
+              <Statistic title="自动生成修改后备注" value={result.fixedRows} />
             </Card>
           </Space>
 
