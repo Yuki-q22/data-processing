@@ -233,20 +233,6 @@ export function splitMajorNameAndRemark(majorName?: string): {
   }
 }
 
-export function extractEnrollmentTypeFromRemark(
-  remark: string | undefined,
-  remarkTypeRules: Array<{ keyword: string; output: string; priority: number }>
-): string | undefined {
-  const text = sanitizeText(remark)
-  if (!text) return undefined
-
-  const matched = [...remarkTypeRules]
-    .sort((a, b) => a.priority - b.priority)
-    .find((item) => text.includes(item.keyword))
-
-  return matched?.output
-}
-
 function subjectLongToShort(text: string): string {
   let remaining = text
   const result: string[] = []

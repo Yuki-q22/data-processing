@@ -65,20 +65,9 @@ export default function MappingStep() {
   const batchRules = useRuleStore((state) => state.batchRules)
   const ignoredPlanSourceFields = useRuleStore((state) => state.ignoredPlanSourceFields)
 
-  const cloudRemarkTypeRules = useRuleCenterStore((state) => state.remarkTypeRules)
   const provinceYearCategoryType = useRuleCenterStore((state) => state.provinceYearCategoryType)
   const provinceCurrentBatchDictByYear = useRuleCenterStore((state) => state.provinceCurrentBatchDictByYear)
   const { startTask, isLatestTask } = useLatestTaskGuard()
-
-  const remarkTypeRules = useMemo(
-    () =>
-      cloudRemarkTypeRules.map((rule) => ({
-        keyword: rule.keyword,
-        output: rule.outputType,
-        priority: rule.priority,
-      })),
-    [cloudRemarkTypeRules]
-  )
 
   const targetOptions = TARGET_FIELDS.map((field) => ({
     label: field,
@@ -181,7 +170,6 @@ export default function MappingStep() {
         provinceYearCategoryType,
         manualSchoolName,
         manualProvince,
-        remarkTypeRules,
       }
     )
 
@@ -195,7 +183,6 @@ export default function MappingStep() {
         categoryRules,
         batchRules,
         provinceYearCategoryType,
-        remarkTypeRules,
       }
     )
 

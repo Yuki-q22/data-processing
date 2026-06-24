@@ -339,11 +339,7 @@ function buildFieldSources(
         ? '招生计划匹配补全'
         : '无',
 
-    enrollmentType: score.enrollmentType
-      ? (score.majorRemark ? '原始数据 / 备注提取结果' : '原始数据或备注提取')
-      : matchedPlan?.enrollmentType
-        ? '招生计划补全'
-        : '无',
+    enrollmentType: matchedPlan ? '招生计划' : '无',
 
     subjectRequirementMode: score.subjectRequirementMode
       ? '原始数据'
@@ -418,7 +414,6 @@ export function buildProcessedRecords(
     const requirement = deriveRequirementFromPlan(matchedPlan)
     const scoreBatchValid = isBatchInProvinceRules(score, provinceCurrentBatchDictByYear)
     const shouldUsePlanCategory = !!score.subjectCategoryNeedsReview && !!matchedPlan?.subjectCategory
-    const isManualMatch = matchStatus === 'matched_manual'
     const finalSubjectCategory = shouldUsePlanCategory
       ? matchedPlan?.subjectCategory
       : score.subjectCategory || matchedPlan?.subjectCategory
@@ -432,9 +427,8 @@ export function buildProcessedRecords(
       firstSubject: finalFirstSubject,
       batch: scoreBatchValid ? score.batch || matchedPlan?.batch : matchedPlan?.batch || score.batch,
       level1: score.level1 || matchedPlan?.level1,
-      enrollmentType: isManualMatch
-        ? matchedPlan?.enrollmentType
-        : score.enrollmentType || matchedPlan?.enrollmentType,
+      // 招生类型始终使用匹配到的招生计划原值；计划为空时结果也保持为空。
+      enrollmentType: matchedPlan?.enrollmentType,
       enrollmentPlan: score.enrollmentPlan ?? matchedPlan?.enrollmentPlan ?? null,
       groupCode: score.groupCode || matchedPlan?.groupCode,
       // 统一由匹配逻辑填入

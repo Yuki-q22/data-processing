@@ -2,7 +2,6 @@ import type { FieldMappingItem } from '../types/mapping'
 import type { PlanRecord, ScoreRecord } from '../types/record'
 import {
   deriveFieldsFromRawSubjectCategory,
-  extractEnrollmentTypeFromRemark,
   getCategoryTypeByYearProvince,
   mergeSubjectRequirements,
   normalizeBatch,
@@ -73,7 +72,6 @@ type StandardizeOptions = {
   categoryRules: Record<string, string>
   batchRules: Record<string, string>
   provinceYearCategoryType: Record<string, Record<string, string>>
-  remarkTypeRules: Array<{ keyword: string; output: string; priority: number }>
   manualSchoolName?: string
   manualProvince?: string
 }
@@ -104,7 +102,6 @@ export function buildScoreRecords(
     const splitMajor = splitMajorNameAndRemark(toText(mapped['招生专业']))
     const explicitRemark = normalizeRemarkWithChineseBrackets(toText(mapped['专业备注']))
     const finalRemark = mergeMajorRemarks(splitMajor.majorRemark, explicitRemark)
-    const extractedType = extractEnrollmentTypeFromRemark(finalRemark, options.remarkTypeRules)
 
     const schoolName =
       sanitizeText(toText(mapped['学校名称'])) || sanitizeText(options.manualSchoolName)
@@ -134,7 +131,7 @@ export function buildScoreRecords(
       majorDirection: sanitizeText(toText(mapped['专业方向'])),
       majorRemark: finalRemark,
       level1: normalizeLevel1(toText(mapped['一级层次'])),
-      enrollmentType: sanitizeText(toText(mapped['招生类型'])) || extractedType,
+      enrollmentType: sanitizeText(toText(mapped['招生类型'])),
       enrollmentPlan: toNumber(mapped['招生人数']),
       admittedCount: toNumber(mapped['录取人数']),
       highestScore: toNumber(mapped['最高分']),
@@ -187,7 +184,6 @@ export function buildPlanRecords(
     const splitMajor = splitMajorNameAndRemark(toText(mapped['招生专业']))
     const explicitRemark = sanitizeText(toText(mapped['专业备注']))
     const finalRemark = mergeMajorRemarks(splitMajor.majorRemark, explicitRemark)
-    const extractedType = extractEnrollmentTypeFromRemark(finalRemark, options.remarkTypeRules)
 
     const schoolName =
       sanitizeText(toText(mapped['学校名称'])) || sanitizeText(options.manualSchoolName)
@@ -208,7 +204,9 @@ export function buildPlanRecords(
       majorDirection: sanitizeText(toText(mapped['专业方向'])),
       majorRemark: finalRemark,
       level1: normalizeLevel1(toText(mapped['一级层次'])),
-      enrollmentType: sanitizeText(toText(mapped['招生类型'])) || extractedType,
+      // 专业分模板智能填充的招生类型只认招生计划中的原字段，
+      // 即使该字段为空，也禁止再根据专业备注或规则中心规则补提取。
+      enrollmentType: sanitizeText(toText(mapped['招生类型'])),
       enrollmentPlan: toNumber(mapped['招生人数']),
       groupCode: sanitizeText(toText(mapped['专业组代码'])),
       groupSubjectRequirement: mergedRequirement,

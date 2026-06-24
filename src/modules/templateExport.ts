@@ -156,7 +156,8 @@ export async function exportProfessionalScoreTemplate(
       r.majorRemark ?? '',
       r.level1 ?? '',
       r.subjectCategory ?? '',
-      r.batch ?? '',
+      // 浙江的导出批次按业务要求固定留空，不影响前面的批次匹配流程。
+      r.province === '浙江' ? '' : r.batch ?? '',
       r.enrollmentType ?? '',
       r.highestScore ?? '',
       r.lowestScore ?? '',
