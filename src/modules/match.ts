@@ -36,6 +36,13 @@ function isEqualOrIgnored(a?: string, b?: string) {
   return a === b
 }
 
+function hasSubjectCategoryConflict(scoreCategory?: string, planCategory?: string) {
+  const normalizedScoreCategory = normalizeText(scoreCategory)
+  const normalizedPlanCategory = normalizeText(planCategory)
+
+  return !!normalizedScoreCategory && !!normalizedPlanCategory && normalizedScoreCategory !== normalizedPlanCategory
+}
+
 function makeCoreMatchKey(record: Pick<ScoreRecord | PlanRecord, 'schoolName' | 'province' | 'subjectCategory' | 'majorName'>) {
   return [
     normalizeText(record.schoolName),
@@ -103,6 +110,10 @@ function filterCandidates(
   }
 ) {
   return plans.filter((plan) => {
+    if (!options.useCategory && hasSubjectCategoryConflict(score.subjectCategory, plan.subjectCategory)) {
+      return false
+    }
+
     const schoolOk = options.cleaned
       ? normalizeText(plan.schoolName) === normalizeText(score.schoolName)
       : (plan.schoolName || '') === (score.schoolName || '')
