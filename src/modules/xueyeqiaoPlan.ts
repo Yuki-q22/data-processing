@@ -63,6 +63,7 @@ const SOURCE_REQUIRED_COLUMNS = [
   '专业名称',
   '专业类别',
   '报考要求',
+  '专业层次',
   '专业备注',
   '学年',
   '学费',
@@ -306,6 +307,14 @@ function deriveLevel(params: {
     : '本科(普通)'
 }
 
+function deriveLevelFromSourceMajorLevel(value: unknown) {
+  const levelCode = t(value)
+  if (levelCode === '1') return '本科(普通)'
+  if (levelCode === '2') return '专科(高职)'
+  if (levelCode === '3') return '本科(职业)'
+  return null
+}
+
 export function processXueyeqiaoPlanRows(params: {
   rows: Record<string, unknown>[]
   validSchoolNames?: string[]
@@ -339,14 +348,16 @@ export function processXueyeqiaoPlanRows(params: {
     const majorRemark = t(row['专业备注'])
     const category = normalizeCategory(row['科类'])
     const requirement = parseApplyRequirement(row['报考要求'])
-    const level = deriveLevel({
-      batch,
-      schoolName,
-      majorName,
-      majorRemark,
-      majorLevelSet,
-      vocationalOnlyMajors,
-    })
+    const level =
+      deriveLevelFromSourceMajorLevel(row['专业层次']) ??
+      deriveLevel({
+        batch,
+        schoolName,
+        majorName,
+        majorRemark,
+        majorLevelSet,
+        vocationalOnlyMajors,
+      })
     const ruleCenterValidation = validateSchoolAndMajorComboDetailed({
       validSchoolNames,
       validMajorCombos,
