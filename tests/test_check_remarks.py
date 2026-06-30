@@ -119,6 +119,22 @@ class ProcessRemarkTests(unittest.TestCase):
         self.assertEqual(ten_thousand["issues"], "学费金额疑似异常：31万元超过30万元")
         self.assertEqual(ten_thousand["fixed"], "")
 
+    def test_ocr_noise_symbol_and_bracket_group_separator_are_fixed(self) -> None:
+        result = process_remark(
+            "（按智慧安全方向培%养，成龙校区）、（北斗应用与低空经济现代产业学院、九江）（前2年在南昌校区就读，后2年在九江校区就读）"
+        )
+        self.assertIn("疑似 OCR 多余符号：%/％", result["issues"])
+        self.assertIn("括号组之间存在多余标点符号", result["issues"])
+        self.assertEqual(
+            result["fixed"],
+            "（按智慧安全方向培养，成龙校区）（北斗应用与低空经济现代产业学院、九江）（前2年在南昌校区就读，后2年在九江校区就读）",
+        )
+
+    def test_unusual_bracket_content_typo_is_fixed(self) -> None:
+        result = process_remark("（不招色盲、色弱考生）（通类）")
+        self.assertEqual(result["issues"], "括号内容疑似错字：通类 → 普通类")
+        self.assertEqual(result["fixed"], "（不招色盲、色弱考生）（普通类）")
+
     def test_format_cleanup_preserves_meaning(self) -> None:
         result = process_remark("不招 色盲;详见招生章程。。\n不招色弱；；")
         self.assertIn("存在多余空格", result["issues"])

@@ -166,14 +166,20 @@ const HAN_SPACE_HAN_PATTERN = /(?<=\p{Script=Han}) (?=\p{Script=Han})/gu
 const EMPTY_BRACKET_PATTERN = /（\s*）/gu
 const REDUNDANT_NESTED_BRACKET_PATTERN = /（\s*（([^（）]*)）\s*）/u
 const REDUNDANT_NESTED_BRACKET_REPLACE_PATTERN = /（\s*（([^（）]*)）\s*）/gu
+const BRACKET_GROUP_SEPARATOR_PATTERN = /）[、，；]+（/gu
 const LEADING_PUNCTUATION_PATTERN = /^[，；：。！？、]+/u
 const TRAILING_SEPARATOR_PATTERN = /[，；：、]+$/u
 const PUNCTUATION_RUN_PATTERN = /[，；：。！？、]{2,}/gu
+const HAN_OCR_NOISE_SYMBOL_PATTERN = /(?<=\p{Script=Han})[%％](?=\p{Script=Han})/gu
 const TUITION_PATTERN = /学费[^，；。！？、（）\d]{0,12}?(\d+(?:\.\d+)?)\s*(万元|万|元)/gu
 const HEIGHT_VALUE_PATTERN = /(?:身高|身长)[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(cm|CM|厘米|米|m|M)/gu
 const HEIGHT_WRONG_UNIT_PATTERN = /(?:身高|身长)[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(kg|KG|公斤|千克|斤)/gu
 const WEIGHT_VALUE_PATTERN = /体重[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(kg|KG|公斤|千克|斤)/gu
 const WEIGHT_WRONG_UNIT_PATTERN = /体重[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(cm|CM|厘米|米|m|M)/gu
+const BRACKET_CONTENT_TYPO_MAP: Readonly<Record<string, string>> = {
+  通类: '普通类',
+  普类: '普通类',
+}
 
 export type RemarkCheckResult = {
   issues: string
@@ -277,6 +283,15 @@ function checkSuspectTypos(text: string): TextCheckResult {
   return { text, issues, changed: false }
 }
 
+function checkOcrNoiseSymbols(text: string): TextCheckResult {
+  const current = text.replace(HAN_OCR_NOISE_SYMBOL_PATTERN, '')
+  return {
+    text: current,
+    issues: current !== text ? ['疑似 OCR 多余符号：%/％'] : [],
+    changed: current !== text,
+  }
+}
+
 function duplicateKey(segment: string) {
   return segment.replace(/[\s\u3000]+/gu, '').trim()
 }
@@ -292,6 +307,7 @@ function collapsePunctuationRun(run: string) {
 function cleanupPunctuationArtifacts(text: string) {
   return text
     .replace(PUNCTUATION_RUN_PATTERN, collapsePunctuationRun)
+    .replace(BRACKET_GROUP_SEPARATOR_PATTERN, '）（')
     .replace(/（[，；：。！？、]+/gu, '（')
     .replace(/[，；：。！？、]+）/gu, '）')
     .replace(LEADING_PUNCTUATION_PATTERN, '')
@@ -456,6 +472,10 @@ function bracketsAreUnbalanced(text: string) {
   return depth !== 0
 }
 
+function escapeRegExp(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
 function checkBracketIssues(text: string): TextCheckResult {
   let current = text
   const issues: string[] = []
@@ -477,6 +497,16 @@ function checkBracketIssues(text: string): TextCheckResult {
     }
     issues.push('存在嵌套括号：已去除重复外层括号')
     changed = true
+  }
+
+  for (const [wrong, correct] of Object.entries(BRACKET_CONTENT_TYPO_MAP)
+    .sort(([left], [right]) => right.length - left.length)) {
+    const pattern = new RegExp(`（\\s*${escapeRegExp(wrong)}\\s*）`, 'gu')
+    if (pattern.test(current)) {
+      current = current.replace(pattern, `（${correct}）`)
+      issues.push(`括号内容疑似错字：${wrong} → ${correct}`)
+      changed = true
+    }
   }
 
   const shortContents: string[] = []
@@ -594,6 +624,13 @@ export function checkFormatIssues(text: string): TextCheckResult {
     changed = true
   }
 
+  const withoutBracketSeparator = current.replace(BRACKET_GROUP_SEPARATOR_PATTERN, '）（')
+  if (withoutBracketSeparator !== current) {
+    current = withoutBracketSeparator
+    issues.push('括号组之间存在多余标点符号')
+    changed = true
+  }
+
   const withoutExtraPunctuation = current
     .replace(/（[，；：。！？、]+/gu, '（')
     .replace(/[，；：。！？、]+）/gu, '）')
@@ -627,7 +664,8 @@ export function processRemark(value: unknown): RemarkCheckResult {
 
   const original = toText(value)
   const abnormal = checkAbnormalChars(original)
-  const typo = checkTypos(abnormal.text)
+  const ocrNoise = checkOcrNoiseSymbols(abnormal.text)
+  const typo = checkTypos(ocrNoise.text)
   const suspectTypo = checkSuspectTypos(typo.text)
   const format = checkFormatIssues(suspectTypo.text)
   const bracket = checkBracketIssues(format.text)
@@ -636,6 +674,7 @@ export function processRemark(value: unknown): RemarkCheckResult {
   const tuition = checkTuition(physical.text)
   const issueList = unique([
     ...typo.issues,
+    ...ocrNoise.issues,
     ...suspectTypo.issues,
     ...format.issues,
     ...bracket.issues,
@@ -646,6 +685,7 @@ export function processRemark(value: unknown): RemarkCheckResult {
   ])
   const autoChanged = (
     abnormal.changed
+    || ocrNoise.changed
     || typo.changed
     || suspectTypo.changed
     || format.changed

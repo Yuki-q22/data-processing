@@ -187,9 +187,11 @@ PHRASE_CHAR_RE = re.compile(r"^[\u3400-\u9FFFA-Za-z0-9]+$")
 BRACKET_CONTENT_RE = re.compile(r"（([^（）]*)）")
 EMPTY_BRACKET_RE = re.compile(r"（\s*）")
 REDUNDANT_NESTED_BRACKET_RE = re.compile(r"（\s*（([^（）]*)）\s*）")
+BRACKET_GROUP_SEPARATOR_RE = re.compile(r"）[、，；]+（")
 LEADING_PUNCTUATION_RE = re.compile(r"^[，；：。！？、]+")
 TRAILING_SEPARATOR_RE = re.compile(r"[，；：、]+$")
 PUNCTUATION_RUN_RE = re.compile(r"[，；：。！？、]{2,}")
+HAN_OCR_NOISE_SYMBOL_RE = re.compile(r"(?<=[\u3400-\u9FFF])[%％](?=[\u3400-\u9FFF])")
 TUITION_RE = re.compile(
     r"学费[^，；。！？、（）\d]{0,12}?(\d+(?:\.\d+)?)\s*(万元|万|元)"
 )
@@ -205,6 +207,11 @@ WEIGHT_VALUE_RE = re.compile(
 WEIGHT_WRONG_UNIT_RE = re.compile(
     r"体重[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(cm|CM|厘米|米|m|M)"
 )
+
+BRACKET_CONTENT_TYPO_MAP: dict[str, str] = {
+    "通类": "普通类",
+    "普类": "普通类",
+}
 
 
 def _unique(items: list[str]) -> list[str]:
@@ -299,6 +306,12 @@ def check_suspect_typos(text: str) -> tuple[str, list[str], bool]:
     return text, issues, False
 
 
+def check_ocr_noise_symbols(text: str) -> tuple[str, list[str], bool]:
+    current = HAN_OCR_NOISE_SYMBOL_RE.sub("", text)
+    issues = ["疑似 OCR 多余符号：%/％"] if current != text else []
+    return current, issues, current != text
+
+
 def _duplicate_key(segment: str) -> str:
     return re.sub(r"[\s\u3000]+", "", segment).strip()
 
@@ -317,6 +330,7 @@ def _collapse_punctuation_run(match: re.Match[str]) -> str:
 
 def _cleanup_punctuation_artifacts(text: str) -> str:
     current = PUNCTUATION_RUN_RE.sub(_collapse_punctuation_run, text)
+    current = BRACKET_GROUP_SEPARATOR_RE.sub("）（", current)
     current = re.sub(r"（[，；：。！？、]+", "（", current)
     current = re.sub(r"[，；：。！？、]+）", "）", current)
     current = LEADING_PUNCTUATION_RE.sub("", current)
@@ -480,6 +494,15 @@ def check_bracket_issues(text: str) -> tuple[str, list[str], bool]:
         issues.append("存在嵌套括号：已去除重复外层括号")
         changed = True
 
+    for wrong, correct in sorted(
+        BRACKET_CONTENT_TYPO_MAP.items(), key=lambda item: len(item[0]), reverse=True
+    ):
+        pattern = re.compile(rf"（\s*{re.escape(wrong)}\s*）")
+        if pattern.search(current):
+            current = pattern.sub(f"（{correct}）", current)
+            issues.append(f"括号内容疑似错字：{wrong} → {correct}")
+            changed = True
+
     short_contents: list[str] = []
     for _, _, content in _outer_bracket_groups(current):
         content = re.sub(r"[\s\u3000]+", "", content)
@@ -574,6 +597,12 @@ def check_format_issues(text: str) -> tuple[str, list[str], bool]:
         issues.append("存在连续标点")
         changed = True
 
+    before_bracket_separator = current
+    current = BRACKET_GROUP_SEPARATOR_RE.sub("）（", current)
+    if current != before_bracket_separator:
+        issues.append("括号组之间存在多余标点符号")
+        changed = True
+
     before_extra_punctuation = current
     current = re.sub(r"（[，；：。！？、]+", "（", current)
     current = re.sub(r"[，；：。！？、]+）", "）", current)
@@ -605,6 +634,7 @@ def process_remark(text: Any) -> dict[str, str]:
 
     original = _to_text(text)
     current, abnormal_issues, abnormal_changed = check_abnormal_chars(original)
+    current, ocr_noise_issues, ocr_noise_changed = check_ocr_noise_symbols(current)
     current, typo_issues, typo_changed = check_typos(current)
     current, suspect_typo_issues, suspect_typo_changed = check_suspect_typos(current)
     current, format_issues, format_changed = check_format_issues(current)
@@ -615,6 +645,7 @@ def process_remark(text: Any) -> dict[str, str]:
 
     issue_list = _unique(
         typo_issues
+        + ocr_noise_issues
         + suspect_typo_issues
         + format_issues
         + bracket_issues
@@ -625,6 +656,7 @@ def process_remark(text: Any) -> dict[str, str]:
     )
     auto_changed = (
         abnormal_changed
+        or ocr_noise_changed
         or typo_changed
         or suspect_typo_changed
         or format_changed
