@@ -348,7 +348,7 @@ function RemarkTypeExtractPanel() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card title="备注招生类型提取" extra={<Button danger onClick={handleResetPage}>重置</Button>}>
         <Paragraph>
-          这个功能按规则中心里的“备注招生类型规则”和“需要核查关键词”处理备注列。若备注命中“需要核查关键词”，系统只标记需要核查，不再提取招生类型，避免把“不含、除外、没有、除”等否定语境误判为招生类型。
+          这个功能按规则中心里的“备注招生类型规则”和“需要核查关键词”处理备注列。若“需要核查关键词”与命中的招生类型字段处在同一个未被标点或空格切开的备注短语中，系统不提取招生类型；被标点或空格切开的其他命中场景仍会提取招生类型并标记需要核查。
         </Paragraph>
 
         <Dragger beforeUpload={handleUpload} showUploadList={false} accept=".xlsx,.xls">

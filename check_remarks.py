@@ -25,16 +25,129 @@ from openpyxl.utils import get_column_letter
 
 # 可维护规则：后期新增错字时，只需在这里补充“错误内容: 正确内容”。
 TYPO_MAP: dict[str, str] = {
+    "详贝院校招生章程": "详见院校招生章程",
+    "详贝学校招生章程": "详见学校招生章程",
+    "祥见院校招生章程": "详见院校招生章程",
+    "祥见学校招生章程": "详见学校招生章程",
     "详见院校招生张程": "详见院校招生章程",
     "详见学校招生张程": "详见学校招生章程",
+    "详见院校招牛章程": "详见院校招生章程",
+    "详见学校招牛章程": "详见学校招生章程",
+    "详见院校招生章呈": "详见院校招生章程",
+    "详见学校招生章呈": "详见学校招生章程",
+    "详贝": "详见",
+    "祥见": "详见",
+    "张程": "章程",
+    "章呈": "章程",
+    "招牛": "招生",
+    "召生": "招生",
+    "只召": "只招",
+    "召收": "招收",
     "身休健康": "身体健康",
+    "身体建康": "身体健康",
+    "身体健庚": "身体健康",
+    "体捡": "体检",
+    "休检": "体检",
     "只招有专业志原考生": "只招有专业志愿考生",
+    "只招有专亚志愿考生": "只招有专业志愿考生",
+    "有专业志原": "有专业志愿",
+    "专业志原": "专业志愿",
+    "专亚志愿": "专业志愿",
+    "专此志愿": "专业志愿",
+    "志愿考牛": "志愿考生",
+    "考牛": "考生",
+    "男牛": "男生",
+    "女牛": "女生",
+    "语仲": "语种",
+    "语钟": "语种",
+    "曰语": "日语",
+    "英浯": "英语",
+    "英诘": "英语",
     "不招色肓": "不招色盲",
     "不招色弱色肓": "不招色弱色盲",
+    "色育": "色盲",
+    "色肓": "色盲",
+    "色若": "色弱",
+    "色弱色育": "色弱色盲",
+    "色弱色肓": "色弱色盲",
+    "色盲色若": "色盲色弱",
+    "不直报考": "不宜报考",
+    "不宣报考": "不宜报考",
+    "不官报考": "不宜报考",
+    "进人": "进入",
+    "人学": "入学",
+    "人校": "入校",
+    "转人": "转入",
+    "编人": "编入",
+    "人读": "入读",
     "单色识别不全者慎报": "单色识别不全者慎报",
+    "单色识别不金": "单色识别不全",
+    "单色识别不仝": "单色识别不全",
+    "单色识别丕全": "单色识别不全",
     "中外合作力学": "中外合作办学",
     "校企合作力学": "校企合作办学",
+    "合作力学": "合作办学",
+    "中外合作办字": "中外合作办学",
+    "校企合作办字": "校企合作办学",
+    "联合培荞": "联合培养",
+    "办学地占": "办学地点",
+    "办学地奌": "办学地点",
     "办学地点详见院校章程": "办学地点详见院校招生章程",
+    "师范粪": "师范类",
+    "帅范类": "师范类",
+    "帅范": "师范",
+    "非公费帅范": "非公费师范",
+    "公费帅范": "公费师范",
+    "囯家专项计划": "国家专项计划",
+    "国家专顷计划": "国家专项计划",
+    "国家专顶计划": "国家专项计划",
+    "地方专顷计划": "地方专项计划",
+    "地方专顶计划": "地方专项计划",
+    "专项计刘": "专项计划",
+    "计刘": "计划",
+    "项日": "项目",
+    "项自": "项目",
+    "顷目": "项目",
+    "专顷": "专项",
+    "专顶": "专项",
+    "少数民旅": "少数民族",
+    "民旅": "民族",
+    "加份": "加分",
+    "政第": "政策",
+    "执衍": "执行",
+    "认同并执厅": "认同并执行",
+    "符台": "符合",
+    "台格": "合格",
+    "成绩台格": "成绩合格",
+    "口试成缋": "口试成绩",
+    "成缋": "成绩",
+    "录収": "录取",
+    "录叹": "录取",
+    "包含专亚": "包含专业",
+    "包含专此": "包含专业",
+    "包含专止": "包含专业",
+    "学贵": "学费",
+    "学弗": "学费",
+    "字费": "学费",
+    "住宿贵": "住宿费",
+    "收费标淮": "收费标准",
+    "标淮": "标准",
+}
+
+# 低置信 OCR 疑似错字：只标注，不自动修正，避免把真实内容改坏。
+SUSPECT_TYPO_MAP: dict[str, str] = {
+    "老生": "考生",
+    "老试": "考试",
+    "报孝": "报考",
+    "慎填": "慎报",
+    "校冈": "校区",
+    "校医": "校区",
+    "由请": "申请",
+    "甲请": "申请",
+    "电请": "申请",
+    "攻策": "政策",
+    "识刖": "识别",
+    "语神": "语种",
 }
 
 # 白名单仅保护合法固定表达，不用于删除或改写备注内容。
@@ -69,9 +182,29 @@ HORIZONTAL_SPACE_RE = re.compile(
 )
 HAN_SPACE_HAN_RE = re.compile(r"(?<=[\u3400-\u9FFF]) (?=[\u3400-\u9FFF])")
 DELIMITED_SPLIT_RE = re.compile(r"([。；;，,\r\n]+)")
-# “？”可能是 OCR 占位符，按异常字符策略只标注，不自动压缩或删除。
-REPEATED_PUNCTUATION_RE = re.compile(r"([，；：。！、])\1+")
+REPEATED_PUNCTUATION_RE = re.compile(r"([，；：。！？、])\1+")
 PHRASE_CHAR_RE = re.compile(r"^[\u3400-\u9FFFA-Za-z0-9]+$")
+BRACKET_CONTENT_RE = re.compile(r"（([^（）]*)）")
+EMPTY_BRACKET_RE = re.compile(r"（\s*）")
+REDUNDANT_NESTED_BRACKET_RE = re.compile(r"（\s*（([^（）]*)）\s*）")
+LEADING_PUNCTUATION_RE = re.compile(r"^[，；：。！？、]+")
+TRAILING_SEPARATOR_RE = re.compile(r"[，；：、]+$")
+PUNCTUATION_RUN_RE = re.compile(r"[，；：。！？、]{2,}")
+TUITION_RE = re.compile(
+    r"学费[^，；。！？、（）\d]{0,12}?(\d+(?:\.\d+)?)\s*(万元|万|元)"
+)
+HEIGHT_VALUE_RE = re.compile(
+    r"(?:身高|身长)[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(cm|CM|厘米|米|m|M)"
+)
+HEIGHT_WRONG_UNIT_RE = re.compile(
+    r"(?:身高|身长)[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(kg|KG|公斤|千克|斤)"
+)
+WEIGHT_VALUE_RE = re.compile(
+    r"体重[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(kg|KG|公斤|千克|斤)"
+)
+WEIGHT_WRONG_UNIT_RE = re.compile(
+    r"体重[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(cm|CM|厘米|米|m|M)"
+)
 
 
 def _unique(items: list[str]) -> list[str]:
@@ -142,10 +275,6 @@ def check_abnormal_chars(text: str) -> tuple[str, list[str], bool]:
 
 
 def check_typos(text: str) -> tuple[str, list[str], bool]:
-    # 白名单完整表达直接放行；不使用模糊相似度猜测错字。
-    if text.strip() in WHITELIST:
-        return text, [], False
-
     current = text
     issues: list[str] = []
 
@@ -158,17 +287,71 @@ def check_typos(text: str) -> tuple[str, list[str], bool]:
     return current, issues, current != text
 
 
+def check_suspect_typos(text: str) -> tuple[str, list[str], bool]:
+    issues: list[str] = []
+
+    for wrong, correct in sorted(
+        SUSPECT_TYPO_MAP.items(), key=lambda item: len(item[0]), reverse=True
+    ):
+        if wrong in text:
+            issues.append(f"疑似 OCR 错字：{wrong} 可能为 {correct}，请人工检查")
+
+    return text, issues, False
+
+
 def _duplicate_key(segment: str) -> str:
     return re.sub(r"[\s\u3000]+", "", segment).strip()
+
+
+def _collapse_punctuation_run(match: re.Match[str]) -> str:
+    run = match.group(0)
+    terminal_marks = [char for char in run if char in "。！？"]
+    if terminal_marks:
+        return terminal_marks[-1]
+    if "；" in run:
+        return "；"
+    if "，" in run:
+        return "，"
+    return run[0]
+
+
+def _cleanup_punctuation_artifacts(text: str) -> str:
+    current = PUNCTUATION_RUN_RE.sub(_collapse_punctuation_run, text)
+    current = re.sub(r"（[，；：。！？、]+", "（", current)
+    current = re.sub(r"[，；：。！？、]+）", "）", current)
+    current = LEADING_PUNCTUATION_RE.sub("", current)
+    current = TRAILING_SEPARATOR_RE.sub("", current)
+    return current.strip()
+
+
+def _outer_bracket_groups(text: str) -> list[tuple[int, int, str]]:
+    groups: list[tuple[int, int, str]] = []
+    depth = 0
+    start: int | None = None
+
+    for index, char in enumerate(text):
+        if char == "（":
+            if depth == 0:
+                start = index
+            depth += 1
+            continue
+
+        if char != "）" or depth == 0:
+            continue
+
+        depth -= 1
+        if depth == 0 and start is not None:
+            groups.append((start, index + 1, text[start + 1 : index]))
+            start = None
+
+    return groups
 
 
 def _remove_delimited_duplicates(text: str) -> tuple[str, list[str]]:
     parts = DELIMITED_SPLIT_RE.split(text)
     seen: set[str] = set()
     duplicate_labels: list[str] = []
-    kept: list[tuple[str, str]] = []
-    ends_with_delimiter = bool(re.search(r"[。；;，,\r\n]+$", text))
-    terminal_delimiter = parts[-2] if ends_with_delimiter and len(parts) >= 2 else ""
+    rebuilt: list[str] = []
 
     for index in range(0, len(parts), 2):
         segment = parts[index] if index < len(parts) else ""
@@ -177,20 +360,15 @@ def _remove_delimited_duplicates(text: str) -> tuple[str, list[str]]:
         key = _duplicate_key(trimmed)
 
         if not key:
+            if not rebuilt and delimiter:
+                rebuilt.append(delimiter)
             continue
         if key in seen:
             duplicate_labels.append(trimmed)
             continue
 
         seen.add(key)
-        kept.append((trimmed, delimiter))
-
-    rebuilt: list[str] = []
-    for index, (segment, delimiter) in enumerate(kept):
-        if index < len(kept) - 1:
-            rebuilt.append(f"{segment}{delimiter or '；'}")
-        else:
-            rebuilt.append(f"{segment}{terminal_delimiter}")
+        rebuilt.append(f"{trimmed}{delimiter}")
 
     return "".join(rebuilt) or text, _unique(duplicate_labels)
 
@@ -207,7 +385,11 @@ def _remove_continuous_duplicates(text: str) -> tuple[str, list[str]]:
             for length in range(max_length, 1, -1):
                 phrase = current[start : start + length]
                 repeated = current[start + length : start + length * 2]
-                if phrase != repeated or not PHRASE_CHAR_RE.fullmatch(phrase):
+                if (
+                    phrase != repeated
+                    or phrase.isdigit()
+                    or not PHRASE_CHAR_RE.fullmatch(phrase)
+                ):
                     continue
                 current = current[: start + length] + current[start + length * 2 :]
                 phrases.append(phrase)
@@ -222,34 +404,39 @@ def _remove_continuous_duplicates(text: str) -> tuple[str, list[str]]:
 def _check_duplicate_bracket_contents(text: str) -> tuple[str, list[str]]:
     seen: dict[str, str] = {}
     duplicate_contents: list[str] = []
+    duplicate_ranges: list[tuple[int, int]] = []
+    previous_group: tuple[int, int, str] | None = None
 
-    for match in re.finditer(r"（([^（）]+)）", text):
-        content = match.group(1).strip()
-        key = _duplicate_key(content)
+    for group in _outer_bracket_groups(text):
+        start, end, content = group
+        trimmed = content.strip()
+        key = _duplicate_key(trimmed)
         if not key:
             continue
         if key in seen:
             duplicate_contents.append(seen[key])
+            if previous_group is not None:
+                previous_start, previous_end, previous_content = previous_group
+                between = text[previous_end:start]
+                if (
+                    _duplicate_key(previous_content) == key
+                    and not between.strip()
+                ):
+                    duplicate_ranges.append((start, end))
         else:
-            seen[key] = content
+            seen[key] = trimmed
+        previous_group = group
 
-    # 相邻且内容相同的括号组可安全保留一组；非相邻重复只标注，不强删。
-    current = text
-    adjacent_pattern = re.compile(r"（([^（）]+)）[\s\u3000]*（([^（）]+)）")
-    changed_in_pass = True
-    while changed_in_pass:
-        changed_in_pass = False
+    if not duplicate_ranges:
+        return text, _unique(duplicate_contents)
 
-        def replace_adjacent(match: re.Match[str]) -> str:
-            nonlocal changed_in_pass
-            left, right = match.group(1), match.group(2)
-            if _duplicate_key(left) != _duplicate_key(right):
-                return match.group(0)
-            changed_in_pass = True
-            return f"（{left.strip()}）"
-
-        current = adjacent_pattern.sub(replace_adjacent, current)
-
+    rebuilt: list[str] = []
+    cursor = 0
+    for start, end in duplicate_ranges:
+        rebuilt.append(text[cursor:start])
+        cursor = end
+    rebuilt.append(text[cursor:])
+    current = "".join(rebuilt)
     return current, _unique(duplicate_contents)
 
 
@@ -273,6 +460,78 @@ def _brackets_are_unbalanced(text: str) -> bool:
                 return True
             depth -= 1
     return depth != 0
+
+
+def check_bracket_issues(text: str) -> tuple[str, list[str], bool]:
+    current = text
+    issues: list[str] = []
+    changed = False
+
+    if EMPTY_BRACKET_RE.search(current):
+        current = EMPTY_BRACKET_RE.sub("", current)
+        issues.append("存在空括号")
+        changed = True
+
+    if REDUNDANT_NESTED_BRACKET_RE.search(current):
+        while REDUNDANT_NESTED_BRACKET_RE.search(current):
+            current = REDUNDANT_NESTED_BRACKET_RE.sub(
+                lambda match: f"（{match.group(1).strip()}）", current
+            )
+        issues.append("存在嵌套括号：已去除重复外层括号")
+        changed = True
+
+    short_contents: list[str] = []
+    for _, _, content in _outer_bracket_groups(current):
+        content = re.sub(r"[\s\u3000]+", "", content)
+        if 0 < len(content) <= 1:
+            short_contents.append(content)
+
+    if short_contents:
+        issues.append(f"括号内容过短：{'、'.join(_unique(short_contents))}，请人工检查")
+
+    if changed:
+        current = _cleanup_punctuation_artifacts(current)
+
+    return current, issues, changed
+
+
+def check_physical_constraints(text: str) -> tuple[str, list[str], bool]:
+    issues: list[str] = []
+
+    for match in HEIGHT_WRONG_UNIT_RE.finditer(text):
+        issues.append(f"身高单位疑似错误：{match.group(1)}{match.group(2)}")
+
+    for match in HEIGHT_VALUE_RE.finditer(text):
+        raw_value, unit = match.group(1), match.group(2)
+        value = float(raw_value)
+        height_cm = value * 100 if unit.lower() == "m" or unit == "米" else value
+        if height_cm < 100 or height_cm > 230:
+            issues.append(f"身高数值疑似异常：{raw_value}{unit}")
+
+    for match in WEIGHT_WRONG_UNIT_RE.finditer(text):
+        issues.append(f"体重单位疑似错误：{match.group(1)}{match.group(2)}")
+
+    for match in WEIGHT_VALUE_RE.finditer(text):
+        raw_value, unit = match.group(1), match.group(2)
+        value = float(raw_value)
+        weight_kg = value / 2 if unit == "斤" else value
+        if weight_kg < 30 or weight_kg > 200:
+            issues.append(f"体重数值疑似异常：{raw_value}{unit}")
+
+    return text, _unique(issues), False
+
+
+def check_tuition(text: str) -> tuple[str, list[str], bool]:
+    issues: list[str] = []
+
+    for match in TUITION_RE.finditer(text):
+        raw_value, unit = match.group(1), match.group(2)
+        value = float(raw_value)
+        yuan = value * 10000 if unit in {"万", "万元"} else value
+        if yuan > 300000:
+            issues.append(f"学费金额疑似异常：{raw_value}{unit}超过30万元")
+
+    return text, _unique(issues), False
 
 
 def check_format_issues(text: str) -> tuple[str, list[str], bool]:
@@ -310,9 +569,18 @@ def check_format_issues(text: str) -> tuple[str, list[str], bool]:
         issues.append("英文标点已统一为中文标点")
         changed = True
 
-    if REPEATED_PUNCTUATION_RE.search(current):
-        current = REPEATED_PUNCTUATION_RE.sub(r"\1", current)
+    if PUNCTUATION_RUN_RE.search(current):
+        current = PUNCTUATION_RUN_RE.sub(_collapse_punctuation_run, current)
         issues.append("存在连续标点")
+        changed = True
+
+    before_extra_punctuation = current
+    current = re.sub(r"（[，；：。！？、]+", "（", current)
+    current = re.sub(r"[，；：。！？、]+）", "）", current)
+    current = LEADING_PUNCTUATION_RE.sub("", current)
+    current = TRAILING_SEPARATOR_RE.sub("", current)
+    if current != before_extra_punctuation:
+        issues.append("存在多余标点符号")
         changed = True
 
     if _brackets_are_unbalanced(current):
@@ -338,13 +606,33 @@ def process_remark(text: Any) -> dict[str, str]:
     original = _to_text(text)
     current, abnormal_issues, abnormal_changed = check_abnormal_chars(original)
     current, typo_issues, typo_changed = check_typos(current)
-    current, duplicate_issues, duplicate_changed = check_duplicates(current)
+    current, suspect_typo_issues, suspect_typo_changed = check_suspect_typos(current)
     current, format_issues, format_changed = check_format_issues(current)
+    current, bracket_issues, bracket_changed = check_bracket_issues(current)
+    current, duplicate_issues, duplicate_changed = check_duplicates(current)
+    current, physical_issues, physical_changed = check_physical_constraints(current)
+    current, tuition_issues, tuition_changed = check_tuition(current)
 
     issue_list = _unique(
-        typo_issues + duplicate_issues + format_issues + abnormal_issues
+        typo_issues
+        + suspect_typo_issues
+        + format_issues
+        + bracket_issues
+        + duplicate_issues
+        + physical_issues
+        + tuition_issues
+        + abnormal_issues
     )
-    auto_changed = abnormal_changed or typo_changed or duplicate_changed or format_changed
+    auto_changed = (
+        abnormal_changed
+        or typo_changed
+        or suspect_typo_changed
+        or format_changed
+        or bracket_changed
+        or duplicate_changed
+        or physical_changed
+        or tuition_changed
+    )
     fixed = current if auto_changed and current != original else ""
     return {"issues": "；".join(issue_list), "fixed": fixed}
 
@@ -376,9 +664,7 @@ def process_excel(input_path: str | Path) -> Path:
     fixed_rows = 0
     processed_sheets = 0
 
-    # 只遍历普通工作表；图表工作表不包含可供 pandas 检查的二维表格。
-    for worksheet in workbook.worksheets:
-        sheet_name = worksheet.title
+    for sheet_name in workbook.sheetnames:
         dataframe = pd.read_excel(
             path,
             sheet_name=sheet_name,
@@ -390,6 +676,7 @@ def process_excel(input_path: str | Path) -> Path:
         except ValueError:
             continue
 
+        worksheet = workbook[sheet_name]
         processed_sheets += 1
         total_rows += len(dataframe)
 

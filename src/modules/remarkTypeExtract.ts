@@ -47,11 +47,71 @@ function sortRules(rules: RemarkTypeRule[]) {
   return [...rules].sort((a, b) => a.priority - b.priority)
 }
 
-function extractRecruitmentType(remark: string, rules: RemarkTypeRule[]) {
+function normalizeKeywords(keywords: string[]) {
+  return keywords.map((word) => word.trim()).filter(Boolean)
+}
+
+function isReviewContextDelimiter(char: string) {
+  return /\s/.test(char) || '，,。；;、：:（）()【】[]{}<>《》“”"\'/\\|'.includes(char)
+}
+
+function getReviewContext(remark: string, start: number, end: number) {
+  let contextStart = start
+  let contextEnd = end
+
+  while (contextStart > 0 && !isReviewContextDelimiter(remark[contextStart - 1])) {
+    contextStart -= 1
+  }
+
+  while (contextEnd < remark.length && !isReviewContextDelimiter(remark[contextEnd])) {
+    contextEnd += 1
+  }
+
+  return remark.slice(contextStart, contextEnd)
+}
+
+function isBlockedByReviewKeyword(
+  remark: string,
+  keywordStart: number,
+  keyword: string,
+  reviewKeywords: string[],
+) {
+  const keywordEnd = keywordStart + keyword.length
+  const context = getReviewContext(remark, keywordStart, keywordEnd)
+
+  return reviewKeywords.some((word) => {
+    const beforeStart = keywordStart - word.length
+    const isBefore = beforeStart >= 0 && remark.slice(beforeStart, keywordStart) === word
+    const isAfter = remark.slice(keywordEnd, keywordEnd + word.length) === word
+
+    return isBefore || isAfter || context.includes(word)
+  })
+}
+
+function hasUnblockedRuleKeyword(remark: string, keyword: string, reviewKeywords: string[]) {
+  let startAt = 0
+
+  while (startAt < remark.length) {
+    const index = remark.indexOf(keyword, startAt)
+    if (index === -1) return false
+    if (!isBlockedByReviewKeyword(remark, index, keyword, reviewKeywords)) return true
+    startAt = index + 1
+  }
+
+  return false
+}
+
+function extractRecruitmentType(
+  remark: string,
+  rules: RemarkTypeRule[],
+  reviewKeywords: string[] = [],
+) {
   if (!remark.trim()) return ''
   const sorted = sortRules(rules)
+  const normalizedReviewKeywords = normalizeKeywords(reviewKeywords)
+
   for (const rule of sorted) {
-    if (rule.keyword && remark.includes(rule.keyword)) {
+    if (rule.keyword && hasUnblockedRuleKeyword(remark, rule.keyword, normalizedReviewKeywords)) {
       return rule.outputType
     }
   }
@@ -61,9 +121,7 @@ function extractRecruitmentType(remark: string, rules: RemarkTypeRule[]) {
 function getMatchedReviewKeywords(remark: string, keywords: string[]) {
   if (!remark.trim()) return ''
 
-  const matched = keywords
-    .map((word) => word.trim())
-    .filter(Boolean)
+  const matched = normalizeKeywords(keywords)
     .filter((word) => remark.includes(word))
 
   return Array.from(new Set(matched)).join('、')
@@ -106,10 +164,8 @@ export function processRemarkTypeExtract(params: {
   const matchedReviewKeywords = getMatchedReviewKeywords(remark, exclusionKeywords)
 const review = remarkNeedsReview(remark, matchedReviewKeywords)
 
-// 命中核查关键词时，不再提取招生类型，避免把“不含、除外、没有、除”等否定语境误判为招生类型。
-const type = matchedReviewKeywords
-  ? ''
-  : extractRecruitmentType(remark, rules)
+// Suppress a type only when a review keyword is in the same undelimited phrase.
+const type = extractRecruitmentType(remark, rules, exclusionKeywords)
 
 return {
   rowId: String(index + 1),
