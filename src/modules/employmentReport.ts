@@ -26,6 +26,44 @@ function dedupe<T>(items: T[]) {
   return Array.from(new Set(items))
 }
 
+function normalizePageUrl(url: string) {
+  const trimmed = url.trim()
+
+  if (!trimmed) {
+    throw new Error('请输入网页链接')
+  }
+
+  if (/^\/\//.test(trimmed)) {
+    return `https:${trimmed}`
+  }
+
+  if (!/^https?:\/\//i.test(trimmed)) {
+    throw new Error('请输入完整网页链接，需要包含 http:// 或 https://。如果当前只有 NewsDetail.html 这类相对路径，请补全网站域名。')
+  }
+
+  try {
+    return new URL(trimmed).toString()
+  } catch {
+    throw new Error('网页链接格式不正确，请检查后重试')
+  }
+}
+
+async function fetchReadableResource(url: string, targetName: string) {
+  try {
+    return await fetch(url)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+
+    if (/failed to fetch|networkerror|load failed/i.test(message)) {
+      throw new Error(
+        `${targetName}抓取失败：浏览器无法读取该链接，常见原因是网站跨域限制、链接无法访问或图片禁止外链。请确认链接为公开完整地址；如果仍失败，需要先下载网页源码或图片后再本地处理。`
+      )
+    }
+
+    throw error
+  }
+}
+
 async function getImageSize(objectUrl: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -122,14 +160,15 @@ export function toSafePdfFilename(pageTitle: string) {
 }
 
 export async function fetchStaticImagesFromPage(url: string): Promise<StaticImagesFromPageResult> {
-  const htmlResp = await fetch(url)
+  const pageUrl = normalizePageUrl(url)
+  const htmlResp = await fetchReadableResource(pageUrl, '页面')
   if (!htmlResp.ok) {
     throw new Error(`页面获取失败：HTTP ${htmlResp.status}`)
   }
 
   const html = await htmlResp.text()
   const pageTitle = extractPageTitleFromHtml(html)
-  const imageUrls = extractStaticImageUrlsFromHtml(html, url)
+  const imageUrls = extractStaticImageUrlsFromHtml(html, pageUrl)
 
   if (!imageUrls.length) {
     return { pageTitle, images: [] }
@@ -137,7 +176,7 @@ export async function fetchStaticImagesFromPage(url: string): Promise<StaticImag
 
   const settled = await Promise.allSettled(
     imageUrls.map(async (imageUrl, index) => {
-      const resp = await fetch(imageUrl)
+      const resp = await fetchReadableResource(imageUrl, '图片')
       if (!resp.ok) {
         throw new Error(`图片获取失败：${imageUrl}`)
       }
@@ -167,12 +206,17 @@ export async function fetchStaticImagesFromPage(url: string): Promise<StaticImag
     })
   )
 
-  return {
-    pageTitle,
-    images: settled
-      .filter((item): item is PromiseFulfilledResult<ExtractedImageItem> => item.status === 'fulfilled')
-      .map((item) => item.value),
+  const images = settled
+    .filter((item): item is PromiseFulfilledResult<ExtractedImageItem> => item.status === 'fulfilled')
+    .map((item) => item.value)
+
+  if (!images.length) {
+    throw new Error(
+      '页面已读取，但页面中的图片全部抓取失败。常见原因是图片地址禁止跨域读取或禁止外链，请尝试下载网页中的图片后再本地处理。'
+    )
   }
+
+  return { pageTitle, images }
 }
 
 export async function imagesToPdfBlob(images: ExtractedImageItem[]): Promise<Blob> {

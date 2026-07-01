@@ -487,7 +487,7 @@ export default function QuestionScreenshotTool() {
                   ),
                 },
               ]}
-              pagination={{ pageSize: 10 }}
+              pagination={{ defaultPageSize: 10 }}
               scroll={{ x: 1400 }}
             />
           </Card>
@@ -528,7 +528,7 @@ export default function QuestionScreenshotTool() {
                       rowKey={(row) => `${row.qno}-${row.pageIndex}-${row.y}`}
                       dataSource={project.starts}
                       columns={startColumns}
-                      pagination={{ pageSize: 10 }}
+                      pagination={{ defaultPageSize: 10 }}
                       scroll={{ x: 900 }}
                     />
                   ),
@@ -541,7 +541,7 @@ export default function QuestionScreenshotTool() {
                       rowKey={(row) => `${row.pageIndex}-${row.y}-${row.text}`}
                       dataSource={project.sections}
                       columns={sectionColumns}
-                      pagination={{ pageSize: 10 }}
+                      pagination={{ defaultPageSize: 10 }}
                       scroll={{ x: 800 }}
                     />
                   ) : (

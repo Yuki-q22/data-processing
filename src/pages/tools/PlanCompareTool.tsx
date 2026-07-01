@@ -652,7 +652,7 @@ export default function PlanCompareTool() {
                       dataSource={filteredPlanScoreRows}
                       columns={planScoreColumns}
                       scroll={{ x: 2000 }}
-                      pagination={{ pageSize: 10 }}
+                      pagination={{ defaultPageSize: 10 }}
                       style={tableFontStyle}
                     />
                   ) : (
@@ -721,7 +721,7 @@ export default function PlanCompareTool() {
                           dataSource={filteredPlanScoreMissingKeyRows}
                           columns={missingKeyColumns}
                           scroll={{ x: 2600 }}
-                          pagination={{ pageSize: 10, showSizeChanger: true }}
+                          pagination={{ defaultPageSize: 10, showSizeChanger: true }}
                           style={tableFontStyle}
                         />
                       ) : (
@@ -739,7 +739,7 @@ export default function PlanCompareTool() {
                       dataSource={filteredPlanCollegeRows}
                       columns={planCollegeColumns}
                       scroll={{ x: 1900 }}
-                      pagination={{ pageSize: 10 }}
+                      pagination={{ defaultPageSize: 10 }}
                       style={tableFontStyle}
                     />
                   ) : (

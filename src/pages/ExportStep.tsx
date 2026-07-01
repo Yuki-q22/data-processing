@@ -192,7 +192,7 @@ export default function ExportStep() {
               columns={columns}
               dataSource={issuePreviewRows}
               scroll={{ x: 1300 }}
-              pagination={{ pageSize: 10 }}
+              pagination={{ defaultPageSize: 10 }}
               rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
             />
           </>

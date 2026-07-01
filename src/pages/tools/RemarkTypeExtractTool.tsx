@@ -403,7 +403,7 @@ function RemarkTypeExtractPanel() {
             <Table
               rowKey="rowId"
               dataSource={result.rows}
-              pagination={{ pageSize: 10 }}
+              pagination={{ defaultPageSize: 10 }}
               scroll={{ x: 1000 }}
               columns={REMARK_TYPE_TABLE_COLUMNS}
             />
@@ -616,7 +616,7 @@ function RemarkCleanPanel() {
                 dataSource={result.previewRows}
                 columns={REMARK_CLEAN_TABLE_COLUMNS}
                 scroll={{ x: 1100 }}
-                pagination={{ pageSize: 10 }}
+                pagination={{ defaultPageSize: 10 }}
               />
             ) : (
               <Empty description="没有可输出的数据" />

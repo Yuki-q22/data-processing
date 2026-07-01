@@ -358,7 +358,7 @@ export default function CollegeScoreNormalTool({ embedded = false }: CollegeScor
                 dataSource={previewRows}
                 columns={TABLE_COLUMNS}
                 scroll={{ x: 2200 }}
-                pagination={{ pageSize: 10 }}
+                pagination={{ defaultPageSize: 10 }}
               />
             ) : (
               <Empty description="没有可输出的数据" />

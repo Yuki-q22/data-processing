@@ -396,7 +396,7 @@ function XueyeqiaoConvertPanel() {
                 dataSource={previewRows}
                 columns={XUEYEQIAO_TABLE_COLUMNS}
                 scroll={{ x: 4000 }}
-                pagination={{ pageSize: 10 }}
+                pagination={{ defaultPageSize: 10 }}
               />
             ) : (
               <Empty description="没有可输出的数据" />
@@ -572,7 +572,7 @@ function XueyeqiaoPlanConvertPanel() {
                 dataSource={result.previewRows}
                 columns={XUEYEQIAO_PLAN_TABLE_COLUMNS}
                 scroll={{ x: 3400 }}
-                pagination={{ pageSize: 10 }}
+                pagination={{ defaultPageSize: 10 }}
               />
             ) : (
               <Empty description="没有可输出的数据" />
@@ -745,7 +745,7 @@ function LibraryTemplateConvertPanel() {
                 dataSource={result.previewRows}
                 columns={LIBRARY_TEMPLATE_TABLE_COLUMNS}
                 scroll={{ x: 3400 }}
-                pagination={{ pageSize: 10 }}
+                pagination={{ defaultPageSize: 10 }}
               />
             ) : (
               <Empty description="没有可输出的数据" />

@@ -715,7 +715,7 @@ const goNextRecord = () => {
             columns={columns}
             dataSource={filteredRecords}
             scroll={{ x: 2400 }}
-            pagination={{ pageSize: 10 }}
+            pagination={{ defaultPageSize: 10 }}
             rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
           />
         )}
@@ -764,6 +764,9 @@ const goNextRecord = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label="批次">
                   {activeRecord.result.batch || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="层次">
+                  {activeRecord.result.level1 || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="类型">
                   {activeRecord.result.enrollmentType || '-'}

@@ -37,6 +37,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Pagination,
   Row,
   Space,
   Select,
@@ -74,6 +75,8 @@ import {
 
 const { Paragraph, Text, Title } = Typography
 const { TextArea, Password } = Input
+
+const REMARK_RULE_DEFAULT_PAGE_SIZE = 20
 
 
 type PreviewRow = {
@@ -181,6 +184,11 @@ export default function RuleCenterPage() {
     outputType: '',
     priority: 1,
   })
+  const [remarkRuleKeyword, setRemarkRuleKeyword] = useState('')
+  const [remarkRulePage, setRemarkRulePage] = useState(1)
+  const [remarkRulePageSize, setRemarkRulePageSize] = useState(
+    REMARK_RULE_DEFAULT_PAGE_SIZE
+  )
 
   /**
    * 多年份规则预览筛选。
@@ -351,6 +359,29 @@ export default function RuleCenterPage() {
     () => buildYearSummary(controlLineFiltered),
     [controlLineFiltered]
   )
+
+  const filteredRemarkRuleDrafts = useMemo(() => {
+    const keyword = remarkRuleKeyword.trim().toLowerCase()
+
+    if (!keyword) return remarkRuleDrafts
+
+    return remarkRuleDrafts.filter((rule) =>
+      [rule.keyword, rule.outputType, String(rule.priority)]
+        .join(' ')
+        .toLowerCase()
+        .includes(keyword)
+    )
+  }, [remarkRuleDrafts, remarkRuleKeyword])
+
+  const currentRemarkRulePage = Math.min(
+    remarkRulePage,
+    Math.max(1, Math.ceil(filteredRemarkRuleDrafts.length / remarkRulePageSize))
+  )
+
+  const pagedRemarkRuleDrafts = useMemo(() => {
+    const start = (currentRemarkRulePage - 1) * remarkRulePageSize
+    return filteredRemarkRuleDrafts.slice(start, start + remarkRulePageSize)
+  }, [currentRemarkRulePage, filteredRemarkRuleDrafts, remarkRulePageSize])
 
   const getAuthErrorMessage = (error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error)
@@ -561,6 +592,11 @@ export default function RuleCenterPage() {
     } catch (error) {
       message.error(error instanceof Error ? error.message : '恢复默认规则失败')
     }
+  }
+
+  const handleRemarkRuleKeywordChange = (value: string) => {
+    setRemarkRuleKeyword(value)
+    setRemarkRulePage(1)
   }
 
   const handleRemoveRemarkRule = async (id: string) => {
@@ -1124,7 +1160,7 @@ export default function RuleCenterPage() {
                           <Table
                             rowKey={(row) => `${row.year}_${row.province}_${row.categoryType}`}
                             size="small"
-                            pagination={{ pageSize: 12, showSizeChanger: true }}
+                            pagination={{ defaultPageSize: 10, showSizeChanger: true }}
                             dataSource={provinceCategoryBatchFiltered}
                             rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
                             columns={[
@@ -1167,7 +1203,7 @@ export default function RuleCenterPage() {
                           <Table
                             rowKey={(row) => `${row.year}_${row.province}`}
                             size="small"
-                            pagination={{ pageSize: 12, showSizeChanger: true }}
+                            pagination={{ defaultPageSize: 10, showSizeChanger: true }}
                             dataSource={controlLineFiltered}
                             rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
                             columns={[
@@ -1240,7 +1276,7 @@ export default function RuleCenterPage() {
                               <Table
                                 rowKey="key"
                                 size="small"
-                                pagination={{ pageSize: 10 }}
+                                pagination={{ defaultPageSize: 10 }}
                                 columns={schoolColumns}
                                 dataSource={schoolPreview}
                                 rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
@@ -1276,7 +1312,7 @@ export default function RuleCenterPage() {
                               <Table
                                 rowKey="key"
                                 size="small"
-                                pagination={{ pageSize: 10 }}
+                                pagination={{ defaultPageSize: 10 }}
                                 columns={majorColumns}
                                 dataSource={majorPreview}
                                 rowClassName={(_, index) => `table-row-animate table-row-delay-${Math.min(index % 8, 7)}`}
@@ -1334,6 +1370,33 @@ export default function RuleCenterPage() {
                       </Card>
 
                       <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: 12,
+                          padding: '12px 14px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-lg)',
+                          background: 'var(--bg-surface)',
+                        }}
+                      >
+                        <Input
+                          allowClear
+                          value={remarkRuleKeyword}
+                          onChange={(event) =>
+                            handleRemarkRuleKeywordChange(event.target.value)
+                          }
+                          placeholder="搜索备注查找字段 / 输出招生类型 / 优先级"
+                          style={{ minWidth: 280, maxWidth: 420, flex: '1 1 320px' }}
+                        />
+                        <Text type="secondary" style={{ whiteSpace: 'nowrap' }}>
+                          显示 {filteredRemarkRuleDrafts.length} / {remarkRuleDrafts.length} 条
+                        </Text>
+                      </div>
+
+                      <div
                         className="rule-list-container"
                         style={{
                           border: '1px solid var(--border-color)',
@@ -1369,10 +1432,10 @@ export default function RuleCenterPage() {
                           onDragEnd={handleRemarkRuleDragEnd}
                         >
                           <SortableContext
-                            items={remarkRuleDrafts.map((rule) => rule.id)}
+                            items={pagedRemarkRuleDrafts.map((rule) => rule.id)}
                             strategy={verticalListSortingStrategy}
                           >
-                            {remarkRuleDrafts.map((rule) => (
+                            {pagedRemarkRuleDrafts.map((rule) => (
                               <SortableRemarkRuleRow
                                 key={rule.id}
                                 rule={rule}
@@ -1401,6 +1464,47 @@ export default function RuleCenterPage() {
                         {remarkRuleDrafts.length === 0 ? (
                           <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-tertiary)' }}>
                             暂无备注招生类型规则
+                          </div>
+                        ) : null}
+
+                        {remarkRuleDrafts.length > 0 && filteredRemarkRuleDrafts.length === 0 ? (
+                          <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                            没有匹配当前筛选的备注招生类型规则
+                          </div>
+                        ) : null}
+
+                        {filteredRemarkRuleDrafts.length > 0 ? (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              flexWrap: 'wrap',
+                              gap: 12,
+                              padding: '10px 12px',
+                              borderTop: '1px solid var(--divider-color)',
+                              background: 'var(--bg-surface)',
+                            }}
+                          >
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              第 {(currentRemarkRulePage - 1) * remarkRulePageSize + 1}-
+                              {Math.min(
+                                currentRemarkRulePage * remarkRulePageSize,
+                                filteredRemarkRuleDrafts.length
+                              )} 条，共 {filteredRemarkRuleDrafts.length} 条
+                            </Text>
+                            <Pagination
+                              size="small"
+                              current={currentRemarkRulePage}
+                              pageSize={remarkRulePageSize}
+                              total={filteredRemarkRuleDrafts.length}
+                              showSizeChanger
+                              pageSizeOptions={['10', '20', '50', '100']}
+                              onChange={(page, pageSize) => {
+                                setRemarkRulePage(page)
+                                setRemarkRulePageSize(pageSize)
+                              }}
+                            />
                           </div>
                         ) : null}
                       </div>

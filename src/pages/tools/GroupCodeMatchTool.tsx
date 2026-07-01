@@ -484,7 +484,7 @@ const saveManualSelection = () => {
               rowKey={(row) => row.rowId}
               dataSource={filteredRows}
               scroll={{ x: 2800 }}
-              pagination={{ pageSize: 10 }}
+              pagination={{ defaultPageSize: 10 }}
               columns={[
                 { title: '学校名称', dataIndex: 'schoolName', key: 'schoolName', width: 180, fixed: 'left' },
                 { title: '省份', dataIndex: 'province', key: 'province', width: 100, fixed: 'left' },

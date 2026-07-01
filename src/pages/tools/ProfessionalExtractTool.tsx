@@ -231,7 +231,7 @@ export default function ProfessionalExtractTool() {
                 dataSource={result.previewRows}
                 columns={PREVIEW_COLUMNS}
                 scroll={{ x: 1000 }}
-                pagination={{ pageSize: 10 }}
+                pagination={{ defaultPageSize: 10 }}
               />
             ) : (
               <Empty description="没有提取到标准专业" />
