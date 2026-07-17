@@ -48,6 +48,7 @@ import {
   message,
 } from 'antd'
 import {
+  GoogleOutlined,
   HolderOutlined,
 } from '@ant-design/icons'
 import {
@@ -71,10 +72,9 @@ import {
   type ProvinceCategoryBatchRule,
   type ControlLineRule,
 } from '../stores/ruleCenterStore'
-import { downloadRemarkRuleWorkbook } from '../modules/remarkRuleWorkbook'
 
 const { Paragraph, Text, Title } = Typography
-const { TextArea } = Input
+const { TextArea, Password } = Input
 
 const REMARK_RULE_DEFAULT_PAGE_SIZE = 20
 
@@ -97,11 +97,15 @@ export default function RuleCenterPage() {
   const controlLineRules = useRuleCenterStore((state) => state.controlLineRules)
   const controlLineRuleFileName = useRuleCenterStore((state) => state.controlLineRuleFileName)
 
-  const currentUid = useRuleCenterStore((state) => state.currentUid)
+  const currentUserEmail = useRuleCenterStore((state) => state.currentUserEmail)
   const isAdminUser = useRuleCenterStore((state) => state.isAdminUser)
   const authReady = useRuleCenterStore((state) => state.authReady)
   const syncing = useRuleCenterStore((state) => state.syncing)
   const authError = useRuleCenterStore((state) => state.authError)
+
+  const login = useRuleCenterStore((state) => state.login)
+  const loginWithGoogle = useRuleCenterStore((state) => state.loginWithGoogle)
+  const logout = useRuleCenterStore((state) => state.logout)
 
   const importSchoolRuleFile = useRuleCenterStore((state) => state.importSchoolRuleFile)
   const importMajorRuleFile = useRuleCenterStore((state) => state.importMajorRuleFile)
@@ -121,6 +125,10 @@ export default function RuleCenterPage() {
   const reorderRemarkTypeRules = useRuleCenterStore((state) => state.reorderRemarkTypeRules)
 
   const setExclusionKeywords = useRuleCenterStore((state) => state.setExclusionKeywords)
+
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [authSubmitting, setAuthSubmitting] = useState(false)
 
   const exclusionSourceText = exclusionKeywords.join('\n')
   const [exclusionDraftState, setExclusionDraftState] = useState(() => ({
@@ -375,6 +383,61 @@ export default function RuleCenterPage() {
     return filteredRemarkRuleDrafts.slice(start, start + remarkRulePageSize)
   }, [currentRemarkRulePage, filteredRemarkRuleDrafts, remarkRulePageSize])
 
+  const getAuthErrorMessage = (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error)
+
+    if (msg.includes('auth/network-request-failed')) {
+      return 'Firebase 网络连接失败：请检查当前网络是否能访问 Firebase / Google 服务，或检查 Edge 是否开启了严格跟踪防护'
+    }
+
+    if (msg.includes('auth/unauthorized-domain')) {
+      return '当前域名未加入 Firebase 授权域名，请到 Firebase Authentication 的 Authorized domains 中添加 Cloudflare 域名'
+    }
+
+    return msg || '登录失败'
+  }
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      message.warning('请输入邮箱和密码')
+      return
+    }
+
+    setAuthSubmitting(true)
+
+    try {
+      await login(email, password)
+      message.success('登录成功')
+      setPassword('')
+    } catch (error) {
+      message.error(getAuthErrorMessage(error))
+    } finally {
+      setAuthSubmitting(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setAuthSubmitting(true)
+
+    try {
+      await loginWithGoogle()
+      message.success('Gmail 登录成功')
+    } catch (error) {
+      message.error(getAuthErrorMessage(error))
+    } finally {
+      setAuthSubmitting(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      message.success('已退出登录')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '退出登录失败')
+    }
+  }
+
   const handleImportSchoolRules = async (file: File) => {
     try {
       await importSchoolRuleFile(file)
@@ -406,15 +469,6 @@ export default function RuleCenterPage() {
     }
 
     return false
-  }
-
-  const handleExportRemarkRules = () => {
-    try {
-      downloadRemarkRuleWorkbook(remarkTypeRules)
-      message.success(`已导出 ${remarkTypeRules.length} 条备注招生类型规则`)
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '备注招生类型规则导出失败')
-    }
   }
 
 
@@ -756,16 +810,21 @@ export default function RuleCenterPage() {
             </Paragraph>
           </Col>
 
-          {currentUid ? (
+          {currentUserEmail ? (
             <Col>
               <Space direction="vertical" size={6} align="end">
                 <Space wrap>
-                  <Tag color="green">可编辑</Tag>
+                  <Tag color={isAdminUser ? 'green' : 'blue'}>
+                    {isAdminUser ? '管理员' : '只读用户'}
+                  </Tag>
                   <Tag color={syncing ? 'processing' : 'success'}>
                     {syncing ? '同步中' : '已同步'}
                   </Tag>
                 </Space>
-                <Text type="secondary">无需登录，修改会自动同步到云端</Text>
+                <Text type="secondary">{currentUserEmail}</Text>
+                <Button size="small" onClick={handleLogout}>
+                  退出登录
+                </Button>
               </Space>
             </Col>
           ) : null}
@@ -780,9 +839,50 @@ export default function RuleCenterPage() {
           />
         ) : null}
 
+        {currentUserEmail && !isAdminUser ? (
+          <Alert
+            type="info"
+            showIcon
+            message="当前账号只有查看权限，规则导入、清空、新增、编辑和恢复默认规则需要管理员权限。"
+            style={{ marginTop: 14 }}
+          />
+        ) : null}
+
+        {!currentUserEmail ? (
+          <Card
+            size="small"
+            style={{ marginTop: 16, background: 'var(--color-info-bg)' }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+              <Alert type="info" showIcon message="请登录后查看和管理云端共享规则" />
+              <Input
+                value={email}
+                placeholder="请输入邮箱"
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <Password
+                value={password}
+                placeholder="请输入密码"
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <Space wrap>
+                <Button type="primary" loading={authSubmitting} onClick={handleLogin}>
+                  登录
+                </Button>
+                <Button
+                  icon={<GoogleOutlined />}
+                  loading={authSubmitting}
+                  onClick={handleGoogleLogin}
+                >
+                  Gmail 登录
+                </Button>
+              </Space>
+            </Space>
+          </Card>
+        ) : null}
       </Card>
 
-      {currentUid ? (
+      {currentUserEmail ? (
         <>
           <Row gutter={[12, 12]}>
             <Col xs={12} lg={6}>
@@ -1245,12 +1345,6 @@ export default function RuleCenterPage() {
                             >
                               <Button disabled={!isAdminUser}>导入备注规则</Button>
                             </Upload>
-                            <Button
-                              disabled={remarkTypeRules.length === 0}
-                              onClick={handleExportRemarkRules}
-                            >
-                              导出备注规则
-                            </Button>
                             <Button type="primary" disabled={!isAdminUser} onClick={openAddRemarkRuleModal}>
                               新增规则
                             </Button>
