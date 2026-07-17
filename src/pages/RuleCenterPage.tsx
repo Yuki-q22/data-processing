@@ -71,6 +71,7 @@ import {
   type ProvinceCategoryBatchRule,
   type ControlLineRule,
 } from '../stores/ruleCenterStore'
+import { downloadRemarkRuleWorkbook } from '../modules/remarkRuleWorkbook'
 
 const { Paragraph, Text, Title } = Typography
 const { TextArea } = Input
@@ -405,6 +406,15 @@ export default function RuleCenterPage() {
     }
 
     return false
+  }
+
+  const handleExportRemarkRules = () => {
+    try {
+      downloadRemarkRuleWorkbook(remarkTypeRules)
+      message.success(`已导出 ${remarkTypeRules.length} 条备注招生类型规则`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '备注招生类型规则导出失败')
+    }
   }
 
 
@@ -1235,6 +1245,12 @@ export default function RuleCenterPage() {
                             >
                               <Button disabled={!isAdminUser}>导入备注规则</Button>
                             </Upload>
+                            <Button
+                              disabled={remarkTypeRules.length === 0}
+                              onClick={handleExportRemarkRules}
+                            >
+                              导出备注规则
+                            </Button>
                             <Button type="primary" disabled={!isAdminUser} onClick={openAddRemarkRuleModal}>
                               新增规则
                             </Button>
