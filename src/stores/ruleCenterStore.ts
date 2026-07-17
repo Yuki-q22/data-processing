@@ -90,6 +90,7 @@ type RuleCenterStore = {
 
   remarkTypeRules: RemarkTypeRule[]
   remarkRuleFileName?: string
+  remarkRulesLoadedFromCloud: boolean
   exclusionKeywords: string[]
 
   provinceCategoryBatchRules: ProvinceCategoryBatchRule[]
@@ -276,6 +277,21 @@ function mapCloudRemarkRules(
     .filter((rule) => rule.keyword && rule.outputType)
 
   return rules.length ? sortRules(rules) : getDefaultRemarkTypeRules()
+}
+
+function hasValidCloudRemarkRules(
+  value: Record<string, CloudRuleItem> | null | undefined
+): boolean {
+  if (!value || typeof value !== 'object') return false
+
+  return Object.values(value).some((item) => {
+    if (!item || item.enabled === false) return false
+
+    return Boolean(
+      String(item.source_text ?? '').trim() &&
+        String(item.target_text ?? '').trim()
+    )
+  })
 }
 
 function mapCloudSimpleValues(
@@ -592,6 +608,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
 
   remarkTypeRules: getDefaultRemarkTypeRules(),
   remarkRuleFileName: '内置默认规则',
+  remarkRulesLoadedFromCloud: false,
   exclusionKeywords: getDefaultExclusionKeywords(),
 
   provinceCategoryBatchRules: DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
@@ -642,6 +659,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
             majorRuleFileName: undefined,
             remarkTypeRules: getDefaultRemarkTypeRules(),
             remarkRuleFileName: '内置默认规则',
+            remarkRulesLoadedFromCloud: false,
             exclusionKeywords: getDefaultExclusionKeywords(),
             provinceCategoryBatchRules: DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
             provinceCategoryBatchRuleFileName: '内置默认规则',
@@ -746,13 +764,16 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
         const offRemark = onValue(
           remarkRef,
           (snapshot) => {
-            const remarkTypeRules = mapCloudRemarkRules(snapshot.val())
+            const cloudValue = snapshot.val()
+            const remarkTypeRules = mapCloudRemarkRules(cloudValue)
+            const remarkRulesLoadedFromCloud = hasValidCloudRemarkRules(cloudValue)
 
             setState({
               remarkTypeRules,
-              remarkRuleFileName: remarkTypeRules.length
+              remarkRuleFileName: remarkRulesLoadedFromCloud
                 ? CLOUD_RULE_FILE_NAME
                 : '内置默认规则',
+              remarkRulesLoadedFromCloud,
             })
             markInitialLoadComplete('remark')
           },
@@ -1174,7 +1195,12 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   },
 
   addRemarkTypeRule: async (rule = {}) => {
-    const { currentUid, isAdminUser, remarkTypeRules } = getState()
+    const {
+      currentUid,
+      isAdminUser,
+      remarkTypeRules,
+      remarkRulesLoadedFromCloud,
+    } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
     const keyword = String(rule.keyword || '').trim()
@@ -1204,27 +1230,44 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       priority: nextPriority,
     }
 
-    await updateRuleCenterAtomically({
-      [`rule_center/remark_enrollment_type/${newId}`]: {
-        rule_name: `${keyword} → ${outputType}`,
-        source_text: keyword,
-        target_text: outputType,
-        enabled: true,
-        sort_order: nextPriority,
-        updated_at: serverTimestamp(),
-        updated_by: currentUid!,
-      },
-    })
+    const nextRules = sortRules([...remarkTypeRules, newRule])
+
+    if (remarkRulesLoadedFromCloud) {
+      await updateRuleCenterAtomically({
+        [`rule_center/remark_enrollment_type/${newId}`]: {
+          rule_name: `${keyword} → ${outputType}`,
+          source_text: keyword,
+          target_text: outputType,
+          enabled: true,
+          sort_order: nextPriority,
+          updated_at: serverTimestamp(),
+          updated_by: currentUid!,
+        },
+      })
+    } else {
+      await updateRuleCenterAtomically({
+        'rule_center/remark_enrollment_type': toCloudPayloadFromRemarkRules(
+          nextRules,
+          currentUid!,
+        ),
+      })
+    }
 
     setState({
-      remarkTypeRules: sortRules([...remarkTypeRules, newRule]),
+      remarkTypeRules: nextRules,
       remarkRuleFileName: CLOUD_RULE_FILE_NAME,
+      remarkRulesLoadedFromCloud: true,
     })
 
   },
 
   updateRemarkTypeRule: async (id, patch) => {
-    const { currentUid, isAdminUser, remarkTypeRules } = getState()
+    const {
+      currentUid,
+      isAdminUser,
+      remarkTypeRules,
+      remarkRulesLoadedFromCloud,
+    } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
     const current = remarkTypeRules.find((rule) => rule.id === id)
@@ -1265,21 +1308,35 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     setState({
       remarkTypeRules: nextRules,
       remarkRuleFileName: CLOUD_RULE_FILE_NAME,
+      remarkRulesLoadedFromCloud: true,
     })
 
     try {
-      await updateRuleCenterItemAtomically(`rule_center/remark_enrollment_type/${id}`, {
-        rule_name: `${nextKeyword} → ${nextOutputType}`,
-        source_text: nextKeyword,
-        target_text: nextOutputType,
-        sort_order: safePriority,
-        enabled: true,
-        updated_at: serverTimestamp(),
-        updated_by: currentUid!,
-      })
+      if (remarkRulesLoadedFromCloud) {
+        await updateRuleCenterItemAtomically(`rule_center/remark_enrollment_type/${id}`, {
+          rule_name: `${nextKeyword} → ${nextOutputType}`,
+          source_text: nextKeyword,
+          target_text: nextOutputType,
+          sort_order: safePriority,
+          enabled: true,
+          updated_at: serverTimestamp(),
+          updated_by: currentUid!,
+        })
+      } else {
+        await updateRuleCenterAtomically({
+          'rule_center/remark_enrollment_type': toCloudPayloadFromRemarkRules(
+            nextRules,
+            currentUid!,
+          ),
+        })
+      }
     } catch (error) {
       setState({
         remarkTypeRules: previousRules,
+        remarkRuleFileName: remarkRulesLoadedFromCloud
+          ? CLOUD_RULE_FILE_NAME
+          : '内置默认规则',
+        remarkRulesLoadedFromCloud,
       })
 
       throw error
@@ -1287,23 +1344,43 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   },
 
   removeRemarkTypeRule: async (id) => {
-    const { currentUid, isAdminUser, remarkTypeRules } = getState()
+    const {
+      currentUid,
+      isAdminUser,
+      remarkTypeRules,
+      remarkRulesLoadedFromCloud,
+    } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
     const previousRules = remarkTypeRules
+    const nextRules = remarkTypeRules.filter((rule) => rule.id !== id)
 
     setState({
-      remarkTypeRules: remarkTypeRules.filter((rule) => rule.id !== id),
+      remarkTypeRules: nextRules,
       remarkRuleFileName: CLOUD_RULE_FILE_NAME,
+      remarkRulesLoadedFromCloud: true,
     })
 
     try {
-      await updateRuleCenterAtomically({
-        [`rule_center/remark_enrollment_type/${id}`]: null,
-      })
+      if (remarkRulesLoadedFromCloud) {
+        await updateRuleCenterAtomically({
+          [`rule_center/remark_enrollment_type/${id}`]: null,
+        })
+      } else {
+        await updateRuleCenterAtomically({
+          'rule_center/remark_enrollment_type': toCloudPayloadFromRemarkRules(
+            nextRules,
+            currentUid!,
+          ),
+        })
+      }
     } catch (error) {
       setState({
         remarkTypeRules: previousRules,
+        remarkRuleFileName: remarkRulesLoadedFromCloud
+          ? CLOUD_RULE_FILE_NAME
+          : '内置默认规则',
+        remarkRulesLoadedFromCloud,
       })
 
       throw error
@@ -1319,6 +1396,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     setState({
       remarkTypeRules: defaultRules,
       remarkRuleFileName: CLOUD_RULE_FILE_NAME,
+      remarkRulesLoadedFromCloud: true,
     })
 
     await updateRuleCenterAtomically({
@@ -1330,7 +1408,12 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
   },
 
   reorderRemarkTypeRules: async (activeId, overId) => {
-    const { currentUid, isAdminUser, remarkTypeRules } = getState()
+    const {
+      currentUid,
+      isAdminUser,
+      remarkTypeRules,
+      remarkRulesLoadedFromCloud,
+    } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
     const sortedRules = sortRules(remarkTypeRules)
@@ -1346,26 +1429,40 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     setState({
       remarkTypeRules: nextRules,
       remarkRuleFileName: CLOUD_RULE_FILE_NAME,
+      remarkRulesLoadedFromCloud: true,
     })
 
     try {
-      const updates: Record<string, unknown> = {}
+      if (remarkRulesLoadedFromCloud) {
+        const updates: Record<string, unknown> = {}
 
-      nextRules.forEach((rule, index) => {
-        const nextPriority = index + 1
+        nextRules.forEach((rule, index) => {
+          const nextPriority = index + 1
 
-        updates[`rule_center/remark_enrollment_type/${rule.id}/sort_order`] =
-          nextPriority
-        updates[`rule_center/remark_enrollment_type/${rule.id}/updated_at`] =
-          now
-        updates[`rule_center/remark_enrollment_type/${rule.id}/updated_by`] =
-          currentUid!
-      })
+          updates[`rule_center/remark_enrollment_type/${rule.id}/sort_order`] =
+            nextPriority
+          updates[`rule_center/remark_enrollment_type/${rule.id}/updated_at`] =
+            now
+          updates[`rule_center/remark_enrollment_type/${rule.id}/updated_by`] =
+            currentUid!
+        })
 
-      await updateRuleCenterAtomically(updates)
+        await updateRuleCenterAtomically(updates)
+      } else {
+        await updateRuleCenterAtomically({
+          'rule_center/remark_enrollment_type': toCloudPayloadFromRemarkRules(
+            nextRules,
+            currentUid!,
+          ),
+        })
+      }
     } catch (error) {
       setState({
         remarkTypeRules: previousRules,
+        remarkRuleFileName: remarkRulesLoadedFromCloud
+          ? CLOUD_RULE_FILE_NAME
+          : '内置默认规则',
+        remarkRulesLoadedFromCloud,
       })
 
       throw error
