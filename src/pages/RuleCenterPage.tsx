@@ -48,9 +48,11 @@ import {
   message,
 } from 'antd'
 import {
+  DownloadOutlined,
   GoogleOutlined,
   HolderOutlined,
 } from '@ant-design/icons'
+import * as XLSX from 'xlsx'
 import {
   DndContext,
   PointerSensor,
@@ -469,6 +471,44 @@ export default function RuleCenterPage() {
     }
 
     return false
+  }
+
+  const handleExportRemarkRules = () => {
+    if (!remarkTypeRules.length) {
+      message.warning('当前没有可导出的备注招生类型规则')
+      return
+    }
+
+    try {
+      const rows = remarkTypeRules.map((rule, index) => ({
+        备注查找字段: rule.keyword,
+        输出招生类型: rule.outputType,
+        优先级: Number.isFinite(rule.priority) ? rule.priority : index + 1,
+      }))
+      const worksheet = XLSX.utils.json_to_sheet(rows, {
+        header: ['备注查找字段', '输出招生类型', '优先级'],
+      })
+      worksheet['!cols'] = [{ wch: 28 }, { wch: 22 }, { wch: 10 }]
+
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, '备注招生类型规则')
+
+      const now = new Date()
+      const timestamp = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0'),
+        '_',
+        String(now.getHours()).padStart(2, '0'),
+        String(now.getMinutes()).padStart(2, '0'),
+        String(now.getSeconds()).padStart(2, '0'),
+      ].join('')
+
+      XLSX.writeFile(workbook, `备注招生类型规则_${timestamp}.xlsx`)
+      message.success(`已导出 ${rows.length} 条备注招生类型规则`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '备注招生类型规则导出失败')
+    }
   }
 
 
@@ -1345,6 +1385,13 @@ export default function RuleCenterPage() {
                             >
                               <Button disabled={!isAdminUser}>导入备注规则</Button>
                             </Upload>
+                            <Button
+                              icon={<DownloadOutlined />}
+                              disabled={!remarkTypeRules.length}
+                              onClick={handleExportRemarkRules}
+                            >
+                              导出备注规则
+                            </Button>
                             <Button type="primary" disabled={!isAdminUser} onClick={openAddRemarkRuleModal}>
                               新增规则
                             </Button>
