@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeFirebaseWriteError, withTimeout } from './firebaseWriteGuard'
+import {
+  normalizeFirebaseWriteError,
+  waitForFirebaseConnection,
+  withTimeout,
+} from './firebaseWriteGuard'
 
 describe('firebase write guard', () => {
   it('returns a completed operation result', async () => {
@@ -16,5 +20,35 @@ describe('firebase write guard', () => {
     expect(normalizeFirebaseWriteError(new Error('PERMISSION_DENIED')).message).toContain(
       'rule_center'
     )
+  })
+
+  it('waits through the initial disconnected event until Firebase connects', async () => {
+    let unsubscribed = false
+
+    await expect(
+      waitForFirebaseConnection((onConnectionChange) => {
+        onConnectionChange(false)
+        const timer = setTimeout(() => onConnectionChange(true), 1)
+
+        return () => {
+          clearTimeout(timer)
+          unsubscribed = true
+        }
+      }, 50)
+    ).resolves.toBeUndefined()
+
+    expect(unsubscribed).toBe(true)
+  })
+
+  it('stops listening when the Firebase connection times out', async () => {
+    let unsubscribed = false
+
+    await expect(
+      waitForFirebaseConnection(() => () => {
+        unsubscribed = true
+      }, 5)
+    ).rejects.toThrow('连接 Firebase 超时')
+
+    expect(unsubscribed).toBe(true)
   })
 })

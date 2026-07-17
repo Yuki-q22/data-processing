@@ -1,6 +1,11 @@
 export const FIREBASE_CONNECTION_TIMEOUT_MS = 8_000
 export const FIREBASE_WRITE_TIMEOUT_MS = 15_000
 
+type FirebaseConnectionSubscriber = (
+  onConnectionChange: (connected: boolean) => void,
+  onError: (error: unknown) => void,
+) => () => void
+
 export async function withTimeout<T>(
   operation: Promise<T>,
   timeoutMs: number,
@@ -17,6 +22,28 @@ export async function withTimeout<T>(
     ])
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+}
+
+export async function waitForFirebaseConnection(
+  subscribe: FirebaseConnectionSubscriber,
+  timeoutMs = FIREBASE_CONNECTION_TIMEOUT_MS,
+) {
+  let unsubscribe: () => void = () => undefined
+
+  try {
+    await withTimeout(
+      new Promise<void>((resolve, reject) => {
+        unsubscribe = subscribe((connected) => {
+          // Firebase 初始化时通常先报告 false，需要继续等待真正连接成功。
+          if (connected) resolve()
+        }, reject)
+      }),
+      timeoutMs,
+      '连接 Firebase 超时，请检查当前网络后再试。',
+    )
+  } finally {
+    unsubscribe()
   }
 }
 

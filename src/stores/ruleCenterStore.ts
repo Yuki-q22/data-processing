@@ -46,6 +46,7 @@ import {
   FIREBASE_CONNECTION_TIMEOUT_MS,
   FIREBASE_WRITE_TIMEOUT_MS,
   normalizeFirebaseWriteError,
+  waitForFirebaseConnection,
   withTimeout,
 } from '../modules/firebaseWriteGuard'
 import {
@@ -564,22 +565,15 @@ function getFirebaseDb() {
 
 async function updateRuleCenterAtomically(updates: Record<string, unknown>) {
   const firebaseDb = getFirebaseDb()
-  const connected = await withTimeout(
-    new Promise<boolean>((resolve, reject) => {
+  await waitForFirebaseConnection(
+    (onConnectionChange, onError) =>
       onValue(
         ref(firebaseDb, '.info/connected'),
-        (snapshot) => resolve(snapshot.val() === true),
-        reject,
-        { onlyOnce: true },
-      )
-    }),
+        (snapshot) => onConnectionChange(snapshot.val() === true),
+        onError,
+      ),
     FIREBASE_CONNECTION_TIMEOUT_MS,
-    '连接 Firebase 超时，请检查当前网络后再试。',
   )
-
-  if (!connected) {
-    throw new Error('当前未连接 Firebase，请检查网络后再试。')
-  }
 
   const timestamp = serverTimestamp()
 
