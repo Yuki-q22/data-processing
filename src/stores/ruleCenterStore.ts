@@ -43,6 +43,12 @@ import {
 import { buildMajorComboForRuleCenter } from '../modules/ruleCenterValidation'
 import { validateUploadFile } from '../modules/uploadValidation'
 import {
+  FIREBASE_CONNECTION_TIMEOUT_MS,
+  FIREBASE_WRITE_TIMEOUT_MS,
+  normalizeFirebaseWriteError,
+  withTimeout,
+} from '../modules/firebaseWriteGuard'
+import {
   DEFAULT_CONTROL_LINE_RULES,
   DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
   buildProvinceCurrentBatchDictByYear,
@@ -557,12 +563,39 @@ function getFirebaseDb() {
 }
 
 async function updateRuleCenterAtomically(updates: Record<string, unknown>) {
+  const firebaseDb = getFirebaseDb()
+  const connected = await withTimeout(
+    new Promise<boolean>((resolve, reject) => {
+      onValue(
+        ref(firebaseDb, '.info/connected'),
+        (snapshot) => resolve(snapshot.val() === true),
+        reject,
+        { onlyOnce: true },
+      )
+    }),
+    FIREBASE_CONNECTION_TIMEOUT_MS,
+    '连接 Firebase 超时，请检查当前网络后再试。',
+  )
+
+  if (!connected) {
+    throw new Error('当前未连接 Firebase，请检查网络后再试。')
+  }
+
   const timestamp = serverTimestamp()
-  await dbUpdate(ref(getFirebaseDb()), {
-    ...updates,
-    'rule_center/meta/version': timestamp,
-    'rule_center/meta/updatedAt': timestamp,
-  })
+
+  try {
+    await withTimeout(
+      dbUpdate(ref(firebaseDb), {
+        ...updates,
+        'rule_center/meta/version': timestamp,
+        'rule_center/meta/updatedAt': timestamp,
+      }),
+      FIREBASE_WRITE_TIMEOUT_MS,
+      'Firebase 写入等待时间过长，请检查网络和数据库规则；请勿重复点击，刷新后确认是否已保存。',
+    )
+  } catch (error) {
+    throw normalizeFirebaseWriteError(error)
+  }
 }
 
 async function updateRuleCenterItemAtomically(
