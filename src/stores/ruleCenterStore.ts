@@ -24,6 +24,7 @@ import { arrayMove } from '@dnd-kit/sortable'
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
+  signInAnonymously,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -633,7 +634,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
             currentUserEmail: undefined,
             currentUid: undefined,
             isAdminUser: false,
-            authReady: true,
+            authReady: false,
             syncing: false,
             authError: undefined,
             validSchoolNames: [],
@@ -650,19 +651,33 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
             ...deriveProvinceRuleMaps(DEFAULT_PROVINCE_CATEGORY_BATCH_RULES),
           })
 
+          // 页面无需手动登录；首次访问时自动创建匿名 Firebase 会话。
+          try {
+            await signInAnonymously(getFirebaseAuth())
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+
+            setState({
+              authReady: true,
+              authError: message.includes('auth/operation-not-allowed')
+                ? 'Firebase 尚未启用匿名登录，请在 Authentication 的登录方式中启用“匿名”。'
+                : message || 'Firebase 自动连接失败',
+            })
+          }
+
           return
         }
 
         setState({
           currentUserEmail: user.email ?? undefined,
           currentUid: user.uid,
-          isAdminUser: false,
+          // 所有自动认证的访问者都拥有规则编辑权限，不再读取管理员名单。
+          isAdminUser: true,
           authReady: true,
           syncing: true,
           authError: undefined,
         })
 
-        const adminRef = ref(getFirebaseDb(), `admins/${user.uid}`)
         const schoolRef = ref(getFirebaseDb(), 'rule_center/school_name')
         const majorRef = ref(getFirebaseDb(), 'rule_center/major_combo')
         const remarkRef = ref(getFirebaseDb(), 'rule_center/remark_enrollment_type')
@@ -670,7 +685,6 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
         const provinceCategoryBatchRef = ref(getFirebaseDb(), 'rule_center/province_category_batch')
         const controlLineRef = ref(getFirebaseDb(), 'rule_center/control_line')
         const pendingInitialLoads = new Set([
-          'admin',
           'school',
           'major',
           'remark',
@@ -684,22 +698,6 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
             setState({ syncing: false })
           }
         }
-
-        const offAdmin = onValue(
-          adminRef,
-          (snapshot) => {
-            setState({
-              isAdminUser: snapshot.val() === true,
-            })
-            markInitialLoadComplete('admin')
-          },
-          (error) => {
-            setState({
-              authError: error.message,
-            })
-            markInitialLoadComplete('admin')
-          }
-        )
 
         const offSchool = onValue(
           schoolRef,
@@ -825,7 +823,6 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
         )
 
         dataUnsubscribers = [
-          offAdmin,
           offSchool,
           offMajor,
           offRemark,

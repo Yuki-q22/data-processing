@@ -1,6 +1,6 @@
 # 数据处理工具平台
 
-面向招生数据清洗、标准化、匹配、校验和导出的浏览器端工具集。项目采用 React + TypeScript 构建，大部分 Excel、PDF 和图片处理在浏览器本地完成；规则中心通过 Firebase Authentication 和 Realtime Database 提供登录、管理员权限与规则同步。
+面向招生数据清洗、标准化、匹配、校验和导出的浏览器端工具集。项目采用 React + TypeScript 构建，大部分 Excel、PDF 和图片处理在浏览器本地完成；规则中心通过 Firebase 匿名认证和 Realtime Database 提供免登录的规则同步与编辑。
 
 README 会被应用内“使用规则 / README”弹窗直接加载。修改工具名称或章节标题时，请同步检查 `src/config/toolRegistry.tsx` 中的 README 导航关键词。
 
@@ -34,7 +34,7 @@ README 会被应用内“使用规则 / README”弹窗直接加载。修改工�
 
 ## 1. 规则中心
 
-规则中心为其他工具提供共享规则。未配置 Firebase 时，页面仍可加载内置默认规则，但登录、云端同步和管理员写入不可用。
+规则中心为其他工具提供共享规则。页面打开后会自动建立匿名 Firebase 会话，无需输入账号；未配置 Firebase 时仍可加载内置默认规则，但云端同步和编辑不可用。
 
 支持的规则类型：
 
@@ -55,11 +55,7 @@ README 会被应用内“使用规则 / README”弹窗直接加载。修改工�
 | 省份科类批次 | `年份`、`省份`、`招生科类/科类`、`招生批次/批次` |
 | 省控线科类批次 | `年份`、`省份`、`省控线科类`、`省控线批次` |
 
-登录方式支持邮箱密码和 Google 登录。规则读取要求已登录；写入要求：
-
-```text
-admins/{uid} = true
-```
+Firebase Authentication 必须启用“匿名”登录方式。匿名会话由页面自动建立，所有能够打开系统的访问者均可读取和修改共享规则，无需维护管理员 UID。
 
 新增、更新、删除、导入和排序操作会把规则数据及 `rule_center/meta` 版本信息放在同一次 Firebase 原子更新中。
 
@@ -368,9 +364,6 @@ python -m unittest discover -s tests -v
 主要数据结构：
 
 ```text
-admins/
-  {uid}: true
-
 rule_center/
   school_name/
   major_combo/
@@ -386,8 +379,8 @@ rule_center/
 仓库中的 `database.rules.json` 执行以下权限策略：
 
 - 根节点默认禁止读写。
-- `rule_center`：已登录用户可读，仅管理员可写。
-- `admins/{uid}`：用户只能读取自己的管理员标记，客户端不能写管理员列表。
+- `rule_center`：自动完成匿名认证的访问者均可读写。
+- 其他根节点保持禁止读写。
 
 部署数据库规则前，请先确认 Firebase CLI 当前项目：
 
@@ -396,7 +389,7 @@ firebase use
 firebase deploy --only database
 ```
 
-生产环境不要只依赖页面上的管理员判断；真正的写入权限由 Realtime Database 安全规则控制。
+当前策略适用于可信的内部使用场景。任何能够打开系统的访问者都可以修改共享规则；如果未来对公网开放，应恢复基于账号或角色的写入权限。
 
 ## 部署说明
 
@@ -418,10 +411,9 @@ firebase deploy --only database
 如果页面可打开但规则无法读取或写入，依次检查：
 
 1. Firebase 环境变量是否完整。
-2. Authentication 是否启用了对应登录方式。
+2. Authentication 是否启用了“匿名”登录方式。
 3. Realtime Database 规则是否已经部署。
-4. 当前用户 UID 是否存在于 `admins/{uid}`。
-5. 浏览器控制台和规则中心是否显示权限或网络错误。
+4. 浏览器控制台和规则中心是否显示权限或网络错误。
 
 ## 文件与性能限制
 
