@@ -22,6 +22,8 @@ export default function ProfessionalScorePlatform() {
   const scoreMappings = usePreviewStore((state) => state.scoreMappings)
   const planMappings = usePreviewStore((state) => state.planMappings)
   const processedRecords = usePreviewStore((state) => state.processedRecords)
+  const inputRevision = usePreviewStore((state) => state.inputRevision)
+  const processedRevision = usePreviewStore((state) => state.processedRevision)
 
   const stepItems = [
     { title: '文件上传' },
@@ -39,7 +41,8 @@ export default function ProfessionalScorePlatform() {
     scoreMappings.some((item) => !item.ignored && item.targetField) &&
     planMappings.some((item) => !item.ignored && item.targetField)
 
-  const hasProcessedRecords = processedRecords.length > 0
+  const hasProcessedRecords =
+    processedRecords.length > 0 && processedRevision === inputRevision
 
   const validateStepEnter = (targetStep: number) => {
     if (targetStep >= 1 && !hasUploadedFiles) {

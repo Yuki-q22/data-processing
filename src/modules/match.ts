@@ -52,6 +52,52 @@ function makeCoreMatchKey(record: Pick<ScoreRecord | PlanRecord, 'schoolName' | 
   ].join('||')
 }
 
+function makeBaseMatchKey(
+  record: Pick<ScoreRecord | PlanRecord, 'schoolName' | 'province' | 'majorName'>,
+  cleaned: boolean,
+) {
+  const normalize = cleaned ? normalizeText : (value?: string) => value || ''
+  return [
+    normalize(record.schoolName),
+    normalize(record.province),
+    normalize(record.majorName),
+  ].join('||')
+}
+
+type PlanIndexes = {
+  byId: Map<string, PlanRecord>
+  byCoreKey: Map<string, PlanRecord[]>
+  byRawBaseKey: Map<string, PlanRecord[]>
+  byCleanBaseKey: Map<string, PlanRecord[]>
+}
+
+function addToIndex(index: Map<string, PlanRecord[]>, key: string, plan: PlanRecord) {
+  const current = index.get(key)
+  if (current) {
+    current.push(plan)
+  } else {
+    index.set(key, [plan])
+  }
+}
+
+function buildPlanIndexes(plans: PlanRecord[]): PlanIndexes {
+  const indexes: PlanIndexes = {
+    byId: new Map(),
+    byCoreKey: new Map(),
+    byRawBaseKey: new Map(),
+    byCleanBaseKey: new Map(),
+  }
+
+  plans.forEach((plan) => {
+    indexes.byId.set(plan.rowId, plan)
+    addToIndex(indexes.byCoreKey, makeCoreMatchKey(plan), plan)
+    addToIndex(indexes.byRawBaseKey, makeBaseMatchKey(plan, false), plan)
+    addToIndex(indexes.byCleanBaseKey, makeBaseMatchKey(plan, true), plan)
+  })
+
+  return indexes
+}
+
 function countByCoreMatchKey(records: Array<ScoreRecord | PlanRecord>) {
   const map = new Map<string, number>()
 
@@ -79,11 +125,11 @@ function isBatchInProvinceRules(
   return currentBatches.includes(score.batch)
 }
 
-function getCorePlanCandidates(score: ScoreRecord, plans: PlanRecord[]) {
+function getCorePlanCandidates(score: ScoreRecord, planIndexes: PlanIndexes) {
   const scoreKey = makeCoreMatchKey(score)
   if (!scoreKey.replace(/\|/g, '')) return []
 
-  return plans.filter((plan) => makeCoreMatchKey(plan) === scoreKey)
+  return planIndexes.byCoreKey.get(scoreKey) || []
 }
 
 function planCandidatesHaveSameFields(
@@ -187,7 +233,8 @@ function scorePlanCandidate(
 function pickBestByProvinceBatchDict(
   score: ScoreRecord,
   candidates: PlanRecord[],
-  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>
+  provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>,
+  matchedStatus: MatchStatus = 'matched_without_batch',
 ): { matchedPlan?: PlanRecord; matchStatus: MatchStatus; candidatesOut?: PlanRecord[] } {
   if (candidates.length === 0) {
     return { matchedPlan: undefined, matchStatus: 'unmatched', candidatesOut: [] }
@@ -203,7 +250,7 @@ function pickBestByProvinceBatchDict(
   if (scored.length === 1) {
     return {
       matchedPlan: scored[0].item,
-      matchStatus: 'matched_without_batch',
+      matchStatus: matchedStatus,
       candidatesOut: [scored[0].item],
     }
   }
@@ -211,7 +258,7 @@ function pickBestByProvinceBatchDict(
   if (scored[0].score > scored[1].score) {
     return {
       matchedPlan: scored[0].item,
-      matchStatus: 'matched_without_batch',
+      matchStatus: matchedStatus,
       candidatesOut: scored.map((x) => x.item),
     }
   }
@@ -225,7 +272,7 @@ function pickBestByProvinceBatchDict(
 
 function pickMatch(
   score: ScoreRecord,
-  plans: PlanRecord[],
+  planIndexes: PlanIndexes,
   provinceCurrentBatchDictByYear: Record<string, Record<string, string[]>>,
   duplicateInfo: {
     scoreCoreKeyCounts: Map<string, number>
@@ -235,7 +282,7 @@ function pickMatch(
 ): { matchedPlan?: PlanRecord; matchStatus: MatchStatus; candidatesOut?: PlanRecord[] } {
   const manualPlanId = manualMatchSelections?.[score.rowId]
   if (manualPlanId) {
-    const manualPlan = plans.find((p) => p.rowId === manualPlanId)
+    const manualPlan = planIndexes.byId.get(manualPlanId)
     if (manualPlan) {
       return {
         matchedPlan: manualPlan,
@@ -256,7 +303,7 @@ function pickMatch(
    * 否则同一专业下的不同批次/方向/代码可能被系统自动选中，导致误匹配。
    */
   if (scoreCoreDuplicated || planCoreDuplicated) {
-    const candidates = getCorePlanCandidates(score, plans)
+    const candidates = getCorePlanCandidates(score, planIndexes)
     if (
       planCandidatesHaveSameFields(candidates, [
         'batch',
@@ -293,7 +340,11 @@ function pickMatch(
   ]
 
   for (const strategy of strategies) {
-    const candidates = filterCandidates(score, plans, strategy)
+    // 先按学校、省份、专业缩小候选集，避免每种策略都扫描全部招生计划。
+    const candidatePool = strategy.cleaned
+      ? planIndexes.byCleanBaseKey.get(makeBaseMatchKey(score, true)) || []
+      : planIndexes.byRawBaseKey.get(makeBaseMatchKey(score, false)) || []
+    const candidates = filterCandidates(score, candidatePool, strategy)
 
     if (strategy.useBatch) {
       if (candidates.length === 1) {
@@ -314,7 +365,12 @@ function pickMatch(
     }
 
     if (candidates.length >= 1) {
-      const best = pickBestByProvinceBatchDict(score, candidates, provinceCurrentBatchDictByYear)
+      const best = pickBestByProvinceBatchDict(
+        score,
+        candidates,
+        provinceCurrentBatchDictByYear,
+        strategy.status,
+      )
       if (best.matchedPlan || best.matchStatus === 'matched_multiple') {
         return best
       }
@@ -412,11 +468,12 @@ export function buildProcessedRecords(
     scoreCoreKeyCounts: countByCoreMatchKey(scoreRecords),
     planCoreKeyCounts: countByCoreMatchKey(planRecords),
   }
+  const planIndexes = buildPlanIndexes(planRecords)
 
   return scoreRecords.map((score) => {
     const { matchedPlan, matchStatus, candidatesOut } = pickMatch(
       score,
-      planRecords,
+      planIndexes,
       provinceCurrentBatchDictByYear,
       duplicateInfo,
       manualMatchSelections

@@ -168,9 +168,10 @@ const REDUNDANT_NESTED_BRACKET_PATTERN = /（\s*（([^（）]*)）\s*）/u
 const REDUNDANT_NESTED_BRACKET_REPLACE_PATTERN = /（\s*（([^（）]*)）\s*）/gu
 const BRACKET_GROUP_SEPARATOR_PATTERN = /）[、，；]+（/gu
 const LEADING_PUNCTUATION_PATTERN = /^[，；：。！？、]+/u
-const TRAILING_SEPARATOR_PATTERN = /[，；：、]+$/u
+const TRAILING_SEPARATOR_PATTERN = /[，；：。！？、]+$/u
 const PUNCTUATION_RUN_PATTERN = /[，；：。！？、]{2,}/gu
 const HAN_OCR_NOISE_SYMBOL_PATTERN = /(?<=\p{Script=Han})[%％](?=\p{Script=Han})/gu
+const SHORT_TRAILING_PUNCTUATION_MAX_CHARS = 4
 const TUITION_PATTERN = /学费[^，；。！？、（）\d]{0,12}?(\d+(?:\.\d+)?)\s*(万元|万|元)/gu
 const HEIGHT_VALUE_PATTERN = /(?:身高|身长)[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(cm|CM|厘米|米|m|M)/gu
 const HEIGHT_WRONG_UNIT_PATTERN = /(?:身高|身长)[^，；。！？、（）]{0,12}?(\d+(?:\.\d+)?)\s*(kg|KG|公斤|千克|斤)/gu
@@ -304,15 +305,38 @@ function collapsePunctuationRun(run: string) {
   return run[0]
 }
 
+function trailingMeaningfulLength(text: string) {
+  const segments = text.trim().split(/[，；：。！？、（）\s]+/u).filter(Boolean)
+  const tail = segments.at(-1) || ''
+  return [...tail.replace(/[^\p{L}\p{N}]/gu, '')].length
+}
+
+function shouldStripShortTrailingPunctuation(textBeforePunctuation: string) {
+  const length = trailingMeaningfulLength(textBeforePunctuation)
+  return length > 0 && length <= SHORT_TRAILING_PUNCTUATION_MAX_CHARS
+}
+
+function stripShortPunctuationBeforeClosingBracket(text: string) {
+  return text.replace(/([^（）]*?)[，；：。！？、]+）/gu, (match, content: string) => (
+    shouldStripShortTrailingPunctuation(content) ? `${content}）` : match
+  ))
+}
+
+function stripShortTrailingPunctuation(text: string) {
+  return text.replace(TRAILING_SEPARATOR_PATTERN, (punctuation, offset, source) => (
+    shouldStripShortTrailingPunctuation(source.slice(0, offset)) ? '' : punctuation
+  ))
+}
+
 function cleanupPunctuationArtifacts(text: string) {
-  return text
+  let current = text
     .replace(PUNCTUATION_RUN_PATTERN, collapsePunctuationRun)
     .replace(BRACKET_GROUP_SEPARATOR_PATTERN, '）（')
     .replace(/（[，；：。！？、]+/gu, '（')
-    .replace(/[，；：。！？、]+）/gu, '）')
     .replace(LEADING_PUNCTUATION_PATTERN, '')
-    .replace(TRAILING_SEPARATOR_PATTERN, '')
-    .trim()
+  current = stripShortPunctuationBeforeClosingBracket(current)
+  current = stripShortTrailingPunctuation(current)
+  return current.trim()
 }
 
 function outerBracketGroups(text: string) {
@@ -374,28 +398,30 @@ function removeDelimitedDuplicates(text: string) {
 function removeContinuousDuplicates(text: string) {
   let current = text
   const phrases: string[] = []
-  let changedInPass = true
+  let start = 0
 
-  while (changedInPass) {
-    changedInPass = false
+  while (start < current.length) {
+    const maxLength = Math.min(12, Math.floor((current.length - start) / 2))
+    let removed = false
 
-    outer: for (let start = 0; start < current.length; start += 1) {
-      const maxLength = Math.min(12, Math.floor((current.length - start) / 2))
-      for (let length = maxLength; length >= 2; length -= 1) {
-        const phrase = current.slice(start, start + length)
-        const repeated = current.slice(start + length, start + length * 2)
-        if (
-          phrase !== repeated
-          || /^\d+$/u.test(phrase)
-          || !/^[\p{Script=Han}A-Za-z0-9]+$/u.test(phrase)
-        ) continue
+    for (let length = maxLength; length >= 2; length -= 1) {
+      const phrase = current.slice(start, start + length)
+      const repeated = current.slice(start + length, start + length * 2)
+      if (
+        phrase !== repeated
+        || /^\d+$/u.test(phrase)
+        || !/^[\p{Script=Han}A-Za-z0-9]+$/u.test(phrase)
+      ) continue
 
-        current = `${current.slice(0, start + length)}${current.slice(start + length * 2)}`
-        phrases.push(phrase)
-        changedInPass = true
-        break outer
-      }
+      current = `${current.slice(0, start + length)}${current.slice(start + length * 2)}`
+      phrases.push(phrase)
+      // 删除后只回看可能受拼接影响的局部区域，避免每次都从头扫描。
+      start = Math.max(0, start - 12)
+      removed = true
+      break
     }
+
+    if (!removed) start += 1
   }
 
   return { text: current, phrases: unique(phrases) }
@@ -631,11 +657,11 @@ export function checkFormatIssues(text: string): TextCheckResult {
     changed = true
   }
 
-  const withoutExtraPunctuation = current
+  let withoutExtraPunctuation = current
     .replace(/（[，；：。！？、]+/gu, '（')
-    .replace(/[，；：。！？、]+）/gu, '）')
     .replace(LEADING_PUNCTUATION_PATTERN, '')
-    .replace(TRAILING_SEPARATOR_PATTERN, '')
+  withoutExtraPunctuation = stripShortPunctuationBeforeClosingBracket(withoutExtraPunctuation)
+  withoutExtraPunctuation = stripShortTrailingPunctuation(withoutExtraPunctuation)
   if (withoutExtraPunctuation !== current) {
     current = withoutExtraPunctuation
     issues.push('存在多余标点符号')

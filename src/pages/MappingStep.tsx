@@ -17,7 +17,7 @@ import { useRuleStore } from '../stores/ruleStore'
 import { useRuleCenterStore } from '../stores/ruleCenterStore'
 import { sheetToJsonInWorker } from '../utils/excelWorkerClient'
 import { useLatestTaskGuard } from '../hooks/useLatestTaskGuard'
-import { matchFields } from '../utils/mapping'
+import { haveSameMappingSources, matchFields } from '../utils/mapping'
 import { buildScoreRecords, buildPlanRecords } from '../modules/transform'
 import { buildProcessedRecords } from '../modules/match'
 import { attachValidationIssues } from '../modules/validate'
@@ -31,15 +31,6 @@ function getSheetHeaders(workbook: UploadedWorkbook | null | undefined, sheetNam
   return workbook.sheets.find((sheet) => sheet.name === sheetName)?.headers ?? []
 }
 
-function sameSourceFields(
-  mappings: EditableFieldMappingItem[],
-  headers: string[]
-): boolean {
-  if (mappings.length !== headers.length) return false
-
-  return headers.every((header, index) => mappings[index]?.sourceField === header)
-}
-
 export default function MappingStep() {
   const scoreMappings = usePreviewStore((state) => state.scoreMappings)
   const planMappings = usePreviewStore((state) => state.planMappings)
@@ -49,6 +40,7 @@ export default function MappingStep() {
   const setScoreRecords = usePreviewStore((state) => state.setScoreRecords)
   const setPlanRecords = usePreviewStore((state) => state.setPlanRecords)
   const setProcessedRecords = usePreviewStore((state) => state.setProcessedRecords)
+  const inputRevision = usePreviewStore((state) => state.inputRevision)
 
   const year = useTaskStore((state) => state.year)
   const defaultDataSource = useTaskStore((state) => state.defaultDataSource)
@@ -98,14 +90,15 @@ export default function MappingStep() {
 
   useEffect(() => {
     if (!scoreHeaders.length) return
-    if (sameSourceFields(scoreMappings, scoreHeaders)) return
+    if (haveSameMappingSources(scoreMappings, scoreHeaders)) return
 
     resetScoreMappingsToAuto(autoScoreMappings)
   }, [autoScoreMappings, resetScoreMappingsToAuto, scoreHeaders, scoreMappings])
 
   useEffect(() => {
     if (!planHeaders.length) return
-    if (sameSourceFields(planMappings, planHeaders)) return
+    const autoPlanSourceFields = autoPlanMappings.map((item) => item.sourceField)
+    if (haveSameMappingSources(planMappings, autoPlanSourceFields)) return
 
     resetPlanMappingsToAuto(autoPlanMappings)
   }, [autoPlanMappings, planHeaders, planMappings, resetPlanMappingsToAuto])
@@ -142,6 +135,7 @@ export default function MappingStep() {
     }
 
     const taskId = startTask('apply-mappings')
+    const startedInputRevision = inputRevision
     let scoreRows: Record<string, unknown>[]
     let planRows: Record<string, unknown>[]
 
@@ -156,7 +150,10 @@ export default function MappingStep() {
       return
     }
 
-    if (!isLatestTask('apply-mappings', taskId)) return
+    if (
+      !isLatestTask('apply-mappings', taskId) ||
+      usePreviewStore.getState().inputRevision !== startedInputRevision
+    ) return
 
     const scoreRecords = buildScoreRecords(
       scoreRows,

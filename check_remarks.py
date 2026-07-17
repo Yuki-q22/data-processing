@@ -4,7 +4,7 @@
 运行方式：
     python check_remarks.py input.xlsx
 
-依赖：pandas、openpyxl
+依赖：openpyxl
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ from copy import copy
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, PatternFill
 from openpyxl.utils import get_column_letter
@@ -165,6 +164,7 @@ WHITELIST = [
 ]
 
 REMARK_COLUMN_NAMES = ("备注", "专业备注", "计划备注", "招生备注")
+EXCEL_EXPORT_COLUMN_WIDTH = 12.75
 INVALID_REMARKS = {"无", "暂无", "-", "/"}
 EMPTY_TEXT_VALUES = {"nan", "none"}
 ENGLISH_PUNCTUATION_MAP = str.maketrans(
@@ -189,9 +189,10 @@ EMPTY_BRACKET_RE = re.compile(r"（\s*）")
 REDUNDANT_NESTED_BRACKET_RE = re.compile(r"（\s*（([^（）]*)）\s*）")
 BRACKET_GROUP_SEPARATOR_RE = re.compile(r"）[、，；]+（")
 LEADING_PUNCTUATION_RE = re.compile(r"^[，；：。！？、]+")
-TRAILING_SEPARATOR_RE = re.compile(r"[，；：、]+$")
+TRAILING_SEPARATOR_RE = re.compile(r"[，；：。！？、]+$")
 PUNCTUATION_RUN_RE = re.compile(r"[，；：。！？、]{2,}")
 HAN_OCR_NOISE_SYMBOL_RE = re.compile(r"(?<=[\u3400-\u9FFF])[%％](?=[\u3400-\u9FFF])")
+SHORT_TRAILING_PUNCTUATION_MAX_CHARS = 4
 TUITION_RE = re.compile(
     r"学费[^，；。！？、（）\d]{0,12}?(\d+(?:\.\d+)?)\s*(万元|万|元)"
 )
@@ -225,7 +226,7 @@ def _to_text(value: Any) -> str:
     if isinstance(value, float) and math.isnan(value):
         return ""
     try:
-        if pd.isna(value):
+        if value != value:
             return ""
     except (TypeError, ValueError):
         pass
@@ -241,9 +242,10 @@ def _is_invalid_remark(value: Any) -> bool:
     return _to_text(value).strip() in INVALID_REMARKS
 
 
-def find_remark_column(df: pd.DataFrame) -> str:
+def find_remark_column(source: Any) -> str:
     """按约定列名自动寻找备注列，找不到时抛出清晰错误。"""
-    normalized = {str(column).strip(): str(column) for column in df.columns}
+    columns = source.columns if hasattr(source, "columns") else source
+    normalized = {str(column).strip(): str(column) for column in columns if column is not None}
     for candidate in REMARK_COLUMN_NAMES:
         if candidate in normalized:
             return normalized[candidate]
@@ -328,13 +330,40 @@ def _collapse_punctuation_run(match: re.Match[str]) -> str:
     return run[0]
 
 
+def _trailing_meaningful_length(text: str) -> int:
+    segments = [segment for segment in re.split(r"[，；：。！？、（）\s]+", text.strip()) if segment]
+    if not segments:
+        return 0
+    return sum(1 for char in segments[-1] if char.isalnum())
+
+
+def _should_strip_short_trailing_punctuation(text_before_punctuation: str) -> bool:
+    length = _trailing_meaningful_length(text_before_punctuation)
+    return 0 < length <= SHORT_TRAILING_PUNCTUATION_MAX_CHARS
+
+
+def _strip_short_punctuation_before_closing_bracket(text: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        content = match.group(1)
+        return f"{content}）" if _should_strip_short_trailing_punctuation(content) else match.group(0)
+
+    return re.sub(r"([^（）]*?)[，；：。！？、]+）", replace, text)
+
+
+def _strip_short_trailing_punctuation(text: str) -> str:
+    match = TRAILING_SEPARATOR_RE.search(text)
+    if not match:
+        return text
+    return text[: match.start()] if _should_strip_short_trailing_punctuation(text[: match.start()]) else text
+
+
 def _cleanup_punctuation_artifacts(text: str) -> str:
     current = PUNCTUATION_RUN_RE.sub(_collapse_punctuation_run, text)
     current = BRACKET_GROUP_SEPARATOR_RE.sub("）（", current)
     current = re.sub(r"（[，；：。！？、]+", "（", current)
-    current = re.sub(r"[，；：。！？、]+）", "）", current)
+    current = _strip_short_punctuation_before_closing_bracket(current)
     current = LEADING_PUNCTUATION_RE.sub("", current)
-    current = TRAILING_SEPARATOR_RE.sub("", current)
+    current = _strip_short_trailing_punctuation(current)
     return current.strip()
 
 
@@ -390,27 +419,28 @@ def _remove_delimited_duplicates(text: str) -> tuple[str, list[str]]:
 def _remove_continuous_duplicates(text: str) -> tuple[str, list[str]]:
     current = text
     phrases: list[str] = []
-    changed_in_pass = True
+    start = 0
 
-    while changed_in_pass:
-        changed_in_pass = False
-        for start in range(len(current)):
-            max_length = min(12, (len(current) - start) // 2)
-            for length in range(max_length, 1, -1):
-                phrase = current[start : start + length]
-                repeated = current[start + length : start + length * 2]
-                if (
-                    phrase != repeated
-                    or phrase.isdigit()
-                    or not PHRASE_CHAR_RE.fullmatch(phrase)
-                ):
-                    continue
-                current = current[: start + length] + current[start + length * 2 :]
-                phrases.append(phrase)
-                changed_in_pass = True
-                break
-            if changed_in_pass:
-                break
+    while start < len(current):
+        matched = False
+        max_length = min(12, (len(current) - start) // 2)
+        for length in range(max_length, 1, -1):
+            phrase = current[start : start + length]
+            repeated = current[start + length : start + length * 2]
+            if (
+                phrase != repeated
+                or phrase.isdigit()
+                or not PHRASE_CHAR_RE.fullmatch(phrase)
+            ):
+                continue
+            current = current[: start + length] + current[start + length * 2 :]
+            phrases.append(phrase)
+            matched = True
+            # 删除后只需回看最大短语长度，避免每次都从字符串开头重新扫描。
+            start = max(0, start - 12)
+            break
+        if not matched:
+            start += 1
 
     return current, _unique(phrases)
 
@@ -605,9 +635,9 @@ def check_format_issues(text: str) -> tuple[str, list[str], bool]:
 
     before_extra_punctuation = current
     current = re.sub(r"（[，；：。！？、]+", "（", current)
-    current = re.sub(r"[，；：。！？、]+）", "）", current)
+    current = _strip_short_punctuation_before_closing_bracket(current)
     current = LEADING_PUNCTUATION_RE.sub("", current)
-    current = TRAILING_SEPARATOR_RE.sub("", current)
+    current = _strip_short_trailing_punctuation(current)
     if current != before_extra_punctuation:
         issues.append("存在多余标点符号")
         changed = True
@@ -678,6 +708,22 @@ def _copy_header_style(source_cell: Any, target_cell: Any) -> None:
         target_cell.alignment = copy(source_cell.alignment)
 
 
+def apply_uniform_excel_export_formatting(workbook: Any) -> None:
+    """统一导出列宽与水平对齐，并保留单元格已有的其他对齐属性。"""
+    for worksheet in workbook.worksheets:
+        for column_index in range(1, worksheet.max_column + 1):
+            column_letter = get_column_letter(column_index)
+            worksheet.column_dimensions[column_letter].width = EXCEL_EXPORT_COLUMN_WIDTH
+
+        # 仅遍历已实例化单元格，避免稀疏工作表因整块遍历而急剧膨胀内存和文件体积。
+        for cell in list(worksheet._cells.values()):
+            alignment = copy(cell.alignment)
+            alignment.horizontal = "left"
+            if alignment.vertical is None:
+                alignment.vertical = "center"
+            cell.alignment = alignment
+
+
 def process_excel(input_path: str | Path) -> Path:
     """检查工作簿中所有包含标准备注列的工作表，并输出新文件。"""
     path = Path(input_path).expanduser().resolve()
@@ -687,6 +733,10 @@ def process_excel(input_path: str | Path) -> Path:
         raise ValueError("仅支持 .xlsx 文件")
 
     output_path = path.with_name(f"{path.stem}_备注检查结果.xlsx")
+    output_index = 1
+    while output_path.exists():
+        output_path = path.with_name(f"{path.stem}_备注检查结果_{output_index}.xlsx")
+        output_index += 1
     workbook = load_workbook(path)
     yellow_fill = PatternFill(fill_type="solid", fgColor="FFF2CC")
 
@@ -697,23 +747,28 @@ def process_excel(input_path: str | Path) -> Path:
     processed_sheets = 0
 
     for sheet_name in workbook.sheetnames:
-        dataframe = pd.read_excel(
-            path,
-            sheet_name=sheet_name,
-            dtype=object,
-            engine="openpyxl",
-        )
+        worksheet = workbook[sheet_name]
+        existing_cells = list(worksheet._cells.values())
+        headers = [cell.value for cell in worksheet[1]]
         try:
-            remark_column = find_remark_column(dataframe)
+            remark_column = find_remark_column(headers)
         except ValueError:
             continue
 
-        worksheet = workbook[sheet_name]
         processed_sheets += 1
-        total_rows += len(dataframe)
+        last_value_row = max(
+            (cell.row for cell in existing_cells if cell.value is not None),
+            default=1,
+        )
+        data_row_count = max(0, last_value_row - 1)
+        total_rows += data_row_count
 
-        remark_col_index = list(dataframe.columns).index(remark_column) + 1
-        last_data_col = max(len(dataframe.columns), remark_col_index)
+        remark_col_index = next(
+            index
+            for index, value in enumerate(headers, start=1)
+            if str(value).strip() == remark_column
+        )
+        last_data_col = max(worksheet.max_column, remark_col_index)
         issue_col_index = last_data_col + 1
         fixed_col_index = last_data_col + 2
 
@@ -723,7 +778,20 @@ def process_excel(input_path: str | Path) -> Path:
         _copy_header_style(source_header, issue_header)
         _copy_header_style(source_header, fixed_header)
 
-        for row_offset, value in enumerate(dataframe[remark_column].tolist(), start=2):
+        remark_source_cells = sorted(
+            (
+                cell
+                for cell in existing_cells
+                if cell.row >= 2
+                and cell.column == remark_col_index
+                and cell.value is not None
+            ),
+            key=lambda cell: cell.row,
+        )
+
+        for source_cell in remark_source_cells:
+            row_offset = source_cell.row
+            value = source_cell.value
             result = process_remark(value)
             issue_cell = worksheet.cell(row=row_offset, column=issue_col_index, value=result["issues"])
             fixed_cell = worksheet.cell(row=row_offset, column=fixed_col_index, value=result["fixed"])
@@ -746,6 +814,7 @@ def process_excel(input_path: str | Path) -> Path:
         expected = "、".join(REMARK_COLUMN_NAMES)
         raise ValueError(f"所有工作表中均未找到备注列，支持的列名：{expected}")
 
+    apply_uniform_excel_export_formatting(workbook)
     workbook.save(output_path)
     print(f"总行数：{total_rows}")
     print(f"有备注行数：{remark_rows}")

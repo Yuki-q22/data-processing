@@ -3,6 +3,9 @@ import type { EditableFieldMappingItem } from '../types/mapping'
 import type { PlanRecord, ProcessedRecord, ScoreRecord } from '../types/record'
 
 type PreviewStore = {
+  inputRevision: number
+  processedRevision?: number
+
   scoreMappings: EditableFieldMappingItem[]
   planMappings: EditableFieldMappingItem[]
 
@@ -36,10 +39,14 @@ type PreviewStore = {
   clearManualMatchSelection: (sourceRowId: string) => void
   resetManualMatchSelections: () => void
 
+  invalidateProcessing: () => void
+
   resetPreview: () => void
 }
 
 export const usePreviewStore = create<PreviewStore>((set) => ({
+  inputRevision: 0,
+  processedRevision: undefined,
   scoreMappings: [],
   planMappings: [],
   scoreRecords: [],
@@ -69,7 +76,12 @@ export const usePreviewStore = create<PreviewStore>((set) => ({
 
   setScoreRecords: (items) => set({ scoreRecords: items }),
   setPlanRecords: (items) => set({ planRecords: items }),
-  setProcessedRecords: (items) => set({ processedRecords: items }),
+  setProcessedRecords: (items) =>
+    set((state) => ({
+      processedRecords: items,
+      // 处理结果必须和生成时的输入版本绑定，防止上游变化后导出旧数据。
+      processedRevision: state.inputRevision,
+    })),
 
   setManualMatchSelection: (sourceRowId, planRowId) =>
     set((state) => ({
@@ -88,13 +100,27 @@ export const usePreviewStore = create<PreviewStore>((set) => ({
 
   resetManualMatchSelections: () => set({ manualMatchSelections: {} }),
 
-  resetPreview: () =>
-    set({
+  invalidateProcessing: () =>
+    set((state) => ({
+      inputRevision: state.inputRevision + 1,
+      processedRevision: undefined,
       scoreMappings: [],
       planMappings: [],
       scoreRecords: [],
       planRecords: [],
       processedRecords: [],
       manualMatchSelections: {},
-    }),
+    })),
+
+  resetPreview: () =>
+    set((state) => ({
+      inputRevision: state.inputRevision + 1,
+      processedRevision: undefined,
+      scoreMappings: [],
+      planMappings: [],
+      scoreRecords: [],
+      planRecords: [],
+      processedRecords: [],
+      manualMatchSelections: {},
+    })),
 }))

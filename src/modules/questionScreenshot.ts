@@ -16,6 +16,7 @@
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import JSZip from 'jszip'
+import { validateUploadFile } from './uploadValidation'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc
 
@@ -890,9 +891,7 @@ export async function loadQuestionScreenshotProject(
   file: File,
   partialOptions?: Partial<QuestionScreenshotOptions>,
 ): Promise<QuestionScreenshotProject> {
-  if (!file.name.toLowerCase().endsWith('.pdf')) {
-    throw new Error('当前工具只支持 PDF。请先把 Word / WPS / DOCX 手动另存为 PDF 后再上传。')
-  }
+  await validateUploadFile(file, { allowedKinds: ['pdf'] })
 
   const options = mergeQuestionScreenshotOptions(partialOptions)
   const buffer = await file.arrayBuffer()

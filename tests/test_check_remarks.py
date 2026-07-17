@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, PatternFill
+from openpyxl.utils import get_column_letter
 
 from check_remarks import process_excel, process_remark
 
@@ -143,6 +145,24 @@ class ProcessRemarkTests(unittest.TestCase):
         self.assertIn("存在多余标点符号", result["issues"])
         self.assertEqual(result["fixed"], "不招色盲；详见招生章程。不招色弱")
 
+    def test_long_sentence_trailing_punctuation_is_preserved(self) -> None:
+        result = process_remark("录取规则详见学校招生章程；")
+        self.assertNotIn("存在多余标点符号", result["issues"])
+        self.assertEqual(result["fixed"], "")
+
+        bracket = process_remark("（具体要求详见学校招生章程。）")
+        self.assertNotIn("存在多余标点符号", bracket["issues"])
+        self.assertEqual(bracket["fixed"], "")
+
+    def test_short_phrase_trailing_punctuation_is_flagged(self) -> None:
+        result = process_remark("师范类。")
+        self.assertIn("存在多余标点符号", result["issues"])
+        self.assertEqual(result["fixed"], "师范类")
+
+        bracket = process_remark("（师范类。）")
+        self.assertIn("存在多余标点符号", bracket["issues"])
+        self.assertEqual(bracket["fixed"], "（师范类）")
+
     def test_uncertain_issues_are_not_force_fixed(self) -> None:
         bracket = process_remark("只招英语考生（口试成绩合格")
         self.assertEqual(bracket["issues"], "括号疑似不成对，请人工检查")
@@ -158,6 +178,62 @@ class ProcessRemarkTests(unittest.TestCase):
 
 
 class ProcessExcelTests(unittest.TestCase):
+    def test_missing_file_and_wrong_extension_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            missing_path = Path(temp_dir) / "missing.xlsx"
+            wrong_extension = Path(temp_dir) / "plan.xls"
+            wrong_extension.write_bytes(b"not-an-xlsx")
+
+            with self.assertRaisesRegex(FileNotFoundError, "输入文件不存在"):
+                process_excel(missing_path)
+            with self.assertRaisesRegex(ValueError, "仅支持 .xlsx 文件"):
+                process_excel(wrong_extension)
+
+    def test_workbook_without_remark_column_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "无备注列.xlsx"
+            workbook = Workbook()
+            workbook.active.append(["专业", "学校"])
+            workbook.active.append(["计算机", "测试大学"])
+            workbook.save(input_path)
+
+            with self.assertRaisesRegex(ValueError, "所有工作表中均未找到备注列"):
+                process_excel(input_path)
+
+    def test_sparse_workbook_does_not_expand_empty_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "稀疏计划.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.append(["备注"])
+            sheet["A100000"].fill = PatternFill(fill_type="solid", fgColor="FFFFFF")
+            workbook.save(input_path)
+
+            output_path = process_excel(input_path)
+            result_book = load_workbook(output_path)
+            result_sheet = result_book.active
+
+            self.assertLess(len(result_sheet._cells), 20)
+            self.assertEqual(result_sheet["B1"].value, "备注问题标注")
+            self.assertEqual(result_sheet["C1"].value, "修改后备注")
+
+    def test_existing_output_file_is_not_overwritten(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "招生计划.xlsx"
+            existing_output = Path(temp_dir) / "招生计划_备注检查结果.xlsx"
+
+            workbook = Workbook()
+            workbook.active.append(["备注"])
+            workbook.active.append(["只招英语语种考生"])
+            workbook.save(input_path)
+            existing_output.write_bytes(b"existing-result")
+
+            output_path = process_excel(input_path)
+
+            self.assertEqual(existing_output.read_bytes(), b"existing-result")
+            self.assertEqual(output_path.name, "招生计划_备注检查结果_1.xlsx")
+            self.assertTrue(output_path.exists())
+
     def test_workbook_is_copied_and_result_cells_are_highlighted(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "招生计划.xlsx"
@@ -167,7 +243,16 @@ class ProcessExcelTests(unittest.TestCase):
             sheet.append(["专业", "备注"])
             sheet.append(["计算机", "不招色盲。不招色盲。"])
             sheet.append(["英语", "只招英语语种考生"])
-            workbook.create_sheet("说明")["A1"] = "原工作表应保留"
+            sheet["A1"].alignment = Alignment(
+                horizontal="center",
+                vertical="top",
+                wrap_text=True,
+                shrink_to_fit=True,
+                indent=2,
+            )
+            description_sheet = workbook.create_sheet("说明")
+            description_sheet["A1"] = "原工作表应保留"
+            description_sheet["A1"].alignment = Alignment(horizontal="center")
             workbook.save(input_path)
 
             output_path = process_excel(input_path)
@@ -184,6 +269,26 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(result_sheet["C2"].fill.fgColor.rgb, "00FFF2CC")
             self.assertIsNone(result_sheet["C3"].value)
             self.assertIsNone(result_sheet["D3"].value)
+
+            for result_sheet in result_book.worksheets:
+                for column_index in range(1, result_sheet.max_column + 1):
+                    column_letter = get_column_letter(column_index)
+                    self.assertEqual(
+                        result_sheet.column_dimensions[column_letter].width,
+                        12.75,
+                    )
+
+                for row in result_sheet.iter_rows():
+                    for cell in row:
+                        self.assertEqual(cell.alignment.horizontal, "left")
+                        self.assertIsNotNone(cell.alignment.vertical)
+
+            preserved_alignment = result_book["计划"]["A1"].alignment
+            self.assertEqual(preserved_alignment.vertical, "top")
+            self.assertTrue(preserved_alignment.wrap_text)
+            self.assertTrue(preserved_alignment.shrink_to_fit)
+            self.assertEqual(preserved_alignment.indent, 2)
+            self.assertEqual(result_book["说明"]["A1"].alignment.vertical, "center")
 
 
 if __name__ == "__main__":

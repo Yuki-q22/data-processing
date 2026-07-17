@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
+import { writeXlsxBufferWithUniformFormatting } from "../utils/excelExport";
 import { resolveControlLine } from "./controlLine";
 import { validateSchoolAndMajorComboDetailed } from "./ruleCenterValidation";
 
@@ -654,7 +655,7 @@ export async function exportNormalCollegeScoreWorkbook(
     ws.getColumn(col).width = width;
   });
 
-  const buffer = await workbook.xlsx.writeBuffer();
+  const buffer = await writeXlsxBufferWithUniformFormatting(workbook);
   return new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });

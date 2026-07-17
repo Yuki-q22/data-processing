@@ -1,4 +1,4 @@
-import type { FieldMappingItem } from '../types/mapping'
+import type { EditableFieldMappingItem, FieldMappingItem } from '../types/mapping'
 
 function normalizeText(value: string) {
   return value.replace(/\s/g, '').trim()
@@ -6,6 +6,14 @@ function normalizeText(value: string) {
 
 function isCodeField(value: string) {
   return value.includes('代码')
+}
+
+export function haveSameMappingSources(
+  mappings: EditableFieldMappingItem[],
+  sourceFields: string[],
+) {
+  if (mappings.length !== sourceFields.length) return false
+  return sourceFields.every((sourceField, index) => mappings[index]?.sourceField === sourceField)
 }
 
 export function matchFields(

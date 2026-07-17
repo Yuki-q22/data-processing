@@ -1,7 +1,9 @@
 import ExcelJS from 'exceljs'
 import * as XLSX from 'xlsx'
 import * as pdfjsLib from 'pdfjs-dist'
+import { writeXlsxBufferWithUniformFormatting } from '../utils/excelExport'
 import { parseSegmentationTableRows, parseSegmentationText as parseSegmentationPlainText, type SegmentationParsedRow } from './segmentationParsers'
+import { validateUploadFile } from './uploadValidation'
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc
@@ -1186,7 +1188,7 @@ export async function processSegmentationText(
     parsed.rows.length,
   )
 
-  const outBuffer = await workbook.xlsx.writeBuffer()
+  const outBuffer = await writeXlsxBufferWithUniformFormatting(workbook)
   return {
     blob: new Blob([outBuffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1199,6 +1201,7 @@ export async function processSegmentationWorkbook(
   file: File,
   meta?: SegmentationMeta,
 ): Promise<SegmentationProcessResult> {
+  await validateUploadFile(file, { allowedKinds: ['xlsx', 'xls', 'csv', 'pdf'] })
   const buffer = await file.arrayBuffer()
   const isPdf = shouldTreatAsPdf(file, buffer)
   const effectiveMeta = withFileInferredMeta(file, meta)
@@ -1213,7 +1216,7 @@ export async function processSegmentationWorkbook(
   )
 
   const exportWorkbook = buildPlainExportWorkbook(loaded.workbook, effectiveMeta)
-  const outBuffer = await exportWorkbook.xlsx.writeBuffer()
+  const outBuffer = await writeXlsxBufferWithUniformFormatting(exportWorkbook)
   return {
     blob: new Blob([outBuffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

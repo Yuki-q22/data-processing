@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { UploadedWorkbook } from '../types/workbook'
+import { releaseWorkbookInWorker } from '../utils/excelWorkerClient'
 
 type TaskStore = {
   taskName: string
@@ -38,7 +39,7 @@ type TaskStore = {
   resetTask: () => void
 }
 
-export const useTaskStore = create<TaskStore>((set) => ({
+export const useTaskStore = create<TaskStore>((set, get) => ({
   taskName: '专业分处理任务',
   year: '2025',
   defaultDataSource: '销售',
@@ -60,6 +61,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
       const firstSheet = workbook?.sheets?.[0]?.name
 
       if (type === 'template') {
+        if (state.templateWorkbook?.workbook !== workbook?.workbook) {
+          releaseWorkbookInWorker(state.templateWorkbook?.workbook)
+        }
         return {
           ...state,
           templateWorkbook: workbook,
@@ -68,6 +72,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
       }
 
       if (type === 'score') {
+        if (state.scoreWorkbook?.workbook !== workbook?.workbook) {
+          releaseWorkbookInWorker(state.scoreWorkbook?.workbook)
+        }
         return {
           ...state,
           scoreWorkbook: workbook,
@@ -75,6 +82,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
         }
       }
 
+      if (state.planWorkbook?.workbook !== workbook?.workbook) {
+        releaseWorkbookInWorker(state.planWorkbook?.workbook)
+      }
       return {
         ...state,
         planWorkbook: workbook,
@@ -89,7 +99,11 @@ export const useTaskStore = create<TaskStore>((set) => ({
       return { ...state, planSheetName: sheetName }
     }),
 
-  resetTask: () =>
+  resetTask: () => {
+    const state = get()
+    releaseWorkbookInWorker(state.templateWorkbook?.workbook)
+    releaseWorkbookInWorker(state.scoreWorkbook?.workbook)
+    releaseWorkbookInWorker(state.planWorkbook?.workbook)
     set({
       taskName: '专业分处理任务',
       year: '2025',
@@ -102,5 +116,6 @@ export const useTaskStore = create<TaskStore>((set) => ({
       templateSheetName: undefined,
       scoreSheetName: undefined,
       planSheetName: undefined,
-    }),
+    })
+  },
 }))

@@ -1,7 +1,9 @@
 import * as XLSX from 'xlsx'
 import type { UploadedWorkbook, SheetMeta } from '../types/workbook'
+import { validateUploadFile } from '../modules/uploadValidation'
 
 export async function parseWorkbook(file: File): Promise<UploadedWorkbook> {
+  await validateUploadFile(file, { allowedKinds: ['xlsx', 'xls'] })
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array' })
 

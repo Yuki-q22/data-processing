@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
+import { writeXlsxBufferWithUniformFormatting } from '../utils/excelExport'
 import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
 
 export type ArtCollegeScoreOutputRow = {
@@ -390,7 +391,7 @@ export async function exportArtCollegeScoreWorkbook(
     ws.getColumn(col).width = width
   })
 
-  const buffer = await workbook.xlsx.writeBuffer()
+  const buffer = await writeXlsxBufferWithUniformFormatting(workbook)
   return new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })

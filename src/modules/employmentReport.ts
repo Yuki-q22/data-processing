@@ -14,6 +14,17 @@ export type StaticImagesFromPageResult = {
   images: ExtractedImageItem[]
 }
 
+type FetchStaticImagesOptions = {
+  signal?: AbortSignal
+}
+
+const FETCH_TIMEOUT_MS = 20_000
+const MAX_PAGE_IMAGES = 200
+const MAX_PAGE_HTML_BYTES = 10 * 1024 * 1024
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024
+const MAX_TOTAL_IMAGE_BYTES = 200 * 1024 * 1024
+const IMAGE_FETCH_CONCURRENCY = 6
+
 function getAbsoluteUrl(src: string, baseUrl: string) {
   try {
     return new URL(src, baseUrl).toString()
@@ -48,10 +59,32 @@ function normalizePageUrl(url: string) {
   }
 }
 
-async function fetchReadableResource(url: string, targetName: string) {
+async function fetchReadableResource(
+  url: string,
+  targetName: string,
+  parentSignal?: AbortSignal,
+) {
+  const controller = new AbortController()
+  const abortFromParent = () => controller.abort(parentSignal?.reason)
+  if (parentSignal?.aborted) {
+    controller.abort(parentSignal.reason)
+  } else {
+    parentSignal?.addEventListener('abort', abortFromParent, { once: true })
+  }
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  const cleanup = () => {
+    clearTimeout(timeoutId)
+    parentSignal?.removeEventListener('abort', abortFromParent)
+  }
+
   try {
-    return await fetch(url)
+    const response = await fetch(url, { signal: controller.signal })
+    return { response, signal: controller.signal, cleanup }
   } catch (error) {
+    cleanup()
+    if (controller.signal.aborted) {
+      throw new Error(parentSignal?.aborted ? `${targetName}抓取已取消` : `${targetName}抓取超时`)
+    }
     const message = error instanceof Error ? error.message : String(error)
 
     if (/failed to fetch|networkerror|load failed/i.test(message)) {
@@ -62,6 +95,86 @@ async function fetchReadableResource(url: string, targetName: string) {
 
     throw error
   }
+}
+
+async function readResponseBlobWithinLimit(
+  resource: Awaited<ReturnType<typeof fetchReadableResource>>,
+  maxBytes: number,
+  targetName: string,
+  parentSignal?: AbortSignal,
+) {
+  const { response, signal } = resource
+  const declaredBytes = Number(response.headers.get('content-length') || 0)
+  if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+    throw new Error(`${targetName}超过 ${Math.round(maxBytes / 1024 / 1024)} MB`)
+  }
+
+  if (!response.body) {
+    const blob = await response.blob()
+    if (blob.size > maxBytes) {
+      throw new Error(`${targetName}超过 ${Math.round(maxBytes / 1024 / 1024)} MB`)
+    }
+    return blob
+  }
+
+  const reader = response.body.getReader()
+  const chunks: ArrayBuffer[] = []
+  let totalBytes = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+
+      totalBytes += value.byteLength
+      if (totalBytes > maxBytes) {
+        await reader.cancel()
+        throw new Error(`${targetName}超过 ${Math.round(maxBytes / 1024 / 1024)} MB`)
+      }
+
+      const chunk = new Uint8Array(value.byteLength)
+      chunk.set(value)
+      chunks.push(chunk.buffer)
+    }
+  } catch (error) {
+    if (signal.aborted) {
+      throw new Error(parentSignal?.aborted ? `${targetName}抓取已取消` : `${targetName}抓取超时`)
+    }
+    throw error
+  } finally {
+    reader.releaseLock()
+  }
+
+  return new Blob(chunks, {
+    type: response.headers.get('content-type') || '',
+  })
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results = new Array<PromiseSettledResult<R>>(items.length)
+  let nextIndex = 0
+
+  const run = async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      try {
+        results[index] = { status: 'fulfilled', value: await mapper(items[index], index) }
+      } catch (error) {
+        results[index] = { status: 'rejected', reason: error }
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => run()),
+  )
+  return results
 }
 
 async function getImageSize(objectUrl: string): Promise<{ width: number; height: number }> {
@@ -159,37 +272,77 @@ export function toSafePdfFilename(pageTitle: string) {
   return `${safeTitle || '就业质量报告'}.pdf`
 }
 
-export async function fetchStaticImagesFromPage(url: string): Promise<StaticImagesFromPageResult> {
+export async function fetchStaticImagesFromPage(
+  url: string,
+  options: FetchStaticImagesOptions = {},
+): Promise<StaticImagesFromPageResult> {
   const pageUrl = normalizePageUrl(url)
-  const htmlResp = await fetchReadableResource(pageUrl, '页面')
-  if (!htmlResp.ok) {
-    throw new Error(`页面获取失败：HTTP ${htmlResp.status}`)
+  const htmlResource = await fetchReadableResource(pageUrl, '页面', options.signal)
+  let html: string
+  try {
+    if (!htmlResource.response.ok) {
+      throw new Error(`页面获取失败：HTTP ${htmlResource.response.status}`)
+    }
+    const htmlBlob = await readResponseBlobWithinLimit(
+      htmlResource,
+      MAX_PAGE_HTML_BYTES,
+      '页面内容',
+      options.signal,
+    )
+    html = await htmlBlob.text()
+  } finally {
+    htmlResource.cleanup()
   }
 
-  const html = await htmlResp.text()
   const pageTitle = extractPageTitleFromHtml(html)
-  const imageUrls = extractStaticImageUrlsFromHtml(html, pageUrl)
+  const imageUrls = extractStaticImageUrlsFromHtml(html, pageUrl).slice(0, MAX_PAGE_IMAGES)
 
   if (!imageUrls.length) {
     return { pageTitle, images: [] }
   }
 
-  const settled = await Promise.allSettled(
-    imageUrls.map(async (imageUrl, index) => {
-      const resp = await fetchReadableResource(imageUrl, '图片')
-      if (!resp.ok) {
-        throw new Error(`图片获取失败：${imageUrl}`)
+  let totalImageBytes = 0
+  const settled = await mapWithConcurrency(
+    imageUrls,
+    IMAGE_FETCH_CONCURRENCY,
+    async (imageUrl, index) => {
+      if (options.signal?.aborted) throw new Error('图片抓取已取消')
+
+      const imageResource = await fetchReadableResource(imageUrl, '图片', options.signal)
+      let blob: Blob
+      try {
+        const resp = imageResource.response
+        if (!resp.ok) {
+          throw new Error(`图片获取失败：${imageUrl}`)
+        }
+
+        const contentType = resp.headers.get('content-type') || ''
+        if (contentType && !contentType.toLowerCase().startsWith('image/')) {
+          throw new Error(`响应内容不是图片：${imageUrl}`)
+        }
+        blob = await readResponseBlobWithinLimit(
+          imageResource,
+          MAX_IMAGE_BYTES,
+          '图片',
+          options.signal,
+        )
+      } finally {
+        imageResource.cleanup()
       }
 
-      const blob = await resp.blob()
       if (!(blob instanceof Blob) || blob.size === 0) {
         throw new Error(`图片文件无效：${imageUrl}`)
+      }
+      totalImageBytes += blob.size
+      if (totalImageBytes > MAX_TOTAL_IMAGE_BYTES) {
+        throw new Error('图片总大小超过 200 MB，请减少页面图片数量后重试')
       }
 
       const objectUrl = URL.createObjectURL(blob)
 
       try {
         const size = await getImageSize(objectUrl)
+        if (options.signal?.aborted) throw new Error('图片抓取已取消')
 
         return {
           id: `img_${index + 1}`,
@@ -203,7 +356,7 @@ export async function fetchStaticImagesFromPage(url: string): Promise<StaticImag
         URL.revokeObjectURL(objectUrl)
         throw error
       }
-    })
+    },
   )
 
   const images = settled

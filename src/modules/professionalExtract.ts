@@ -1,4 +1,6 @@
 import ExcelJS from 'exceljs'
+import { writeXlsxBufferWithUniformFormatting } from '../utils/excelExport'
+import { validateUploadFile } from './uploadValidation'
 
 type MatchItem = {
   start: number
@@ -158,6 +160,7 @@ function getActiveWorksheet(workbook: ExcelJS.Workbook, fileLabel: string) {
 }
 
 async function loadWorkbook(file: File) {
+  await validateUploadFile(file, { allowedKinds: ['xlsx'] })
   const workbook = new ExcelJS.Workbook()
   const buffer = await file.arrayBuffer()
   await workbook.xlsx.load(buffer)
@@ -300,7 +303,7 @@ export async function processProfessionalExtract(params: {
     status: '正在保存结果...',
   })
 
-  const buffer = await sourceWorkbook.xlsx.writeBuffer()
+  const buffer = await writeXlsxBufferWithUniformFormatting(sourceWorkbook)
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })

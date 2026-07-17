@@ -31,8 +31,7 @@ import {
 import {
   onValue,
   ref,
-  remove as dbRemove,
-  set as dbSet,
+  serverTimestamp,
   update as dbUpdate,
 } from 'firebase/database'
 import { auth, db, firebaseConfigErrorMessage } from '../lib/firebase'
@@ -41,6 +40,7 @@ import {
   DEFAULT_REMARK_TYPE_RULES,
 } from '../constants/remarkTypeRules'
 import { buildMajorComboForRuleCenter } from '../modules/ruleCenterValidation'
+import { validateUploadFile } from '../modules/uploadValidation'
 import {
   DEFAULT_CONTROL_LINE_RULES,
   DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
@@ -190,6 +190,7 @@ function getDefaultExclusionKeywords(): string[] {
 }
 
 async function readWorkbook(file: File) {
+  await validateUploadFile(file, { allowedKinds: ['xlsx', 'xls'] })
   const buffer = await file.arrayBuffer()
   return XLSX.read(buffer, { type: 'array' })
 }
@@ -554,11 +555,23 @@ function getFirebaseDb() {
   return db
 }
 
-async function updateMetaVersion() {
-  await dbUpdate(ref(getFirebaseDb(), 'rule_center/meta'), {
-    version: Date.now(),
-    updatedAt: Date.now(),
+async function updateRuleCenterAtomically(updates: Record<string, unknown>) {
+  const timestamp = serverTimestamp()
+  await dbUpdate(ref(getFirebaseDb()), {
+    ...updates,
+    'rule_center/meta/version': timestamp,
+    'rule_center/meta/updatedAt': timestamp,
   })
+}
+
+async function updateRuleCenterItemAtomically(
+  itemPath: string,
+  patch: Record<string, unknown>,
+) {
+  const updates = Object.fromEntries(
+    Object.entries(patch).map(([key, value]) => [`${itemPath}/${key}`, value]),
+  )
+  await updateRuleCenterAtomically(updates)
 }
 
 async function ensureAdmin(uid?: string, isAdminUser?: boolean) {
@@ -656,6 +669,21 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
         const exclusionRef = ref(getFirebaseDb(), 'rule_center/exclusion_keywords')
         const provinceCategoryBatchRef = ref(getFirebaseDb(), 'rule_center/province_category_batch')
         const controlLineRef = ref(getFirebaseDb(), 'rule_center/control_line')
+        const pendingInitialLoads = new Set([
+          'admin',
+          'school',
+          'major',
+          'remark',
+          'exclusion',
+          'provinceCategoryBatch',
+          'controlLine',
+        ])
+        const markInitialLoadComplete = (key: string) => {
+          pendingInitialLoads.delete(key)
+          if (pendingInitialLoads.size === 0 && getState().currentUid === user.uid) {
+            setState({ syncing: false })
+          }
+        }
 
         const offAdmin = onValue(
           adminRef,
@@ -663,12 +691,13 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
             setState({
               isAdminUser: snapshot.val() === true,
             })
+            markInitialLoadComplete('admin')
           },
           (error) => {
             setState({
               authError: error.message,
-              syncing: false,
             })
+            markInitialLoadComplete('admin')
           }
         )
 
@@ -682,14 +711,14 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
               schoolRuleFileName: validSchoolNames.length
                 ? CLOUD_RULE_FILE_NAME
                 : undefined,
-              syncing: false,
             })
+            markInitialLoadComplete('school')
           },
           (error) => {
             setState({
               authError: error.message,
-              syncing: false,
             })
+            markInitialLoadComplete('school')
           }
         )
 
@@ -703,14 +732,14 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
               majorRuleFileName: validMajorCombos.length
                 ? CLOUD_RULE_FILE_NAME
                 : undefined,
-              syncing: false,
             })
+            markInitialLoadComplete('major')
           },
           (error) => {
             setState({
               authError: error.message,
-              syncing: false,
             })
+            markInitialLoadComplete('major')
           }
         )
 
@@ -724,14 +753,14 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
               remarkRuleFileName: remarkTypeRules.length
                 ? CLOUD_RULE_FILE_NAME
                 : '内置默认规则',
-              syncing: false,
             })
+            markInitialLoadComplete('remark')
           },
           (error) => {
             setState({
               authError: error.message,
-              syncing: false,
             })
+            markInitialLoadComplete('remark')
           }
         )
 
@@ -740,14 +769,14 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
           (snapshot) => {
             setState({
               exclusionKeywords: mapCloudExclusionKeywords(snapshot.val()),
-              syncing: false,
             })
+            markInitialLoadComplete('exclusion')
           },
           (error) => {
             setState({
               authError: error.message,
-              syncing: false,
             })
+            markInitialLoadComplete('exclusion')
           }
         )
 
@@ -763,14 +792,14 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
                 ? CLOUD_RULE_FILE_NAME
                 : '内置默认规则',
               ...deriveProvinceRuleMaps(provinceCategoryBatchRules),
-              syncing: false,
             })
+            markInitialLoadComplete('provinceCategoryBatch')
           },
           (error) => {
             setState({
               authError: error.message,
-              syncing: false,
             })
+            markInitialLoadComplete('provinceCategoryBatch')
           }
         )
 
@@ -784,14 +813,14 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
               controlLineRuleFileName: controlLineRules.length
                 ? CLOUD_RULE_FILE_NAME
                 : '内置默认规则',
-              syncing: false,
             })
+            markInitialLoadComplete('controlLine')
           },
           (error) => {
             setState({
               authError: error.message,
-              syncing: false,
             })
+            markInitialLoadComplete('controlLine')
           }
         )
 
@@ -862,12 +891,9 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       throw new Error('学校规则文件中没有有效学校名称')
     }
 
-    await dbSet(
-      ref(getFirebaseDb(), 'rule_center/school_name'),
-      toCloudPayloadFromSimpleValues(values, currentUid!)
-    )
-
-    await updateMetaVersion()
+    await updateRuleCenterAtomically({
+      'rule_center/school_name': toCloudPayloadFromSimpleValues(values, currentUid!),
+    })
   },
 
   importMajorRuleFile: async (file: File) => {
@@ -914,12 +940,9 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       throw new Error('专业规则文件中没有有效招生专业组合')
     }
 
-    await dbSet(
-      ref(getFirebaseDb(), 'rule_center/major_combo'),
-      toCloudPayloadFromSimpleValues(values, currentUid!)
-    )
-
-    await updateMetaVersion()
+    await updateRuleCenterAtomically({
+      'rule_center/major_combo': toCloudPayloadFromSimpleValues(values, currentUid!),
+    })
   },
 
   importRemarkRuleFile: async (file: File) => {
@@ -961,12 +984,9 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       throw new Error('备注招生类型规则文件中没有有效规则')
     }
 
-    await dbSet(
-      ref(getFirebaseDb(), 'rule_center/remark_enrollment_type'),
-      toCloudPayloadFromRemarkRules(rules, currentUid!)
-    )
-
-    await updateMetaVersion()
+    await updateRuleCenterAtomically({
+      'rule_center/remark_enrollment_type': toCloudPayloadFromRemarkRules(rules, currentUid!),
+    })
   },
 
 
@@ -1024,10 +1044,10 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       rules,
     )
 
-    await dbSet(
-      ref(getFirebaseDb(), 'rule_center/province_category_batch'),
-      toCloudPayloadFromProvinceCategoryBatchRules(mergedRules, currentUid!),
-    )
+    await updateRuleCenterAtomically({
+      'rule_center/province_category_batch':
+        toCloudPayloadFromProvinceCategoryBatchRules(mergedRules, currentUid!),
+    })
 
     setState({
       provinceCategoryBatchRules: mergedRules,
@@ -1035,7 +1055,6 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       ...deriveProvinceRuleMaps(mergedRules),
     })
 
-    await updateMetaVersion()
   },
 
   importControlLineRuleFile: async (file: File) => {
@@ -1091,33 +1110,29 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       rules,
     )
 
-    await dbSet(
-      ref(getFirebaseDb(), 'rule_center/control_line'),
-      toCloudPayloadFromControlLineRules(mergedRules, currentUid!),
-    )
+    await updateRuleCenterAtomically({
+      'rule_center/control_line': toCloudPayloadFromControlLineRules(mergedRules, currentUid!),
+    })
 
     setState({
       controlLineRules: mergedRules,
       controlLineRuleFileName: CLOUD_RULE_FILE_NAME,
     })
 
-    await updateMetaVersion()
   },
 
   clearSchoolRules: async () => {
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
-    await dbRemove(ref(getFirebaseDb(), 'rule_center/school_name'))
-    await updateMetaVersion()
+    await updateRuleCenterAtomically({ 'rule_center/school_name': null })
   },
 
   clearMajorRules: async () => {
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
-    await dbRemove(ref(getFirebaseDb(), 'rule_center/major_combo'))
-    await updateMetaVersion()
+    await updateRuleCenterAtomically({ 'rule_center/major_combo': null })
   },
 
 
@@ -1125,13 +1140,12 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
-    await dbSet(
-      ref(getFirebaseDb(), 'rule_center/province_category_batch'),
-      toCloudPayloadFromProvinceCategoryBatchRules(
+    await updateRuleCenterAtomically({
+      'rule_center/province_category_batch': toCloudPayloadFromProvinceCategoryBatchRules(
         DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
         currentUid!,
       ),
-    )
+    })
 
     setState({
       provinceCategoryBatchRules: DEFAULT_PROVINCE_CATEGORY_BATCH_RULES,
@@ -1139,24 +1153,24 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       ...deriveProvinceRuleMaps(DEFAULT_PROVINCE_CATEGORY_BATCH_RULES),
     })
 
-    await updateMetaVersion()
   },
 
   resetControlLineRules: async () => {
     const { currentUid, isAdminUser } = getState()
     await ensureAdmin(currentUid, isAdminUser)
 
-    await dbSet(
-      ref(getFirebaseDb(), 'rule_center/control_line'),
-      toCloudPayloadFromControlLineRules(DEFAULT_CONTROL_LINE_RULES, currentUid!),
-    )
+    await updateRuleCenterAtomically({
+      'rule_center/control_line': toCloudPayloadFromControlLineRules(
+        DEFAULT_CONTROL_LINE_RULES,
+        currentUid!,
+      ),
+    })
 
     setState({
       controlLineRules: DEFAULT_CONTROL_LINE_RULES,
       controlLineRuleFileName: CLOUD_RULE_FILE_NAME,
     })
 
-    await updateMetaVersion()
   },
 
   addRemarkTypeRule: async (rule = {}) => {
@@ -1190,14 +1204,16 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       priority: nextPriority,
     }
 
-    await dbSet(ref(getFirebaseDb(), `rule_center/remark_enrollment_type/${newId}`), {
-      rule_name: `${keyword} → ${outputType}`,
-      source_text: keyword,
-      target_text: outputType,
-      enabled: true,
-      sort_order: nextPriority,
-      updated_at: Date.now(),
-      updated_by: currentUid!,
+    await updateRuleCenterAtomically({
+      [`rule_center/remark_enrollment_type/${newId}`]: {
+        rule_name: `${keyword} → ${outputType}`,
+        source_text: keyword,
+        target_text: outputType,
+        enabled: true,
+        sort_order: nextPriority,
+        updated_at: serverTimestamp(),
+        updated_by: currentUid!,
+      },
     })
 
     setState({
@@ -1205,7 +1221,6 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       remarkRuleFileName: CLOUD_RULE_FILE_NAME,
     })
 
-    await updateMetaVersion()
   },
 
   updateRemarkTypeRule: async (id, patch) => {
@@ -1253,17 +1268,15 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     })
 
     try {
-      await dbUpdate(ref(getFirebaseDb(), `rule_center/remark_enrollment_type/${id}`), {
+      await updateRuleCenterItemAtomically(`rule_center/remark_enrollment_type/${id}`, {
         rule_name: `${nextKeyword} → ${nextOutputType}`,
         source_text: nextKeyword,
         target_text: nextOutputType,
         sort_order: safePriority,
         enabled: true,
-        updated_at: Date.now(),
+        updated_at: serverTimestamp(),
         updated_by: currentUid!,
       })
-
-      await updateMetaVersion()
     } catch (error) {
       setState({
         remarkTypeRules: previousRules,
@@ -1285,8 +1298,9 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
     })
 
     try {
-      await dbRemove(ref(getFirebaseDb(), `rule_center/remark_enrollment_type/${id}`))
-      await updateMetaVersion()
+      await updateRuleCenterAtomically({
+        [`rule_center/remark_enrollment_type/${id}`]: null,
+      })
     } catch (error) {
       setState({
         remarkTypeRules: previousRules,
@@ -1307,12 +1321,12 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       remarkRuleFileName: CLOUD_RULE_FILE_NAME,
     })
 
-    await dbSet(
-      ref(getFirebaseDb(), 'rule_center/remark_enrollment_type'),
-      toCloudPayloadFromRemarkRules(defaultRules, currentUid!)
-    )
-
-    await updateMetaVersion()
+    await updateRuleCenterAtomically({
+      'rule_center/remark_enrollment_type': toCloudPayloadFromRemarkRules(
+        defaultRules,
+        currentUid!,
+      ),
+    })
   },
 
   reorderRemarkTypeRules: async (activeId, overId) => {
@@ -1327,7 +1341,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
 
     const previousRules = remarkTypeRules
     const nextRules = normalizeRuleOrder(arrayMove(sortedRules, oldIndex, newIndex))
-    const now = Date.now()
+    const now = serverTimestamp()
 
     setState({
       remarkTypeRules: nextRules,
@@ -1348,10 +1362,7 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
           currentUid!
       })
 
-      updates['rule_center/meta/version'] = now
-      updates['rule_center/meta/updatedAt'] = now
-
-      await dbUpdate(ref(getFirebaseDb()), updates)
+      await updateRuleCenterAtomically(updates)
     } catch (error) {
       setState({
         remarkTypeRules: previousRules,
@@ -1373,8 +1384,9 @@ export const useRuleCenterStore = create<RuleCenterStore>((setState, getState) =
       exclusionKeywords: cleaned,
     })
 
-    await dbSet(ref(getFirebaseDb(), 'rule_center/exclusion_keywords'), cleaned)
-    await updateMetaVersion()
+    await updateRuleCenterAtomically({
+      'rule_center/exclusion_keywords': cleaned,
+    })
   },
 }))
 

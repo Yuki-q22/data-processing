@@ -1,11 +1,10 @@
 import {
   ref,
-  set,
   update,
-  remove,
   onValue,
   push,
   get,
+  serverTimestamp,
 } from 'firebase/database'
 import { db, firebaseConfigErrorMessage } from '../lib/firebase'
 
@@ -33,6 +32,15 @@ export type RuleItem = {
 
 function rulesPath(ruleType: RuleType) {
   return `rule_center/${ruleType}`
+}
+
+async function updateRuleCenterAtomically(updates: Record<string, unknown>) {
+  const timestamp = serverTimestamp()
+  await update(ref(getFirebaseDb()), {
+    ...updates,
+    'rule_center/meta/version': timestamp,
+    'rule_center/meta/updatedAt': timestamp,
+  })
 }
 
 export function subscribeRulesByType(
@@ -65,16 +73,14 @@ export async function createRule(
 ) {
   const parentRef = ref(getFirebaseDb(), rulesPath(ruleType))
   const newRef = push(parentRef)
+  if (!newRef.key) throw new Error('无法生成规则 ID')
 
-  await set(newRef, {
-    ...payload,
-    updated_at: Date.now(),
-    updated_by: uid,
-  })
-
-  await update(ref(getFirebaseDb(), 'rule_center/meta'), {
-    version: Date.now(),
-    updatedAt: Date.now(),
+  await updateRuleCenterAtomically({
+    [`${rulesPath(ruleType)}/${newRef.key}`]: {
+      ...payload,
+      updated_at: serverTimestamp(),
+      updated_by: uid,
+    },
   })
 }
 
@@ -84,26 +90,22 @@ export async function updateRuleItem(
   patch: Partial<Omit<RuleItem, 'id'>>,
   uid: string
 ) {
-  const itemRef = ref(getFirebaseDb(), `${rulesPath(ruleType)}/${id}`)
-  await update(itemRef, {
+  const itemPath = `${rulesPath(ruleType)}/${id}`
+  const nextPatch: Record<string, unknown> = {
     ...patch,
-    updated_at: Date.now(),
+    updated_at: serverTimestamp(),
     updated_by: uid,
-  })
-
-  await update(ref(getFirebaseDb(), 'rule_center/meta'), {
-    version: Date.now(),
-    updatedAt: Date.now(),
-  })
+  }
+  await updateRuleCenterAtomically(
+    Object.fromEntries(
+      Object.entries(nextPatch).map(([key, value]) => [`${itemPath}/${key}`, value]),
+    ),
+  )
 }
 
 export async function deleteRuleItem(ruleType: RuleType, id: string) {
-  const itemRef = ref(getFirebaseDb(), `${rulesPath(ruleType)}/${id}`)
-  await remove(itemRef)
-
-  await update(ref(getFirebaseDb(), 'rule_center/meta'), {
-    version: Date.now(),
-    updatedAt: Date.now(),
+  await updateRuleCenterAtomically({
+    [`${rulesPath(ruleType)}/${id}`]: null,
   })
 }
 

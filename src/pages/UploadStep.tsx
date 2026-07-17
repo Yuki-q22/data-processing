@@ -18,7 +18,10 @@ import { useTaskStore } from '../stores/taskStore'
 import { usePreviewStore } from '../stores/previewStore'
 import { useRuleCenterStore } from '../stores/ruleCenterStore'
 import { confirmToolReset } from '../utils/toolReset'
-import { parseUploadedWorkbookInWorker } from '../utils/excelWorkerClient'
+import {
+  parseUploadedWorkbookInWorker,
+  releaseWorkbookInWorker,
+} from '../utils/excelWorkerClient'
 import { useLatestTaskGuard } from '../hooks/useLatestTaskGuard'
 import type { UploadedWorkbook } from '../types/workbook'
 
@@ -118,6 +121,7 @@ export default function UploadStep() {
   const resetTask = useTaskStore((state) => state.resetTask)
 
   const resetPreview = usePreviewStore((state) => state.resetPreview)
+  const invalidateProcessing = usePreviewStore((state) => state.invalidateProcessing)
   const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
   const { startTask, isLatestTask, cancelTask } = useLatestTaskGuard()
 
@@ -155,8 +159,12 @@ export default function UploadStep() {
 
   const handleScoreUpload = async (file: File) => {
     const taskId = startTask('score-upload')
+    invalidateProcessing()
     const uploaded = await parseUploadedWorkbookInWorker(file)
-    if (!isLatestTask('score-upload', taskId)) return
+    if (!isLatestTask('score-upload', taskId)) {
+      releaseWorkbookInWorker(uploaded.workbook)
+      return
+    }
 
     setWorkbook('score', uploaded)
 
@@ -174,8 +182,12 @@ export default function UploadStep() {
 
   const handlePlanUpload = async (file: File) => {
     const taskId = startTask('plan-upload')
+    invalidateProcessing()
     const uploaded = await parseUploadedWorkbookInWorker(file)
-    if (!isLatestTask('plan-upload', taskId)) return
+    if (!isLatestTask('plan-upload', taskId)) {
+      releaseWorkbookInWorker(uploaded.workbook)
+      return
+    }
 
     setWorkbook('plan', uploaded)
 
@@ -241,7 +253,10 @@ export default function UploadStep() {
               <Text>招生年份</Text>
               <Select
                 value={year}
-                onChange={(value) => setTaskMeta({ year: value })}
+                onChange={(value) => {
+                  setTaskMeta({ year: value })
+                  invalidateProcessing()
+                }}
                 options={YEAR_OPTIONS.map((item) => ({
                   label: item,
                   value: item,
@@ -255,7 +270,10 @@ export default function UploadStep() {
               <Text>默认数据来源</Text>
               <Select
                 value={defaultDataSource}
-                onChange={(value) => setTaskMeta({ defaultDataSource: value })}
+                onChange={(value) => {
+                  setTaskMeta({ defaultDataSource: value })
+                  invalidateProcessing()
+                }}
                 style={{ width: '100%' }}
                 popupMatchSelectWidth={false}
                 options={DATA_SOURCE_OPTIONS.map((item) => ({
@@ -272,8 +290,14 @@ export default function UploadStep() {
               <AutoComplete
                 value={manualSchoolName}
                 options={schoolNameOptions}
-                onChange={(value) => setTaskMeta({ manualSchoolName: value })}
-                onSelect={(value) => setTaskMeta({ manualSchoolName: value })}
+                onChange={(value) => {
+                  setTaskMeta({ manualSchoolName: value })
+                  invalidateProcessing()
+                }}
+                onSelect={(value) => {
+                  setTaskMeta({ manualSchoolName: value })
+                  invalidateProcessing()
+                }}
                 filterOption={false}
                 placeholder="输入学校关键词"
                 style={{ width: '100%' }}
@@ -288,7 +312,10 @@ export default function UploadStep() {
                 allowClear
                 showSearch
                 value={manualProvince || undefined}
-                onChange={(value) => setTaskMeta({ manualProvince: value || '' })}
+                onChange={(value) => {
+                  setTaskMeta({ manualProvince: value || '' })
+                  invalidateProcessing()
+                }}
                 placeholder="选择省份"
                 style={{ width: '100%' }}
                 options={PROVINCE_OPTIONS.map((item) => ({
@@ -314,7 +341,10 @@ export default function UploadStep() {
             title="原始专业分数据上传"
             workbook={scoreWorkbook}
             selectedSheet={scoreSheetName}
-            onSheetChange={(sheetName) => setSheetName('score', sheetName)}
+            onSheetChange={(sheetName) => {
+              setSheetName('score', sheetName)
+              invalidateProcessing()
+            }}
             onUpload={handleScoreUpload}
           />
         </Col>
@@ -325,7 +355,10 @@ export default function UploadStep() {
             workbook={planWorkbook}
             selectedSheet={planSheetName}
             validation={planValidation}
-            onSheetChange={(sheetName) => setSheetName('plan', sheetName)}
+            onSheetChange={(sheetName) => {
+              setSheetName('plan', sheetName)
+              invalidateProcessing()
+            }}
             onUpload={handlePlanUpload}
           />
         </Col>

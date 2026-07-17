@@ -13,6 +13,7 @@
  */
 
 import ExcelJS from 'exceljs'
+import { writeXlsxBufferWithUniformFormatting } from '../utils/excelExport'
 
 export type LibraryProfessionalScoreExportRow = {
   学校名称: string
@@ -391,7 +392,7 @@ export async function exportLibraryProfessionalScoreWorkbook(params: {
     worksheet.getColumn(index + 1).width = width
   })
 
-  const buffer = await workbook.xlsx.writeBuffer()
+  const buffer = await writeXlsxBufferWithUniformFormatting(workbook)
   return new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })

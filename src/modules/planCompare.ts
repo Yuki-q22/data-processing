@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import { writeXlsxBufferWithUniformFormatting } from '../utils/excelExport'
 import { resolveControlLine } from './controlLine'
 import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
 
@@ -1227,7 +1228,7 @@ export async function exportProfessionalCompareTemplate(params: {
     },
   })
 
-  const buffer = await workbook.xlsx.writeBuffer()
+  const buffer = await writeXlsxBufferWithUniformFormatting(workbook)
   return new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
@@ -1252,7 +1253,7 @@ export async function exportCollegeCompareTemplate(params: {
     },
   })
 
-  const buffer = await workbook.xlsx.writeBuffer()
+  const buffer = await writeXlsxBufferWithUniformFormatting(workbook)
   return new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })

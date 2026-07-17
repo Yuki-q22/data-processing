@@ -587,6 +587,9 @@ function getProvinceConfig(province: unknown, year?: string | number): ControlLi
 
   if (candidates.length) return candidates[0]
 
+  // 指定年份时禁止回退到其他年份，避免静默套用错误的省控线规则。
+  if (yearText) return undefined
+
   return rules.find((item) => item.province === text || item.province === t(province))
 }
 

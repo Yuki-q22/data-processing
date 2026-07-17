@@ -9,7 +9,7 @@
  * - 支持一键导出全部题目 PNG，并打包为 ZIP。
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
@@ -200,6 +200,9 @@ export default function QuestionScreenshotTool() {
     total: 0,
     fileName: '',
   })
+  const uploadRequestIdRef = useRef(0)
+  const previewRequestIdRef = useRef(0)
+  const exportRequestIdRef = useRef(0)
 
   const validQuestionCount = useMemo(
     () => project?.questions.filter((question) => question.segments.length > 0).length || 0,
@@ -217,11 +220,23 @@ export default function QuestionScreenshotTool() {
     }
   }, [previewUrl])
 
+  useEffect(() => {
+    return () => {
+      uploadRequestIdRef.current += 1
+      previewRequestIdRef.current += 1
+      exportRequestIdRef.current += 1
+    }
+  }, [])
+
   const patchOption = <K extends OptionKey>(key: K, value: QuestionScreenshotOptions[K]) => {
     setOptions((current) => mergeQuestionScreenshotOptions({ ...current, [key]: value }))
   }
 
   const handleUpload = async (file: File) => {
+    const requestId = uploadRequestIdRef.current + 1
+    uploadRequestIdRef.current = requestId
+    previewRequestIdRef.current += 1
+    exportRequestIdRef.current += 1
     setLoading(true)
     setProject(null)
     setPreviewQuestion(null)
@@ -232,12 +247,15 @@ export default function QuestionScreenshotTool() {
 
     try {
       const nextProject = await loadQuestionScreenshotProject(file, options)
+      if (uploadRequestIdRef.current !== requestId) return false
       setProject(nextProject)
       message.success(`已识别 ${nextProject.starts.length} 道题`)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'PDF 识别失败')
+      if (uploadRequestIdRef.current === requestId) {
+        message.error(error instanceof Error ? error.message : 'PDF 识别失败')
+      }
     } finally {
-      setLoading(false)
+      if (uploadRequestIdRef.current === requestId) setLoading(false)
     }
 
     return false
@@ -254,17 +272,22 @@ export default function QuestionScreenshotTool() {
       return
     }
 
+    const requestId = previewRequestIdRef.current + 1
+    previewRequestIdRef.current = requestId
     setPreviewing(true)
     setPreviewQuestion(question)
 
     try {
       const blob = await renderQuestionToBlob(project, question, options)
+      if (previewRequestIdRef.current !== requestId) return
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       setPreviewUrl(URL.createObjectURL(blob))
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '预览生成失败')
+      if (previewRequestIdRef.current === requestId) {
+        message.error(error instanceof Error ? error.message : '预览生成失败')
+      }
     } finally {
-      setPreviewing(false)
+      if (previewRequestIdRef.current === requestId) setPreviewing(false)
     }
   }
 
@@ -274,18 +297,27 @@ export default function QuestionScreenshotTool() {
       return
     }
 
+    const requestId = exportRequestIdRef.current + 1
+    exportRequestIdRef.current = requestId
     setExportState({ exporting: true, current: 0, total: validQuestionCount, fileName: '' })
 
     try {
       const zipBlob = await exportQuestionsToZip(project, options, (progress) => {
-        setExportState({ exporting: true, ...progress })
+        if (exportRequestIdRef.current === requestId) {
+          setExportState({ exporting: true, ...progress })
+        }
       })
+      if (exportRequestIdRef.current !== requestId) return
       downloadBlob(zipBlob, makeZipFileName(project.fileName))
       message.success('题目截图导出完成')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '导出失败')
+      if (exportRequestIdRef.current === requestId) {
+        message.error(error instanceof Error ? error.message : '导出失败')
+      }
     } finally {
-      setExportState({ exporting: false, current: 0, total: 0, fileName: '' })
+      if (exportRequestIdRef.current === requestId) {
+        setExportState({ exporting: false, current: 0, total: 0, fileName: '' })
+      }
     }
   }
 
@@ -293,6 +325,9 @@ export default function QuestionScreenshotTool() {
     confirmToolReset({
       title: '确认重置高考真题题目截图工具？',
       onReset: () => {
+        uploadRequestIdRef.current += 1
+        previewRequestIdRef.current += 1
+        exportRequestIdRef.current += 1
         setOptions(DEFAULT_QUESTION_SCREENSHOT_OPTIONS)
         setProject(null)
         setLoading(false)

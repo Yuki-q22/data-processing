@@ -914,3 +914,21 @@ button {
 .table-row-delay-5 { animation-delay: 150ms; }
 .table-row-delay-6 { animation-delay: 180ms; }
 .table-row-delay-7 { animation-delay: 210ms; }
+/* 全局错误边界仅在应用无法继续渲染时显示。 */
+.app-error-boundary {
+  max-width: 680px;
+  margin: 15vh auto 0;
+  padding: 32px;
+  color: #1f2937;
+  text-align: center;
+}
+
+.app-error-boundary button {
+  margin-top: 16px;
+  padding: 8px 20px;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  background: #1677ff;
+  cursor: pointer;
+}

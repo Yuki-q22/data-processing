@@ -21,6 +21,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import { writeXlsxBufferWithUniformFormatting } from '../../utils/excelExport'
 import {
   Button,
   Card,
@@ -217,7 +218,7 @@ async function exportRemarkCleanWorkbook(
   worksheet.getColumn(issueColumnNumber).width = 48
   worksheet.getColumn(fixedColumnNumber).width = 42
 
-  const buffer = await workbook.xlsx.writeBuffer()
+  const buffer = await writeXlsxBufferWithUniformFormatting(workbook)
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })

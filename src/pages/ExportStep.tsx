@@ -57,11 +57,14 @@ function getResultTagColor(value: string) {
 
 export default function ExportStep() {
   const processedRecords = usePreviewStore((state) => state.processedRecords)
+  const inputRevision = usePreviewStore((state) => state.inputRevision)
+  const processedRevision = usePreviewStore((state) => state.processedRevision)
   const year = useTaskStore((state) => state.year)
   const validSchoolNames = useRuleCenterStore((state) => state.validSchoolNames)
   const validMajorCombos = useRuleCenterStore((state) => state.validMajorCombos)
 
   const exportable = useMemo(() => getExportableRecords(processedRecords), [processedRecords])
+  const resultIsCurrent = processedRevision === inputRevision
   const blocked = processedRecords.length - exportable.length
 
   const rulePreviewRows = useMemo(
@@ -86,6 +89,11 @@ export default function ExportStep() {
   const issuePreviewRows = useMemo(() => rulePreviewRows.filter((row) => row.issues.length > 0).slice(0, 100), [rulePreviewRows])
 
   const handleExport = async () => {
+    if (!resultIsCurrent) {
+      message.warning('输入已发生变化，请重新应用映射后再导出')
+      return
+    }
+
     if (!processedRecords.length) {
       message.warning('请先生成预览数据')
       return
@@ -172,7 +180,7 @@ export default function ExportStep() {
             <Alert type="success" showIcon message="可导出记录均通过已启用的规则中心校验" />
           ) : null}
 
-          <Button type="primary" onClick={handleExport} disabled={!exportable.length}>
+          <Button type="primary" onClick={handleExport} disabled={!exportable.length || !resultIsCurrent}>
             导出专业分模板
           </Button>
         </Space>

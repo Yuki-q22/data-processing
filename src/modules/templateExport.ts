@@ -21,6 +21,7 @@
  */
 
 import ExcelJS from 'exceljs'
+import { writeXlsxBufferWithUniformFormatting } from '../utils/excelExport'
 import type { ProcessedRecord, ValidationIssue } from '../types/record'
 import { validateSchoolAndMajorComboDetailed } from './ruleCenterValidation'
 
@@ -199,6 +200,6 @@ export async function exportProfessionalScoreTemplate(
     })
   })
 
-  const buffer = await workbook.xlsx.writeBuffer()
+  const buffer = await writeXlsxBufferWithUniformFormatting(workbook)
   downloadBuffer(buffer as ArrayBuffer, `专业分批量导入模板_${year}.xlsx`)
 }

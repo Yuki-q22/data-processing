@@ -65,3 +65,55 @@ export function validateUploadedHeaders(
     isValid: missingFields.length === 0,
   }
 }
+
+export type UploadFileKind = 'xlsx' | 'xls' | 'csv' | 'pdf'
+
+type UploadFileValidationOptions = {
+  allowedKinds: UploadFileKind[]
+  maxBytes?: number
+}
+
+const DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+
+function getExtension(fileName: string) {
+  return fileName.toLowerCase().match(/\.([^.]+)$/)?.[1] || ''
+}
+
+function startsWithBytes(bytes: Uint8Array, signature: number[]) {
+  return signature.every((value, index) => bytes[index] === value)
+}
+
+export async function validateUploadFile(
+  file: File,
+  options: UploadFileValidationOptions,
+) {
+  if (!(file instanceof File)) {
+    throw new Error('上传文件无效')
+  }
+  if (file.size <= 0) {
+    throw new Error('上传文件为空')
+  }
+
+  const maxBytes = options.maxBytes ?? DEFAULT_MAX_UPLOAD_BYTES
+  if (file.size > maxBytes) {
+    throw new Error(`文件过大，最大支持 ${Math.round(maxBytes / 1024 / 1024)} MB`)
+  }
+
+  const extension = getExtension(file.name) as UploadFileKind
+  if (!options.allowedKinds.includes(extension)) {
+    throw new Error(`文件格式不支持，请上传 ${options.allowedKinds.map((item) => `.${item}`).join('、')}`)
+  }
+
+  // 浏览器 accept 只影响文件选择器，这里通过文件头再次验证实际格式。
+  const bytes = new Uint8Array(await file.slice(0, 8).arrayBuffer())
+  const isZip =
+    startsWithBytes(bytes, [0x50, 0x4b, 0x03, 0x04]) ||
+    startsWithBytes(bytes, [0x50, 0x4b, 0x05, 0x06]) ||
+    startsWithBytes(bytes, [0x50, 0x4b, 0x07, 0x08])
+  const isOle = startsWithBytes(bytes, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
+  const isPdf = startsWithBytes(bytes, [0x25, 0x50, 0x44, 0x46, 0x2d])
+
+  if (extension === 'xlsx' && !isZip) throw new Error('文件内容不是有效的 .xlsx 工作簿')
+  if (extension === 'xls' && !isOle) throw new Error('文件内容不是有效的 .xls 工作簿')
+  if (extension === 'pdf' && !isPdf) throw new Error('文件内容不是有效的 PDF')
+}

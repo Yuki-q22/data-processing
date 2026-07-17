@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button,
   Card,
@@ -31,12 +31,23 @@ export default function EmploymentReportImageTool() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const [images, setImages] = useState<ExtractedImageItem[]>([])
   const [pageTitle, setPageTitle] = useState('')
+  const fetchRequestIdRef = useRef(0)
+  const fetchAbortRef = useRef<AbortController | null>(null)
+  const pdfRequestIdRef = useRef(0)
 
   useEffect(() => {
     return () => {
       cleanupImageObjectUrls(images)
     }
   }, [images])
+
+  useEffect(() => {
+    return () => {
+      fetchRequestIdRef.current += 1
+      pdfRequestIdRef.current += 1
+      fetchAbortRef.current?.abort()
+    }
+  }, [])
 
   const summary = useMemo(() => {
     const total = images.length
@@ -51,13 +62,25 @@ export default function EmploymentReportImageTool() {
       return
     }
 
+    fetchAbortRef.current?.abort()
+    const requestId = fetchRequestIdRef.current + 1
+    fetchRequestIdRef.current = requestId
+    const controller = new AbortController()
+    fetchAbortRef.current = controller
+
     cleanupImageObjectUrls(images)
     setImages([])
     setPageTitle('')
     setLoading(true)
 
     try {
-      const result = await fetchStaticImagesFromPage(url.trim())
+      const result = await fetchStaticImagesFromPage(url.trim(), {
+        signal: controller.signal,
+      })
+      if (fetchRequestIdRef.current !== requestId) {
+        cleanupImageObjectUrls(result.images)
+        return
+      }
       setImages(result.images)
       setPageTitle(result.pageTitle)
 
@@ -67,9 +90,14 @@ export default function EmploymentReportImageTool() {
         message.warning('未抓取到任何图片')
       }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '抓取失败')
+      if (fetchRequestIdRef.current === requestId && !controller.signal.aborted) {
+        message.error(error instanceof Error ? error.message : '抓取失败')
+      }
     } finally {
-      setLoading(false)
+      if (fetchRequestIdRef.current === requestId) {
+        setLoading(false)
+        fetchAbortRef.current = null
+      }
     }
   }
 
@@ -80,14 +108,19 @@ export default function EmploymentReportImageTool() {
     }
 
     setPdfLoading(true)
+    const requestId = pdfRequestIdRef.current + 1
+    pdfRequestIdRef.current = requestId
     try {
       const blob = await imagesToPdfBlob(images)
+      if (pdfRequestIdRef.current !== requestId) return
       downloadBlob(blob, toSafePdfFilename(pageTitle))
       message.success('PDF 已生成')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'PDF 生成失败')
+      if (pdfRequestIdRef.current === requestId) {
+        message.error(error instanceof Error ? error.message : 'PDF 生成失败')
+      }
     } finally {
-      setPdfLoading(false)
+      if (pdfRequestIdRef.current === requestId) setPdfLoading(false)
     }
   }
 
@@ -95,6 +128,10 @@ export default function EmploymentReportImageTool() {
     confirmToolReset({
       title: '确认重置图片下载？',
       onReset: () => {
+        fetchRequestIdRef.current += 1
+        pdfRequestIdRef.current += 1
+        fetchAbortRef.current?.abort()
+        fetchAbortRef.current = null
         cleanupImageObjectUrls(images)
         setUrl('')
         setLoading(false)
