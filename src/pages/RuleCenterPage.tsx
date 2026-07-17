@@ -98,6 +98,7 @@ export default function RuleCenterPage() {
   const controlLineRuleFileName = useRuleCenterStore((state) => state.controlLineRuleFileName)
 
   const currentUserEmail = useRuleCenterStore((state) => state.currentUserEmail)
+  const currentUid = useRuleCenterStore((state) => state.currentUid)
   const isAdminUser = useRuleCenterStore((state) => state.isAdminUser)
   const authReady = useRuleCenterStore((state) => state.authReady)
   const syncing = useRuleCenterStore((state) => state.syncing)
@@ -822,6 +823,12 @@ export default function RuleCenterPage() {
                   </Tag>
                 </Space>
                 <Text type="secondary">{currentUserEmail}</Text>
+                {/* 显示当前 Firebase UID，便于在 Realtime Database 中配置管理员权限。 */}
+                {currentUid ? (
+                  <Text copyable code type="secondary">
+                    UID：{currentUid}
+                  </Text>
+                ) : null}
                 <Button size="small" onClick={handleLogout}>
                   退出登录
                 </Button>
